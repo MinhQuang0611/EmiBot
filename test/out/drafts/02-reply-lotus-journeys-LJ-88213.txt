@@ -1,0 +1,28 @@
+DRAFT — chưa gửi. Người gửi: điền 2 chỗ [gap] rồi xóa khối ghi chú này.
+Ghi chú nội bộ:
+- [gap 1] Giá: bảng TA 2026 chưa có trong fixtures. Áp dụng giá TA mùa Winter cho Deluxe Seaview, +20% vì khách Ấn Độ. Đại lý xin giá tốt hơn: Karen quyết định (cần bố mẹ duyệt). Không tự hứa giảm giá.
+- [gap 2] Kỷ niệm ngày cưới, "something special in the room": chưa có quy định. Miễn phí hay có phí thì Karen quyết định.
+---
+From: sales@haya-hotels.com
+To: reservations@lotus-journeys.test
+Subject: RE: New booking request - LJ-88213 - HAYA Phu Quoc
+In-Reply-To: test/emails/02-new-en-agency-missing.txt
+
+Dear Ms. Shah,
+
+Thank you for your booking request LJ-88213 for Mr. Rohan Mehta: 2 x Deluxe Seaview with breakfast, check-in 05/12/2026.
+
+Can you please confirm:
+
+  * Check-out date
+  * Number of adults in each room, and the number and ages of any children
+  * Full names of all guests
+
+Rate: [gap 1]
+
+Anniversary arrangement: [gap 2]
+
+Payment terms: 50% deposit within 48 hours of receiving our confirmation, remaining 50% 7 days before check-in.
+
+Best,
+HAYA Team

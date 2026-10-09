@@ -1,0 +1,15 @@
+﻿.env
+.env.*
+!.env.example
+
+# Credentials and local auth state
+*.key.json
+*service-account*.json
+ascendant-nova-*.json
+.emi-token.json
+
+# Runtime state and temporary files
+emi-state.json
+.state-*.json
+__pycache__/
+*.py[cod]

@@ -1,0 +1,38 @@
+﻿action,received_at,source_email,property,channel_type,company,contact_person,company_email,booking_ref,guest_names,nationality,arrival,departure,nights,room_code,rooms,adults,children,child_ages,meal_plan,rate_source,rate_per_night_vnd,discount_promo,avg_rate_after_discount_vnd,surcharge_type,surcharge_amount_vnd,total_vnd,status,hold_until,prepaid,invoice_details,arrival_time,transfer,special_requests,notes,missing_info,priority,cod_deadline,payment_1_vnd,payment_1_at,payment_2_vnd,payment_2_at,remaining_vnd,ezfolio_group_code,confirmation_no,tracy_status,pdf_link
+NEW,08/10/2026 12:12,Agoda Booking ID 1783423852 - CONFIRMED Hotel Country: Vietnam Check-in 19-Nov-2026 (19-11-2026) / Language_English,HAYA,OTA,Agoda,,no-reply@agoda.com,1783423852,Irina Boltenkova; TBA,RUS,19/11/2026,26/11/2026,7,,1,2,0,,BB,OTA net,3213432,,3213432,,,22494024,Definite,,Yes (Agoda prepaid),,,,Phòng yên tĩnh; view đẹp,"1. Agoda - 1783423852 (Advanced Purchase Rate SS1, Private Sale)
+2. Lead: Irina Boltenkova (RUS, suy từ tên); khách 2: TBA
+3. 19/11/2026 - 26/11/2026, 7 đêm
+4. 1 Suite Sea View (1 King Bed), Agoda code SU1; 2 NL
+5. Quiet room; good view
+6. Net 3.213.432 x 7 = 22.494.024 (giá bán 25.855.200 - hoa hồng 3.361.176). Không hoàn hủy, không sửa được
+7. -",room_code (thiếu bảng Room codes; Agoda ghi SU1) | Quốc tịch suy từ tên | Chưa thấy email SynXis tương ứng,Normal,,,,,,,,,Pending,
+NEW,08/10/2026 10:06,Booking Confirmation – 02–05 December 2026| HAYA Hotel Phu Quoc,HAYA,TA,365 Travel,Trang Dang,trang.dang@365travel.asia,,,POL,02/12/2026,05/12/2026,3,,3,,,,BB,TA card,1700000,,1700000,,,15300000,Tentative,,No,"Công ty TNHH Đầu tư và Du lịch 365; MST 0102126682; Tầng 9, Tầng 15 – Tòa Nhà Ladeco, 266 Đội Cấn, Phường Ngọc Hà, Thành phố Hà Nội, Việt Nam; hoadon@365travel.asia",,,,"1. 365 Travel - không có mã booking
+2. Tên khách chưa có (POL)
+3. 02/12/2026 - 05/12/2026, 3 đêm
+4. 3 Standard Double; số khách chưa có
+5. -
+6. Giá theo email 1.700.000 x 3 phòng x 3 đêm = 15.300.000 (chưa đối chiếu bảng TA, mùa Winter)
+7. Công ty TNHH Đầu tư và Du lịch 365, MST 0102126682, Ladeco 266 Đội Cấn Hà Nội, hoadon@365travel.asia",Bảng giá TA trống: chưa đối chiếu 1.700.000 Standard Double | Mã booking của đại lý | Tên khách | Số người lớn/trẻ em | room_code | Tên công ty trong EZFOLIO chưa xác nhận,Normal,,,,,,,,,Pending,
+CHANGE,08/10/2026 11:07,Re: HAYA Hotel/TBA/ 11-15.01.2027/ An0109,HAYA,TA,Phú Minh Quang Travel,Nguyễn Thị Diệu Ân (Ms. Anna),sales@phuminhquangtravel.com,An0109,TBA,IND,11/01/2027,15/01/2027,4,,1,,,,BB,TA card,2760000,,2760000,,,11040000,Tentative,08/10/2026 13:49 (theo xác nhận 07/10); đại lý xin dời sang 15/10/2026 - CHỜ KAREN,No,,,,"Deluxe tầng cao, view đẹp","1. Phú Minh Quang Travel - An0109 - #29519 / XN 25694
+2. TBA (IND)
+3. 11/01/2027 - 15/01/2027, 4 đêm
+4. 1 Triple + 1 Deluxe Seaview; 5 NL + 2 TE (4 tuổi, 2 tuổi)
+5. Deluxe tầng cao view đẹp
+6. Theo xác nhận đã gửi: Triple 2.760.000 x 4 = 11.040.000; DLX 2.400.000 x 4 = 9.600.000; phụ thu TE 4 tuổi 1.400.000; tổng 22.040.000; cọc 11.020.000
+7. Chưa có
+[Room: Triple] THAY ĐỔI: đại lý xin dời hạn cọc sang 15/10/2026","KAREN OK dời hạn cọc sang 15/10 (lý do đại lý: khách chuyển khoản quốc tế) | Hạn trong xác nhận tính từ lúc nhận yêu cầu, không phải 48h sau khi đại lý nhận xác nhận (07/10 09:47 -> 09/10 09:47) | Trẻ 4 tuổi ở phòng nào | Booking chưa có dòng gốc trong sheet local | Tên khách | Thông tin hóa đơn",Urgent,08/10/2026 13:49 (theo xác nhận 07/10); đại lý xin 15/10/2026 - CHỜ KAREN,,,,,,29519,25694,Pending,
+CHANGE,08/10/2026 11:07,Re: HAYA Hotel/TBA/ 11-15.01.2027/ An0109,HAYA,TA,Phú Minh Quang Travel,Nguyễn Thị Diệu Ân (Ms. Anna),sales@phuminhquangtravel.com,An0109,TBA,IND,11/01/2027,15/01/2027,4,,1,,,,BB,TA card,2400000,,2400000,,,9600000,Tentative,08/10/2026 13:49 (theo xác nhận 07/10); đại lý xin dời sang 15/10/2026 - CHỜ KAREN,No,,,,"Deluxe tầng cao, view đẹp","1. Phú Minh Quang Travel - An0109 - #29519 / XN 25694
+2. TBA (IND)
+3. 11/01/2027 - 15/01/2027, 4 đêm
+4. 1 Triple + 1 Deluxe Seaview; 5 NL + 2 TE (4 tuổi, 2 tuổi)
+5. Deluxe tầng cao view đẹp
+6. Theo xác nhận đã gửi: Triple 2.760.000 x 4 = 11.040.000; DLX 2.400.000 x 4 = 9.600.000; phụ thu TE 4 tuổi 1.400.000; tổng 22.040.000; cọc 11.020.000
+7. Chưa có
+[Room: Deluxe Seaview] THAY ĐỔI: đại lý xin dời hạn cọc sang 15/10/2026","KAREN OK dời hạn cọc sang 15/10 (lý do đại lý: khách chuyển khoản quốc tế) | Hạn trong xác nhận tính từ lúc nhận yêu cầu, không phải 48h sau khi đại lý nhận xác nhận (07/10 09:47 -> 09/10 09:47) | Trẻ 4 tuổi ở phòng nào | Booking chưa có dòng gốc trong sheet local | Tên khách | Thông tin hóa đơn",Urgent,08/10/2026 13:49 (theo xác nhận 07/10); đại lý xin 15/10/2026 - CHỜ KAREN,,,,,,29519,25694,Pending,
+CANCEL,08/10/2026 12:25,CANCELLED RESERVATION No: 112888584;,HAYA,Tour operator,Anex Tour,ANEX NOVOKUZNETSK,vn.robot@ms.anextour.com,112888584,LIASHENKO ALEKSEI; LIASHENKO IRINA,RUS,11/10/2026,21/10/2026,10,,1,2,0,,BB,Anex contract,,,,,,,Cancelled,,,,,,French bed nếu được; không tầng trệt,"1. Anex Tour (ANEX NOVOKUZNETSK) - 112888584 - YÊU CẦU HỦY
+2. Lead: LIASHENKO ALEKSEI (RUS)
+3. 11/10/2026 - 21/10/2026, 10 đêm - ĐẾN TRONG 3 NGÀY
+4. 1 Standard Room - Double (DBL); 2 NL
+5. French bed; not ground floor
+6. Hợp đồng Anex 81/26-27/PQ-HAYA/AL; SPO + BNO
+7. Đặt 05.10.2026, lúc đặt ở trạng thái 'On request'. Anex yêu cầu bấm link xác nhận trên hệ thống Anex","CHỜ KAREN OK HỦY | Booking chưa có trong sheet: Tracy tìm trong EZFOLIO (mã đoàn, số xác nhận) | Booking 'On request' lúc đặt: chưa rõ HAYA đã xác nhận chưa | Ai bấm link xác nhận trên hệ thống Anex (Emi không đụng hệ thống ngoài) | Phí hủy theo hợp đồng Anex",Urgent,,,,,,,,,Pending,

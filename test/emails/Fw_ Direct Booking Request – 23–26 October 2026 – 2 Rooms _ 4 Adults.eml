@@ -1,0 +1,242 @@
+Delivered-To: nguyenminhquang061105@gmail.com
+Received: by 2002:ad4:504e:0:b0:917:7d94:d3ea with SMTP id m14csp971898qvq;
+        Thu, 8 Oct 2026 01:47:23 -0700 (PDT)
+X-Received: by 2002:a17:903:390b:b0:2e5:33a5:36ec with SMTP id d9443c01a7336-2e5ffaf2d5fmr39939155ad.4.1791449243095;
+        Thu, 08 Oct 2026 01:47:23 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1791449243; cv=pass;
+        d=google.com; s=arc-20260327;
+        b=hiocr/ESvN7HuWZrus7Y9vgYr340hjqaXQDqOH6ZOEQv/xoxgtODhcInGyAu88owMR
+         w1dkR2jj2AWchyvEwHcuaL0wik3Kh4ufPnAqlWOzbEkUQ2sVTKkTnKSaisoTqDyDy27t
+         QCKowxfztsYqAh8VXNRdUtMZ8gU2dhjulXX+zRcbyYB7bTFoMzJCEe2NkvSPRKus5Nwt
+         2SLSDLb4ZCG/VwmZL8cktOZ9UrpDWT5OawIHYhZr0Z8U3HeltUogWAAhLquqlzjR97De
+         I5xvdvNGNWd8e6TBEHlmQCXYxlNTvj9f5Ai6qEEFs/KD3JUULjLyGw1dRPfHdnb3l0Cw
+         xTTw==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=mime-version:msip_labels:content-language:accept-language
+         :in-reply-to:references:message-id:date:thread-index:thread-topic
+         :subject:to:from;
+        bh=cqHDeUMI72hskLmwcr5m5R0tsMpM5EBQ3SkFBpx5lwY=;
+        fh=MgnTwFWyeneN47PUSgh1HuI9MgXBvzAhxCv66SJMnvI=;
+        b=UGL818+LOzm5S0l/AVHi/GJTBERO9XeKm/zwjQazntIgNcLp0IFGwCSH0dCP67td6C
+         u3/7pN4Qb23ZSqoqRp7ql+iTABseSnCooWQF4dDWJIqL6buKAc8qmHQ1ztk2bCGE/Ay2
+         nNTLHmpGWf3xH22KmFP9HZGPDdde/vsSiZcbLPF1Q1jwoYpD15bvOI+aEq5+OfoupC7h
+         zd77wqEFtefOzdC0Ii4W5nKSb62JwBA0RI6UwFwJEzht0cGRUtijMNfU81MQQhMClywO
+         kRlkG6nGNmUpbH1p40E68nWonkoEltaFdVlbPA+TGX5uyPtPy5EYDig3nLGPEZOt/W1e
+         HdyQ==;
+        dara=google.com
+ARC-Authentication-Results: i=2; mx.google.com;
+       arc=pass (i=1 spf=pass spfdomain=haya-hotels.com dkim=pass dkdomain=haya-hotels.com dmarc=pass fromdomain=haya-hotels.com);
+       spf=pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c405::5 as permitted sender) smtp.mailfrom=sales@haya-hotels.com
+Return-Path: <sales@haya-hotels.com>
+Received: from TYPPR03CU001.outbound.protection.outlook.com (mail-japaneastazlp170120005.outbound.protection.outlook.com. [2a01:111:f403:c405::5])
+        by mx.google.com with ESMTPS id d9443c01a7336-2e60494a3c1si80764905ad.56.2026.10.08.01.47.22
+        for <nguyenminhquang061105@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Thu, 08 Oct 2026 01:47:23 -0700 (PDT)
+Received-SPF: pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c405::5 as permitted sender) client-ip=2a01:111:f403:c405::5;
+Authentication-Results: mx.google.com;
+       arc=pass (i=1 spf=pass spfdomain=haya-hotels.com dkim=pass dkdomain=haya-hotels.com dmarc=pass fromdomain=haya-hotels.com);
+       spf=pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c405::5 as permitted sender) smtp.mailfrom=sales@haya-hotels.com
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=SIE8Ahdv+F+9UDkkeNziE2TkEwKhquT+zy4ka/hvLb2jj66JW5WNzI4juIs0rj9TSkbbj6vVdXmhddxApoUrb+I4pHkQUY1w41POF0D11j9T6YnGLBL4gtSCYlnFN7EYs4wDWyd50MEY90ECXPerRnvUa/W0iTZy4ZrtEt56lz67r8ZIKThXRHCLsFAn4yOvj5fje4U25K02Pk+rtN84/ROx0Le3P+mEf36qdrLZErxSx2CGx6RESyHKNIxL+y12dgU1Fa35rTaNkjTJhqc4y46jtSrqY0D7OH5lR1QwSLiUZ20dxPxb2NimL2EkCdAjAE5q2Zw8wnH6298j2RWhcQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=cqHDeUMI72hskLmwcr5m5R0tsMpM5EBQ3SkFBpx5lwY=;
+ b=SIystcbxWYwwvx5wdchkaiWKX3HuG/x+CcswwjVPojmD31rz8yxZszyWIOJJJ5Q13YKtQxzlGr47CB5XGhB5JIWA4NvW1anUdshtqh3Z9STc97inuLWJVVQNwGQ4kg4RHMTR8N8FmqZPbvcmUxBA07wigXkOkeASkCJzi3xa4DfwenrNpHPSmUNQ5VdjZBr11AV/OzCm3mD+s4MnN8lODzg34ySAmBRmGdwftVUwZcSWCeMxHHY+6nJJfQ4FAU1tlX31lWj3lnIdQbKbjXpNkihpCHWjJFOcUf4pVDcI6foIFg+Wv/VlJaRkscdhjhRwrM/doWbJGXimC9DPxptSoA==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=haya-hotels.com; dmarc=pass action=none
+ header.from=haya-hotels.com; dkim=pass header.d=haya-hotels.com; arc=none
+Received: from SEZPR02MB7164.apcprd02.prod.outlook.com (2603:1096:101:194::8)
+ by SG2PR02MB5843.apcprd02.prod.outlook.com (2603:1096:4:1b7::9) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.21.496.15; Thu, 8 Oct
+ 2026 08:47:20 +0000
+Received: from SEZPR02MB7164.apcprd02.prod.outlook.com
+ ([fe80::4ef:61dc:84f:92c3]) by SEZPR02MB7164.apcprd02.prod.outlook.com
+ ([fe80::4ef:61dc:84f:92c3%4]) with mapi id 15.21.0496.010; Thu, 8 Oct 2026
+ 08:47:20 +0000
+From: HAYA Hotels Sales <sales@haya-hotels.com>
+To: "nguyenminhquang061105@gmail.com" <nguyenminhquang061105@gmail.com>
+Subject:
+ =?Windows-1252?Q?Fw:_Direct_Booking_Request_=96_23=9626_October_2026_=96_?=
+ =?Windows-1252?Q?2_Rooms_/_4_Adults?=
+Thread-Topic:
+ =?Windows-1252?Q?Direct_Booking_Request_=96_23=9626_October_2026_=96_2_Ro?=
+ =?Windows-1252?Q?oms_/_4_Adults?=
+Thread-Index: AQHdUrunGDdfmhvEKk6jj5cC/Sal67bzXbc9
+Date: Thu, 8 Oct 2026 08:47:20 +0000
+Message-ID:
+ <SEZPR02MB71645E4AE83387091A01DED0E8932@SEZPR02MB7164.apcprd02.prod.outlook.com>
+References:
+ <CADsg=WHfF9yxG25k-2jBsJ4zyYNxa3-RGQFVhj80JWc=vx7dng@mail.gmail.com>
+In-Reply-To:
+ <CADsg=WHfF9yxG25k-2jBsJ4zyYNxa3-RGQFVhj80JWc=vx7dng@mail.gmail.com>
+Accept-Language: en-US, vi-VN
+Content-Language: en-US
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+msip_labels:
+authentication-results: mx.microsoft.com 1; dkim=none (message not signed)
+ header.d=none;dmarc=none action=none header.from=haya-hotels.com;
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: SEZPR02MB7164:EE_|SG2PR02MB5843:EE_
+x-ms-office365-filtering-correlation-id: 2ab7d89a-e79c-4e87-a22b-08df2518c3d7
+x-ms-exchange-senderadcheck: 1
+x-ms-exchange-antispam-relay: 0
+x-microsoft-antispam:
+ BCL:0;ARA:13230040|366016|1800799024|376014|23010399003|10067099003|56012099006|8096899003|22082099003|18002099003|38070700021;
+x-microsoft-antispam-message-info:
+ +MnWq8Vptq/lDESjIgeEq9uXEgZArGcpqp5oEBjcK0FUyeukwyVjRs9iZscUQkP+WQi/wZXSJH6WhkgV+UdYnDvohQ0lZSrXprpYXi8UjFFUyDPGc/Ap9OEZW4K5eFGIjRsSqgZgYWYW3JRBd0ldMsvzr67cmpOApRpYPtBreUx/+lVCRgBfKHwTrx88HJDvs80JaRnB2fMfrqToB7oea2pcyp3f6hQOMEqxgxBaPVIxPuiqrhM5xGsF+K1yxXobqlnDpeUg9UYhtJ24UOWHQZ8xU4DfnEtz72DGieYFuY133EyU5IzHKAmrL71bDEbZTQcEp+5Dm0p14qKC9SbTmheGxGRdd3pKm58CCX7CDM6ac5dpXcLFLnA7cneIBa6toilQM2nO5CHK65XUFN9YARNDO6yQ36vRbJT2V+NSu9Nk72fTMar/yfLp/hiWwSfH+PA25AXRrqfZvBVcUL5vfFx4p2+sF3qqYxoP6BK65Nlg/Peo4Y0P47z8Ffu98kh/YXZfUcwk5nELZVwVorg0VTM8i205UrlFZ6gSwmIKD6t+qcqW1Lz0Z9LDvKNHFbyGRQR2Jb7ig4hf8QFSmL5pXcj4ykasCXtfUJPonsll6zDrXkOwmmuOp0iqhJdykxDOxQxx020EStAKq+5KcXIFS3W03VxUO25Uc5hd6hNxpAvWaALpAzRbHR4NuudySkVafTaC+PBxbUnWweIz5NNgLHKfpi9bDujnrPp0/QYPWds=
+x-forefront-antispam-report:
+ CIP:255.255.255.255;CTRY:;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:SEZPR02MB7164.apcprd02.prod.outlook.com;PTR:;CAT:NONE;SFS:(13230040)(366016)(1800799024)(376014)(23010399003)(10067099003)(56012099006)(8096899003)(22082099003)(18002099003)(38070700021);DIR:OUT;SFP:1102;
+x-ms-exchange-antispam-messagedata-chunkcount: 1
+x-ms-exchange-antispam-messagedata-0:
+ =?Windows-1252?Q?j7YXXkz+0Ryx3CjOZFcWn6rBISr3wA2Q6kFISSjHHgLihaAhprAOf6ay?=
+ =?Windows-1252?Q?PT8ZoQYvt97jZs4ng+EWQHkdpjzlIi7tZpQ+aTK4kjWoE6elyb/ByAi2?=
+ =?Windows-1252?Q?CqLzWNLvCZ4UuIXHOEbiOmcdyJ2EuSwrh+Pc2yvLU2UB8IHyiVlsqw4W?=
+ =?Windows-1252?Q?8QDTssKDc9YzuD1z4y4G7roUtC+HWGc+tWzka6uho3/r5QFaKKhclES0?=
+ =?Windows-1252?Q?A9zJzPNDqCVJbcBwhJ8rqn/i2N17sa2reMhtqokPivYRWg0/pcddg7t1?=
+ =?Windows-1252?Q?ruV2t8+oF77fjTqZNh2BgMu6sUk8EPYJoo8cui9+z/mgYd3OlgBFv4p6?=
+ =?Windows-1252?Q?ZsYf+2OhxGXpFZ2hP4tLLvf7g1I15qDXpLWDnNRVhwRT4t6bJZuTX/mQ?=
+ =?Windows-1252?Q?hWBPpXVQYOQywCmu0URYDJ2bSE0rZzww3ifQcPnft2ZsjHnJWLN+EfQc?=
+ =?Windows-1252?Q?WQX21mxWkX0WXJaTIXIGhBnFQ7PMn1mdO267BC2FtovYuHd3bdNBQRgg?=
+ =?Windows-1252?Q?dscfVE+/ZJpwjT3IQX9VtV0rb9/ZudpBN0TjkqijIhIz7MHgdXEgksPA?=
+ =?Windows-1252?Q?vhwe/zMg16syFlBlsZ9M0YYJHbMOaCbR8eIP4tQPb5GT1Wjom3mG1Omq?=
+ =?Windows-1252?Q?z6tru9MBoFIbcpcVFBN1ulbbuX4l1lBIhsnwoBQmbii0eezD3Nm93anb?=
+ =?Windows-1252?Q?9R6AqN247ZBrJNaYZvzgtgwG6COj9l7t6p4dRhYwhulASdlXhMo4V4Jk?=
+ =?Windows-1252?Q?kixopBx4FK5+1nfKZfRK9ognG+xstoiPu8BfkMaanI37J0czDTJOoe1W?=
+ =?Windows-1252?Q?O3ZVkkQ3uqyozvvObFX7Oj1+GC6BFwQo/nu0IW0nmo9nMkzJHPZHOIKe?=
+ =?Windows-1252?Q?qzuU8hsf4vGYVFm26PHpgLFd3LjYKR6SVqI7xzcU7fScsXcdwnOG6foY?=
+ =?Windows-1252?Q?4fP4G+4gICdWgAysM2ULF/eNDWxtvyxUBIZwzeCdZHDh30AJajShEa78?=
+ =?Windows-1252?Q?Q07KuIfLSRhwXIBquphCbO81BwNbsSAUoh2gFCLdT0QvbIvgJlZhcUEs?=
+ =?Windows-1252?Q?YQ/Yl0dhdlpdGwqAtwmbo5CjI0l6LeQDfLn+vZ8yQaHvEKfyHkIPfQwb?=
+ =?Windows-1252?Q?vWzJBcgNpXkDJSSF7OCxvetMlDcxsfe05XfiTHw1i0baqPptl+WkMWw2?=
+ =?Windows-1252?Q?xGPJRGnjGRg6TBUzOc69kAeC6Qq14yPlKaXUwpaEP3TFeB6sUiaUHivA?=
+ =?Windows-1252?Q?GTSNjOOxoBeQ68YIBEOrQuc+3b3UXzJw8DfQiExb6BV8OjV7JgI13Q7k?=
+ =?Windows-1252?Q?7hprHJH9QOnREdDpJotmdr31WEFvhKlmIpRnupEAdEDANOMmen26tND3?=
+ =?Windows-1252?Q?3IfTMp6zX0OzioFZYwXZhoBDg/I6wHISTMrIjolNm25vMjQGPuVrJyai?=
+ =?Windows-1252?Q?URyPmCj/yPb/3IqNQjeSc/9ZHyOgjD+CCq/heOd9GdnCmK4irjau/scA?=
+ =?Windows-1252?Q?3y69OVYBaWjxeL3C0qFDpLGuMtyI9A3ocuRHZloQ3/hhQZAdC5/9VpE1?=
+ =?Windows-1252?Q?nJi9glweuZX89hc6AAER9EiLZj8szYcC2O1txZtWYi2Ld9/y4tOB7xII?=
+ =?Windows-1252?Q?T43u5cA0r0UV140O16IfdqNPZYyevur+AlgjQD5ed9hsLJJZ/9Rjw5jc?=
+ =?Windows-1252?Q?gGLGc2AcgZSt9Lu6HDiLGp+FaKu7tqY2AGVsxI2UVGhL2bPj2mAcd6Ck?=
+ =?Windows-1252?Q?PXQbspdHOI5cQ8MKEXKfZkngYKbkeTmQvH8bkZZlISt3kWFTp5fBMlpf?=
+ =?Windows-1252?Q?cnmTLulHGPG2WuR6SePSBQi5iPeHh0RX3mKONekyUtPMjAhU?=
+Content-Type: multipart/alternative;
+	boundary="_000_SEZPR02MB71645E4AE83387091A01DED0E8932SEZPR02MB7164apcp_"
+MIME-Version: 1.0
+X-OriginatorOrg: haya-hotels.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: SEZPR02MB7164.apcprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-Network-Message-Id: 2ab7d89a-e79c-4e87-a22b-08df2518c3d7
+X-MS-Exchange-CrossTenant-originalarrivaltime: 08 Oct 2026 08:47:20.4695
+ (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: 3fa12287-6bf1-4285-abbb-d928c8a00e10
+X-MS-Exchange-CrossTenant-mailboxtype: HOSTED
+X-MS-Exchange-CrossTenant-userprincipalname: XU1c8IQypNSQt/coUNArY8HhmOTcs7o7XiCQD8bbkTyWAGFORlgrgY49kX/sOg2GHkunh4GNe8nX7vyN/8ZFug==
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: SG2PR02MB5843
+
+--_000_SEZPR02MB71645E4AE83387091A01DED0E8932SEZPR02MB7164apcp_
+Content-Type: text/plain; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+EMAIL EXAMPLE - ADDITIONAL INFORMATION REQUEST
+________________________________
+From: Hindol Roy <hindolroy7@gmail.com>
+Sent: Saturday, October 3, 2026 05:16
+To: HAYA Hotels Sales <sales@haya-hotels.com>
+Subject: Direct Booking Request =96 23=9626 October 2026 =96 2 Rooms / 4 Ad=
+ults
+
+
+Dear Reservations Team,
+
+I am planning a family stay at Haya Hotel Phu Quoc, Trademark Collection by=
+ Wyndham, from 23 October 2026 to 26 October 2026 (3 nights), for 4 adults =
+requiring 2 rooms.
+
+Please send me your best direct booking rate, including all taxes and buffe=
+t breakfast.
+
+Our preferred arrangement is:
+=95 Room 1: 1 King/Double room, preferably sea view, for 2 adults
+=95 Room 2: Twin room for an 88-year-old gentleman and his attendant/nurse
+
+For the second room, please confirm easy access by lift, minimal walking/st=
+eps, an easy-to-use shower/bathroom, and a quiet location.
+
+Please quote:
+
+  1.  Your lowest available room rate with breakfast and all taxes
+  2.  Best rate for a sea-view room
+  3.  Flexible/free-cancellation rate, if available
+  4.  Any direct-booking discount, complimentary upgrade or stay offer
+  5.  Airport transfer charges, if any
+  6.  Whether vegetarian/Indian breakfast items can be arranged
+  7.  Your WhatsApp or Zalo number for reservation coordination
+
+We are comparing direct hotel rates with Booking/Agoda/MakeMyTrip and are r=
+eady to book directly if your offer is competitive.
+
+Kind regards,
+Hindol Roy
+
+--_000_SEZPR02MB71645E4AE83387091A01DED0E8932SEZPR02MB7164apcp_
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-1=
+252">
+<style type=3D"text/css" style=3D"display:none;"> P {margin-top:0;margin-bo=
+ttom:0;} </style>
+</head>
+<body dir=3D"ltr">
+<div style=3D"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, =
+Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);" clas=
+s=3D"elementToProof">
+EMAIL EXAMPLE - ADDITIONAL INFORMATION REQUEST&nbsp;</div>
+<div id=3D"appendonsend"></div>
+<hr style=3D"display:inline-block;width:98%" tabindex=3D"-1">
+<div id=3D"divRplyFwdMsg" dir=3D"ltr"><font face=3D"Calibri, sans-serif" st=
+yle=3D"font-size:11pt" color=3D"#000000"><b>From:</b> Hindol Roy &lt;hindol=
+roy7@gmail.com&gt;<br>
+<b>Sent:</b> Saturday, October 3, 2026 05:16<br>
+<b>To:</b> HAYA Hotels Sales &lt;sales@haya-hotels.com&gt;<br>
+<b>Subject:</b> Direct Booking Request =96 23=9626 October 2026 =96 2 Rooms=
+ / 4 Adults</font>
+<div>&nbsp;</div>
+</div>
+<div>
+<p>Dear Reservations Team,</p>
+<p>I am planning a family stay at Haya Hotel Phu Quoc, Trademark Collection=
+ by Wyndham, from 23 October 2026 to 26 October 2026 (3 nights), for 4 adul=
+ts requiring 2 rooms.</p>
+<p>Please send me your best direct booking rate, including all taxes and bu=
+ffet breakfast.</p>
+<p>Our preferred arrangement is:<br>
+=95 Room 1: 1 King/Double room, preferably sea view, for 2 adults<br>
+=95 Room 2: Twin room for an 88-year-old gentleman and his attendant/nurse<=
+/p>
+<p>For the second room, please confirm easy access by lift, minimal walking=
+/steps, an easy-to-use shower/bathroom, and a quiet location.</p>
+<p>Please quote:</p>
+<ol>
+<li>Your lowest available room rate with breakfast and all taxes</li><li>Be=
+st rate for a sea-view room</li><li>Flexible/free-cancellation rate, if ava=
+ilable</li><li>Any direct-booking discount, complimentary upgrade or stay o=
+ffer</li><li>Airport transfer charges, if any</li><li>Whether vegetarian/In=
+dian breakfast items can be arranged</li><li>Your WhatsApp or Zalo number f=
+or reservation coordination</li></ol>
+<p>We are comparing direct hotel rates with Booking/Agoda/MakeMyTrip and ar=
+e ready to book directly if your offer is competitive.</p>
+<p>Kind regards,<br>
+Hindol Roy</p>
+</div>
+</body>
+</html>
+
+--_000_SEZPR02MB71645E4AE83387091A01DED0E8932SEZPR02MB7164apcp_--

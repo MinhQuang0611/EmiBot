@@ -1,0 +1,4 @@
+# Python 3.10+. Graph mail (tools/graph_mail.py) uses only the standard library.
+# Google Sheets/Drive via service account (tools/intake_sheet.py):
+google-auth>=2.20
+requests>=2.31

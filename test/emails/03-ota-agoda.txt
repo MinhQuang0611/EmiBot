@@ -1,0 +1,25 @@
+From: Agoda <no-reply@agoda.test>
+To: sales@haya-hotels.com
+Date: 08/10/2026 13:40 (UTC+7)
+Subject: Agoda Booking ID 1122334455 - New booking - HAYA Hotel Phu Quoc
+
+NEW BOOKING
+
+Booking ID: 1122334455
+Hotel: HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+Customer: KIM JIWOO
+Country of residence: South Korea
+Check-in: 14/11/2026
+Check-out: 16/11/2026
+Room type: Superior Double - Breakfast included
+No. of rooms: 1
+No. of adults: 2
+No. of children: 0
+
+Net rate to property:
+14/11/2026  VND 850,000
+15/11/2026  VND 850,000
+Total net: VND 1,700,000
+
+Payment: Agoda collect
+Special request: High floor, non-smoking

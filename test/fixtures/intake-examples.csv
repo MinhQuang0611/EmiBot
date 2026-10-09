@@ -1,0 +1,16 @@
+action,received_at,source_email,property,channel_type,company,contact_person,company_email,booking_ref,ezfolio_group_code,confirmation_no,what_changed,guest_names,nationality,arrival,departure,nights,room_code,rooms,adults,children,child_ages,meal_plan,rate_source,rate_per_night_vnd,discount_promo,Average rate per night after discount,surcharge,Surcharge amount,total_vnd,status,hold_until,prepaid,invoice_details,arrival_time,transfer,special_requests,notes,missing_info,priority,tracy_status,pdf_link,COD,Payment 1,Payment 1 date + time,Payment 2,Payment 2 date + time,Remaining amount
+NEW,04/10/2026 10:15,Booking request GADT 0410STE251026,EXAMPLE - HAYA,TA,GADT Travel,Stella Nguyen,,GADT 0410STE251026,,,,MR VARUN; + 4 adults TBA,India,25/10/2026,29/10/2026,4,TPL,2,5,2,9; 2,BB,TA card,2100000,,,+20% Indian guests (incl. in rate),,16800000,Definite,,No,,,,Adjacent rooms if possible,"2-year-old shares bed, no extra bed.",,Normal,Pending,,,,,,,
+NEW,06/10/2026 17:18,HAYA HOTEL PHU QUOC/ code Thu1230 TVR149,HAYA,TA,Phú Minh Quang Travel,Lê Thị Lệ Thu,eam@phuminhquangtravel.com,Thu1230 TVR149,,,,MR DEEPAK GUPTA,India,04/01/2027,06/01/2027,2,DLX-SV,1,2,1,4,,TA card,2000000,,2400000,,,4800000,Tentative,,,"CÔNG TY TNHH THƯƠNG MẠI & DỊCH VỤ DU LỊCH PHÚ MINH QUANG; MST 0402145541; 26 Dương Khuê, Phường Ngũ Hành Sơn, Đà Nẵng; vat.phuminhquang@gmail.com",,,,"1. Phú Minh Quang Travel – Ref Thu1230 TVR149
+2. MR DEEPAK GUPTA – India
+3. 04/01/2027 – 06/01/2027
+4. 1 Deluxe Seaview – 2 adults, 1 child (4)
+5. None
+6. 2,000,000 +20% Indian = 2,400,000 × 2 nights × 1 room = 4,800,000, incl. 8% VAT
+7. Invoice: CÔNG TY TNHH THƯƠNG MẠI & DỊCH VỤ DU LỊCH PHÚ MINH QUANG, MST 0402145541, 26 Dương Khuê, Phường Ngũ Hành Sơn, Đà Nẵng; vat.phuminhquang@gmail.com","Confirm rate, meal plan, and EZFOLIO company name.",Normal,Pending,,,,,,,4800000
+NEW,06/10/2026 13:49,HAYA Hotel/TBA/ 11-15.01.2027/ An0109,HAYA,TA,Phú Minh Quang Travel,Nguyễn Thị Diệu Ân (Anna),sales@phuminhquangtravel.com,An0109,,,,TBA,India,11/01/2027,15/01/2027,4,TPL,1,,,,BB,TA card,2300000,,2760000,,,11040000,Tentative,,,,,,,"1. Phú Minh Quang Travel – Ref An0109
+2. TBA – India
+3. 11/01/2027 – 15/01/2027
+4. 1 Triple + 1 Deluxe Seaview – 5 adults, 2 children (4, 2) TBA allocation
+5. None
+6. Triple 2,300,000 +20% Indian = 2,760,000 × 4 nights = 11,040,000; Deluxe Seaview 2,000,000 +20% = 2,400,000 × 4 nights = 9,600,000; total 20,640,000, incl. 8% VAT and breakfast
+7. Invoice: CÔNG TY TNHH THƯƠNG MẠI & DỊCH VỤ DU LỊCH PHÚ MINH QUANG, MST 0402145541, 26 Dương Khuê, Phường Ngũ Hành Sơn, Đà Nẵng; vat.phuminhquang@gmail.com",Allocate 5 adults and 2 children (ages 4; 2) between two rooms; confirm rates and EZFOLIO company name.,Normal,Pending,,,,,,,11040000

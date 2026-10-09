@@ -1,0 +1,38 @@
+﻿action,received_at,source_email,property,channel_type,company,contact_person,company_email,booking_ref,guest_names,nationality,arrival,departure,nights,room_code,rooms,adults,children,child_ages,meal_plan,rate_source,rate_per_night_vnd,discount_promo,avg_rate_after_discount_vnd,surcharge_type,surcharge_amount_vnd,total_vnd,status,hold_until,prepaid,invoice_details,arrival_time,transfer,special_requests,notes,missing_info,priority,cod_deadline,payment_1_vnd,payment_1_at,payment_2_vnd,payment_2_at,remaining_vnd,ezfolio_group_code,confirmation_no,tracy_status,pdf_link
+NEW,08/10/2026 09:14,SAO BIỂN TRAVEL ĐẶT PHÒNG HAYA - SB2611-047 - 20/11,HAYA,TA,Sao Biển Travel,Nguyễn Thu Hà,booking@saobien-travel.test,SB2611-047,Trần Văn Minh; Lê Thị Hoa; Trần Gia Bảo; Phạm Quốc Huy; Phạm Thị Lan; Đỗ Văn Nam; Đỗ Thị Mai,VNM,21/11/2026,24/11/2026,3,,2,4,,,BB,TA card,1950000,,1950000,,,11700000,Tentative,,No,"CÔNG TY TNHH DU LỊCH SAO BIỂN (TEST); MST 0000000000; 12 Đường Thử Nghiệm, Q.1, TP.HCM; ketoan@saobien-travel.test","14:00 (báo cho ngày 20/11, chưa xác nhận lại cho 21/11)",,3 phòng cùng tầng nếu được,"1. Sao Biển Travel - SB2611-047
+2. Lead: Trần Văn Minh (VNM), đoàn 7 khách
+3. 21/11/2026 - 24/11/2026, 3 đêm (đổi từ 20/11-23/11 theo email 09/10 10:05)
+4. 2 Superior Double + 1 Deluxe Seaview; 6 NL + 1 TE 5 tuổi ngủ chung giường bố mẹ
+5. 3 phòng cùng tầng nếu được; đến khoảng 14:00 (giờ báo cho ngày 20/11 cũ)
+6. Giá theo email (chưa đối chiếu bảng TA): SD 1.950.000 x 2 phòng x 3 đêm = 11.700.000; DLX Seaview 2.450.000 x 1 x 3 = 7.350.000; phòng = 19.050.000. Phụ thu TE 5 tuổi (EXC) 350.000 x 3 = 1.050.000 nếu là ngày thường, chưa gán phòng. Tổng dự kiến 20.100.000
+7. HĐ: CÔNG TY TNHH DU LỊCH SAO BIỂN (TEST), MST 0000000000, 12 Đường Thử Nghiệm Q.1 TP.HCM, ketoan@saobien-travel.test
+[Room: Superior Double] UNC đặt cọc cả booking ghi ở dòng này; chưa được kế toán xác nhận",Bảng giá TA 2026 trống: chưa đối chiếu được 1.950.000/2.450.000 | room_code: thiếu bảng Room codes | Trẻ em 5 tuổi ở phòng nào (SD hay DLX) -> chưa gán children/phụ thu EXC | Phân phòng 7 khách theo hạng phòng | Giờ đến 14:00 còn đúng với ngày đến mới 21/11? | Tên công ty trong EZFOLIO chưa xác nhận | UNC 9.150.000 không khớp 50% (9.525.000 tiền phòng hoặc 10.050.000 gồm phụ thu) -> Karen,High,48h sau khi đại lý nhận xác nhận (chưa gửi),9150000,09/10/2026 16:12,,,,,,Pending,
+NEW,08/10/2026 09:14,SAO BIỂN TRAVEL ĐẶT PHÒNG HAYA - SB2611-047 - 20/11,HAYA,TA,Sao Biển Travel,Nguyễn Thu Hà,booking@saobien-travel.test,SB2611-047,Trần Văn Minh; Lê Thị Hoa; Trần Gia Bảo; Phạm Quốc Huy; Phạm Thị Lan; Đỗ Văn Nam; Đỗ Thị Mai,VNM,21/11/2026,24/11/2026,3,,1,2,,,BB,TA card,2450000,,2450000,,,7350000,Tentative,,No,"CÔNG TY TNHH DU LỊCH SAO BIỂN (TEST); MST 0000000000; 12 Đường Thử Nghiệm, Q.1, TP.HCM; ketoan@saobien-travel.test","14:00 (báo cho ngày 20/11, chưa xác nhận lại cho 21/11)",,3 phòng cùng tầng nếu được,"1. Sao Biển Travel - SB2611-047
+2. Lead: Trần Văn Minh (VNM), đoàn 7 khách
+3. 21/11/2026 - 24/11/2026, 3 đêm (đổi từ 20/11-23/11 theo email 09/10 10:05)
+4. 2 Superior Double + 1 Deluxe Seaview; 6 NL + 1 TE 5 tuổi ngủ chung giường bố mẹ
+5. 3 phòng cùng tầng nếu được; đến khoảng 14:00 (giờ báo cho ngày 20/11 cũ)
+6. Giá theo email (chưa đối chiếu bảng TA): SD 1.950.000 x 2 phòng x 3 đêm = 11.700.000; DLX Seaview 2.450.000 x 1 x 3 = 7.350.000; phòng = 19.050.000. Phụ thu TE 5 tuổi (EXC) 350.000 x 3 = 1.050.000 nếu là ngày thường, chưa gán phòng. Tổng dự kiến 20.100.000
+7. HĐ: CÔNG TY TNHH DU LỊCH SAO BIỂN (TEST), MST 0000000000, 12 Đường Thử Nghiệm Q.1 TP.HCM, ketoan@saobien-travel.test
+[Room: Deluxe Seaview] Thanh toán: xem dòng Superior Double",Bảng giá TA 2026 trống: chưa đối chiếu được 1.950.000/2.450.000 | room_code: thiếu bảng Room codes | Trẻ em 5 tuổi ở phòng nào (SD hay DLX) -> chưa gán children/phụ thu EXC | Phân phòng 7 khách theo hạng phòng | Giờ đến 14:00 còn đúng với ngày đến mới 21/11? | Tên công ty trong EZFOLIO chưa xác nhận | UNC 9.150.000 không khớp 50% (9.525.000 tiền phòng hoặc 10.050.000 gồm phụ thu) -> Karen,High,48h sau khi đại lý nhận xác nhận (chưa gửi),,,,,,,,Pending,
+NEW,08/10/2026 11:02,New booking request - LJ-88213 - HAYA Phu Quoc,HAYA,TA,Lotus Journeys,Priya Shah,reservations@lotus-journeys.test,LJ-88213,Rohan Mehta,IND,05/12/2026,,,,2,,,,BB,TA card,,,,,,,Tentative,,,,,,"Kỷ niệm ngày cưới: nhờ chuẩn bị 'something special' trong phòng (chưa rõ là gì, có phí hay không -> Karen)","1. Lotus Journeys - LJ-88213
+2. Lead: Mr. Rohan Mehta (IND)
+3. Nhận phòng 05/12/2026, ngày trả phòng chưa có
+4. 2 Deluxe Seaview; số khách chưa có
+5. Kỷ niệm ngày cưới, xin trang trí phòng
+6. Giá TA mùa Winter + 20% (khách Ấn Độ); bảng TA trống nên chưa tính. Đại lý xin giá tốt hơn -> Karen
+7. Không có thông tin hóa đơn","Ngày trả phòng / số đêm | Số người lớn, trẻ em, tuổi trẻ em | Tên các khách còn lại | Giá: bảng TA trống | room_code | Xin giảm giá -> Karen | Trang trí kỷ niệm: miễn phí hay tính tiền -> Karen",High,,,,,,,,,Pending,
+NEW,08/10/2026 13:40,Agoda Booking ID 1122334455 - New booking - HAYA Hotel Phu Quoc,HAYA,OTA,Agoda,,no-reply@agoda.test,1122334455,KIM JIWOO,KOR,14/11/2026,16/11/2026,2,,1,2,0,,BB,OTA net,850000,,850000,,,1700000,Definite,,Yes (Agoda collect),,,,Tầng cao; không hút thuốc,"1. Agoda - 1122334455 (SynXis 77665544, email 13:41 cùng booking, không nhập lần 2)
+2. Lead: KIM JIWOO (KOR, theo nước cư trú)
+3. 14/11/2026 - 16/11/2026, 2 đêm
+4. 1 Superior Double; 2 NL
+5. Tầng cao, không hút thuốc
+6. Net 850.000 x 2 đêm = 1.700.000 (SynXis khớp). DƯỚI SÀN 1.000.000/đêm
+7. -",Giá 850.000/đêm dưới sàn 1.000.000 -> Karen kiểm tra khuyến mãi | room_code | Quốc tịch chỉ có nước cư trú,High,,,,,,,,,Pending,
+CANCEL,08/10/2026 15:20,CANCEL - BWT-5521 - Ellison family - 02/12/2026,HAYA,,Bluewave Tours,Mark Ellison,ops@bluewave-tours.test,BWT-5521,Ellison family,,02/12/2026,06/12/2026,4,,1,,,,,,,,,,,,Cancelled,,,,,,,"1. Bluewave Tours - BWT-5521 - YÊU CẦU HỦY
+2. Ellison family
+3. 02/12/2026 - 06/12/2026, 4 đêm
+4. 1 'Family room'
+5. Đại lý hỏi có phí hủy không
+6. -
+7. -","CHỜ KAREN OK HỦY | Booking chưa có trong sheet: Tracy phải tìm trong EZFOLIO (mã đoàn, số xác nhận) | 'Family room' không phải hạng phòng HAYA, cần đối chiếu | channel_type (TA hay Tour operator) | Điều kiện phí hủy",High,,,,,,,,,Pending,

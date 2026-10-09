@@ -1,0 +1,953 @@
+Delivered-To: nguyenminhquang061105@gmail.com
+Received: by 2002:ad4:504e:0:b0:917:7d94:d3ea with SMTP id m14csp971553qvq;
+        Thu, 8 Oct 2026 01:46:42 -0700 (PDT)
+X-Received: by 2002:a05:690e:1919:b0:671:70d1:d6eb with SMTP id 956f58d0204a3-6790a4e988emr2657466d50.93.1791449202573;
+        Thu, 08 Oct 2026 01:46:42 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1791449202; cv=pass;
+        d=google.com; s=arc-20260327;
+        b=LGIOTcPnHt6awXxwBl7ngMP+ZSV/yfspdS2Fl2zv2aXI92l6hQln0jePayu+aqasJi
+         71oCJAex237MzwuJcMimYFwkRE+cXJMgmRQC+OSccVJc+r0N9jgUh2ezp1rPn3AseoYN
+         CvfuEULXszqC+agA3ZRZ8iciq5txl2bJ4/qT94X0Vf4r4JrOHO1Gx9xgfOqF9Ln1dI+V
+         HLJahenECvHLiJTl3NvOKBSUTtlZBeRaj/ypazzMxTv4FUHJi9GjAmEH7S+fU7OmYx7L
+         AJ8BMxti8I0D+3fJ0Axd0RIofxsxfqmbEPk7r8tzIf9zeUJF4+PDFJgmghHPOngKbUU1
+         d4yQ==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=mime-version:msip_labels:content-language:accept-language
+         :in-reply-to:references:message-id:date:thread-index:thread-topic
+         :subject:to:from;
+        bh=vQT9dRunk1RqhJA2QpELRoSi+t+AbRjmQMno8irFrGU=;
+        fh=MgnTwFWyeneN47PUSgh1HuI9MgXBvzAhxCv66SJMnvI=;
+        b=p6sLCYn/RREglcFUnUagxMvVAqT9SNpVVjg7JuZ/cIzRs23Y0H75Bux3ZzwaqC28cp
+         /WAKO/TwQBcO8OVM+Vc096741f1ZUqodwVx/yWT5bq/ccTjQFJVGCBQshxWRCohdfaKS
+         Ly21GXdudYPWYdavUS66ecz5J7aMGf4ek3jOcI7GaugKUVI6uCbVyt2xqht+RDFQxw3w
+         fO6yRSbVlCBerOJdrUuwlFfDBWHLqRfj8nNKmr1E7Zd1YVRgq7VpmOQB1/oI0hLNNORQ
+         SN/uaf4+IxDQ8IXQ2BPfHMjAbaRMwMd0/Coux5icDwa6Ax24ex1NvbC8f81LBAZL9LGq
+         lx0g==;
+        dara=google.com
+ARC-Authentication-Results: i=2; mx.google.com;
+       arc=pass (i=1 spf=pass spfdomain=haya-hotels.com dkim=pass dkdomain=haya-hotels.com dmarc=pass fromdomain=haya-hotels.com);
+       spf=pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c406::3 as permitted sender) smtp.mailfrom=sales@haya-hotels.com
+Return-Path: <sales@haya-hotels.com>
+Received: from OS8PR02CU002.outbound.protection.outlook.com (mail-japanwestazlp170120003.outbound.protection.outlook.com. [2a01:111:f403:c406::3])
+        by mx.google.com with ESMTPS id 956f58d0204a3-6791b07059bsi1030861d50.173.2026.10.08.01.46.42
+        for <nguyenminhquang061105@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Thu, 08 Oct 2026 01:46:42 -0700 (PDT)
+Received-SPF: pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c406::3 as permitted sender) client-ip=2a01:111:f403:c406::3;
+Authentication-Results: mx.google.com;
+       arc=pass (i=1 spf=pass spfdomain=haya-hotels.com dkim=pass dkdomain=haya-hotels.com dmarc=pass fromdomain=haya-hotels.com);
+       spf=pass (google.com: domain of sales@haya-hotels.com designates 2a01:111:f403:c406::3 as permitted sender) smtp.mailfrom=sales@haya-hotels.com
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=xetnYLl2/lSZ3dqSBiMN/FwxdXW2sE+jr+tNla7cASAy/eGpMNwVnVFA6PU7LwCiUQaAdeZ/j7EgdrjqiBB7SoG2ABOUMRTM378t7NTLzmz9cKvsHeYGiuI8C9Hfpfxc2puzrGkD9J0FZmeQYRINWVCS9vH7gc8LoBp82ayMZzyMgLfjDaoQpT+wfAcQRVyr+J8fxtQBISN3OOCitL9vMwI/5EbRvrB7qW6xGLPMiCiv6uu3GJJ/yRy9qHywOpWChl+gcCxeTy6gK9Z8dYWZHhgO0KUODwN2DMuq6pN7qCBtG/SpAkuxEaGUUfwkWBzxdOC+pW9qcp3VYQ7Mi5KFyQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=vQT9dRunk1RqhJA2QpELRoSi+t+AbRjmQMno8irFrGU=;
+ b=c7g66CYKGau2l+9Zn+NJ8kzqX4kV8u/JkahDextx6voGUnPsJC/iQ6QJdzxRRcgNgFYDTL7/IBQbas42Vpq5Z2L6nUX7PSE1D98uSbibtgBo9Q4DpiHsdDch/+ztTSMyx7yDbVcBpJVuEwboamgFdMFdxEclaoLVOVl1GA0TpJs+fYGZXHVapaTDIVbxMjAoXkewhXZMudfdotOunbUDmyTRMd09d1py6Wr6uXjq083WXkOfG4Mcn3dFtHU1aQjQkpVe05cXRBxEw6U1GUVC0japNgfeK83Kj0KiFtB0YQV78E0WgBI4ecRL2Crh9YBlP86DASkxoha0jmMbIDtavg==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=haya-hotels.com; dmarc=pass action=none
+ header.from=haya-hotels.com; dkim=pass header.d=haya-hotels.com; arc=none
+Received: from SEZPR02MB7164.apcprd02.prod.outlook.com (2603:1096:101:194::8)
+ by SG2PR02MB5843.apcprd02.prod.outlook.com (2603:1096:4:1b7::9) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.21.496.15; Thu, 8 Oct
+ 2026 08:46:37 +0000
+Received: from SEZPR02MB7164.apcprd02.prod.outlook.com
+ ([fe80::4ef:61dc:84f:92c3]) by SEZPR02MB7164.apcprd02.prod.outlook.com
+ ([fe80::4ef:61dc:84f:92c3%4]) with mapi id 15.21.0496.010; Thu, 8 Oct 2026
+ 08:46:37 +0000
+From: HAYA Hotels Sales <sales@haya-hotels.com>
+To: "nguyenminhquang061105@gmail.com" <nguyenminhquang061105@gmail.com>
+Subject: Fw: CANCELLED RESERVATION No: 112888584; 
+Thread-Topic: CANCELLED RESERVATION No: 112888584; 
+Thread-Index: AQHdVuVq5zqrhwzywkioUzHsF1YHdbbzVTl1
+Date: Thu, 8 Oct 2026 08:46:37 +0000
+Message-ID:
+ <SEZPR02MB7164FD8E388344BA7E8372BFE8932@SEZPR02MB7164.apcprd02.prod.outlook.com>
+References: <20261008052513.42A426F40DEF@mail.anex.agency>
+In-Reply-To: <20261008052513.42A426F40DEF@mail.anex.agency>
+Accept-Language: en-US, vi-VN
+Content-Language: en-US
+X-MS-Has-Attach: yes
+X-MS-TNEF-Correlator:
+msip_labels:
+authentication-results: mx.microsoft.com 1; dkim=none (message not signed)
+ header.d=none;dmarc=none action=none header.from=haya-hotels.com;
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: SEZPR02MB7164:EE_|SG2PR02MB5843:EE_
+x-ms-office365-filtering-correlation-id: a209c4cf-aa87-49ab-d2d0-08df2518aa60
+x-ms-exchange-senderadcheck: 1
+x-ms-exchange-antispam-relay: 0
+x-microsoft-antispam:
+ BCL:0;ARA:13230040|366016|1800799024|6049299003|376014|23010399003|10067099003|56012099006|8096899003|22082099003|18002099003|4053099003|38070700021;
+x-microsoft-antispam-message-info:
+ /8xm3BahIvDArLPViITLw8Oj7lQL8kUgQ+gus6JOFfcfQ6TZ0rvctjeDde3Rf2cJ2q2pihWSrvlstQNW8pLkGwWUWnjsqFBt831Nyz4gUKG/4cgklD2gFRj5brbPaHt8qrXBYs+Hcw3AC2Axq76ywcM8wq3PfHhoMaO6YOFaG8jS7GKGH3Ca9ciKafXLj+lt6Abi2So1VZYmGB+car7qiDGKMdDE0Qssn38XVDtVoLeJ+miJMQ+qJts6bsB6LiXmv3xRA+qgTHjHqrhleIWoRNcjzYZxhGMtmKFuB/VHIHPQYDdXj/opbichS/bu1KvDHAhgQeW03X1F+G760fyDIey7vz5ppClRd7No2SbTagc76AnK0ZJyk6V1ld6fsWP8Ac4KZxx3L/R0mamKRUyDJWs9zo71SjrlhQrOnjw8B6s97qLb95IylfevQ5ecE3nOSxTtoeygkHh+Pshw6qj09kGdId2XTxhhy4FepbeEsm69eH5RmeiX/z+kvy/JS0qDO+Q4JTreB/jY06ZMiks0ObLbj80BMfExNPmAZBUKceuqMFueXrejk+6SzM3HAIiROoigPKxRYcbx0ALf0nElJjFpngzozgR77+hQfsp4TczLBC/fCm6tUsfVhbzu0LpqRV58Hc+fG5RCsGvuVEIdRgIDTMC7b80wq5RbvYEpnho=
+x-forefront-antispam-report:
+ CIP:255.255.255.255;CTRY:;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:SEZPR02MB7164.apcprd02.prod.outlook.com;PTR:;CAT:NONE;SFS:(13230040)(366016)(1800799024)(6049299003)(376014)(23010399003)(10067099003)(56012099006)(8096899003)(22082099003)(18002099003)(4053099003)(38070700021);DIR:OUT;SFP:1102;
+x-ms-exchange-antispam-messagedata-chunkcount: 1
+x-ms-exchange-antispam-messagedata-0:
+ =?Windows-1252?Q?SM1L1O+InUhfazEflzzN1frLxHWDh9Drw2wgb4Zt/lgucdJ4M+TDJNgN?=
+ =?Windows-1252?Q?ZS0HLAMi3w5NcmsQsbm0/LLrmcltClFDxTeErJkiQe2jkgAwTl+dCAiU?=
+ =?Windows-1252?Q?2vrtHcMOI9A3ldsB9uz2yq7+RNGFxuxZ7Q/2lJRzicsXSD/ViviXp+ws?=
+ =?Windows-1252?Q?CJodEq/uEP6fwc9ToX2WuaPVZm2Y2ZV3UITUDbsWsvWEhJZMmS+UZpx8?=
+ =?Windows-1252?Q?P5oV3T65qYB4bHKx0xPahvyn80GA5nL2WcFsTqehu9Qh49fnlduiHfu4?=
+ =?Windows-1252?Q?2URGPeAWUEZf+G18MlaaS5SBdpEANOBXmGNKCcSEq6bkpzmVly6HO78y?=
+ =?Windows-1252?Q?g//VFjJ44mKNg/NYdGNQmmH8aaUjRy+/PB0316GZLPN9bTlv3WXY4it3?=
+ =?Windows-1252?Q?ntz/G4xRNW+2O8Q7hGhdjI5bg/EjGzRXFHI26eX3sVNom8KzHiROSlr5?=
+ =?Windows-1252?Q?O0w8Jm03c7j3R4EhqS8iRrSBWh6a7gAGE3+JFCi54BESkGj5VjgAh+6C?=
+ =?Windows-1252?Q?c++9h82e8ICUbO+waz7ZyYxBCbqPmkJmrfUT40cGCnhzHY7mjLGZKI0G?=
+ =?Windows-1252?Q?YKWWrF7s1QAEEX+sfvZULQn11mOLaUa56gW8vDiqDWh6cc2HfsLngWDf?=
+ =?Windows-1252?Q?GH7KBL6ZccWqQuAhbJDW8EHs+yyVbs+fwAAORawZ4IY0im9CNPMFqz1B?=
+ =?Windows-1252?Q?wzrRDGJ3X2ZxK/6z05q1YEaDyz/SPsp/l+FMgiP4XNO4PgdmR2yNSHLi?=
+ =?Windows-1252?Q?+0Jv+FMN0lA+IbfcjScz3VpNNizspopcHmdD+jJ1vyREQ6DQlm3MRL4j?=
+ =?Windows-1252?Q?iYfZ3jxf4yT4TbIoCjBn1qG/RvBl/jgtR2ecdI4ySlXBAVhiiDsbrBQK?=
+ =?Windows-1252?Q?66rFSOvhXE9DwnQ9l4WLb0Q/da8f6xkP08joBH4BAPp+sBDMX/lfd9fJ?=
+ =?Windows-1252?Q?thX40XzVts0XzlfgrogtxAoUMeS3qJAU9RZIaigj/3Y8xnUNL2+QWayW?=
+ =?Windows-1252?Q?iIAG8W0bQSdpLiQXBWVHKag87keOKFZ3ZAaae2FTfStWZ0dndrl8U2oS?=
+ =?Windows-1252?Q?kDO/7hI5c+MwOkL/RCw6XTv/yLi3lfMsV1FkB/TqvR8qE1B2j9oWeYJ3?=
+ =?Windows-1252?Q?0U3uA3uyqmXO45leGI+ZCCgpftOONYJc3uyHo3swAfpoTOcTSls5vVbq?=
+ =?Windows-1252?Q?gjyPgr/NS8hfAXPvDH+AXtYNbDvm3m+BpBGnWpgCe7T2pE8VkgcWpap4?=
+ =?Windows-1252?Q?5Y0CsoRTA3xgpAYMpGUUOGpl9iX5zTYwUQWMtpqIPq0faWKixKQNy8fc?=
+ =?Windows-1252?Q?dLwcJ37xxK1/qGQo2xZ264pAAF5wZ0JnV774yxd1G20pt2g3WRlUnkJn?=
+ =?Windows-1252?Q?o/Wilj90fpdr3+Sz1tiXJOGQ8p+SyjTeob1aLTl8vxubHfdcPmONRP/P?=
+ =?Windows-1252?Q?gDmBKKS6CHmzCFWltDolv2uQ7n92U410mUaTDx8yrui67q/2bZEccDCn?=
+ =?Windows-1252?Q?5+OpjkpQjdeB7iuo+2MzMj1Gf1fNGbQetMPljMGJFRXpo+Yi7D77dYzv?=
+ =?Windows-1252?Q?pYesHYmgUK2OcQihbj7aVAnCWW1wOqy7luNY+gcyYcuYISkZndfY0Ux+?=
+ =?Windows-1252?Q?v8oj+nCI3Ch8E+kJj699QozCqOb+CBCetQCNRXwlOZYQS9vyq0MxLE9F?=
+ =?Windows-1252?Q?LXSnTAVtYvRswQFBzVI7w6e4cH4ovSKzH0Rr0YOIyjTfOByo8ndfJL3L?=
+ =?Windows-1252?Q?YEIaX8CKI/kPfm8odoOuCjXu0bei6JPzVcFiIVYgAs+njhgxkTRoTLdA?=
+ =?Windows-1252?Q?NK5VCbOMC9lz6/LJDVVand7OPzESFhM+G+VBe6VKOu5UmidS?=
+Content-Type: multipart/related;
+	boundary="_004_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_";
+	type="multipart/alternative"
+MIME-Version: 1.0
+X-OriginatorOrg: haya-hotels.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: SEZPR02MB7164.apcprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-Network-Message-Id: a209c4cf-aa87-49ab-d2d0-08df2518aa60
+X-MS-Exchange-CrossTenant-originalarrivaltime: 08 Oct 2026 08:46:37.7648
+ (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: 3fa12287-6bf1-4285-abbb-d928c8a00e10
+X-MS-Exchange-CrossTenant-mailboxtype: HOSTED
+X-MS-Exchange-CrossTenant-userprincipalname: 1YHDTYSvNUjLD1d+/3jElZ+qNIdMrfhMU7q3bGZTvrPrmqEf9siVDr9I/5gMoYd81ToRPe/9wFBHoSHfGrUzfA==
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: SG2PR02MB5843
+
+--_004_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_
+Content-Type: multipart/alternative;
+	boundary="_000_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_"
+
+--_000_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_
+Content-Type: text/plain; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+EMAIL - CANCELLED BOOKING
+
+________________________________
+From: Anex Tour - Robot <vn.robot@ms.anextour.com>
+Sent: Thursday, October 8, 2026 12:25
+To: HAYA Hotels Sales <sales@haya-hotels.com>
+Cc: reservation@anexvietnam.com <reservation@anexvietnam.com>
+Subject: CANCELLED RESERVATION No: 112888584;
+
+[cid:content.files.img0.png@a0fde1db.ac7e.4a66.bda8.f5988f45d8b1]
+ANEX VIETNAM
+Floor 7, VNPT Tower, 50 Le Thanh Ton, Loc Tho, Nha Trang, VIETNAM
+Phones: +84 (58) 3521 426;
+Fax: +84 (58) 3521 427
+Dear reservation team representative:
+Please, confirm the status of the following reservation by clicking on conf=
+irmation link.
+Please, contact with Our Reservation Team if you don=92t know/forgot user n=
+ame and password.
+CANCELLED RESERVATION
+No answer
+confirmation link<https://hotelbooking.anexvietnam.com/reservations?samo%20=
+action=3DconfirmOrder&order=3D4567422&guid=3D49F7E47D-2786-49DC-9CDC-6D0B43=
+B70965&lang=3Den>
+Hotel:
+Haya Hotel Phu Quoc =96 Trademark Collection By Wyndham (DUONG DONG)
+Room:
+1 room(s)
+Standard Room - Double
+Accom.type:
+DBL
+On request
+Reservation No:
+112888584
+Reservation date:
+05.10.2026
+Check-in date:
+11.10.2026
+
+Meal:
+BB
+Check-out date:
+21.10.2026
+
+Touroperator:
+ANEX NOVOKUZNETSK
+Nights:
+10
+State:
+Russia
+Hotel SPO No:
+Haya Hotel Phu Quoc SPO; Haya Hotel Phu Quoc BNO
+Note:
+pls. french bed if possible; not ground floor
+Guest name
+Age
+
+MR
+LIASHENKO ALEKSEI
+45
+29.11.1980
+MRS
+LIASHENKO IRINA
+44
+12.11.1981
+
+Pax:
+2
+
+This message is a part of SAMO-Soft: Hotel-booking system. This message is =
+generated automatically at 08.10.2026 12:25. Please do not answer it.
+To change your email notification subscription please use Hotel-booking onl=
+ine form.
+CONFIDENTIALITY NOTICE: This email is confidential. If you are not the inte=
+nded recipient you are notified that using, copying, distributing or taking=
+ any action in reliance on the contents of this information is strictly pro=
+hibited. If you have received this email in error please notify the sender =
+and delete this email.
+
+--_000_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-1=
+252">
+<style type=3D"text/css" style=3D"display:none;"> P {margin-top:0;margin-bo=
+ttom:0;} </style>
+</head>
+<body dir=3D"ltr">
+<div class=3D"elementToProof" style=3D"font-family: Aptos, Aptos_EmbeddedFo=
+nt, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; c=
+olor: rgb(0, 0, 0);">
+EMAIL - CANCELLED BOOKING</div>
+<div id=3D"appendonsend"></div>
+<div style=3D"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, =
+Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);">
+<br>
+</div>
+<hr style=3D"display: inline-block; width: 98%;">
+<div id=3D"divRplyFwdMsg">
+<div style=3D"direction: ltr; font-family: Calibri, sans-serif; font-size: =
+11pt; color: rgb(0, 0, 0);">
+<b>From:</b> Anex Tour - Robot &lt;vn.robot@ms.anextour.com&gt;<br>
+<b>Sent:</b> Thursday, October 8, 2026 12:25<br>
+<b>To:</b> HAYA Hotels Sales &lt;sales@haya-hotels.com&gt;<br>
+<b>Cc:</b> reservation@anexvietnam.com &lt;reservation@anexvietnam.com&gt;<=
+br>
+<b>Subject:</b> CANCELLED RESERVATION No: 112888584;</div>
+<div style=3D"direction: ltr;">&nbsp;</div>
+</div>
+<div style=3D"background-color: rgb(255, 255, 255);"><a name=3D"x_PageN1"><=
+/a>
+<table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">
+<tbody>
+<tr>
+<td style=3D"padding: 1px 4px; width: 48px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 64px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 68px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 8px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 8px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 148px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 60px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 56px; height: 1px;"></td>
+<td style=3D"padding: 1px 4px; width: 240px; height: 1px;"></td>
+</tr>
+<tr>
+<td colspan=3D"3" style=3D"text-align: left; background-color: rgb(255, 255=
+, 255); padding: 1px 4px; vertical-align: top; color: rgb(0, 0, 0); height:=
+ 97px;">
+<span style=3D"font-family: &quot;Segoe UI&quot;; font-size: 1px;"><img sty=
+le=3D"width: 181px; height: 101px;" width=3D"181" height=3D"101" size=3D"15=
+832" data-outlook-trace=3D"F:1|T:1" src=3D"cid:content.files.img0.png@a0fde=
+1db.ac7e.4a66.bda8.f5988f45d8b1"></span></td>
+<td colspan=3D"6" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 97px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>ANEX VIETNAM</b><br>
+Floor 7, VNPT Tower, 50 Le Thanh Ton, Loc Tho, Nha Trang, VIETNAM<br>
+Phones: +84 (58) 3521 426;<br>
+Fax: +84 (58) 3521 427</div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 27px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 19px;"><b>Dear reservation team representative:</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 39px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 16px;">Please, confirm the status of the following reservation by clicki=
+ng on confirmation link.<br>
+Please, contact with Our Reservation Team if you don=92t know/forgot user n=
+ame and password.</div>
+</td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+<td style=3D"padding: 1px 4px; height: 12px;"></td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: center; border-width: 0px 0px 1px; b=
+order-style: none none solid; border-color: rgb(0, 0, 0); padding: 1px 4px;=
+ vertical-align: middle; color: rgb(0, 0, 0); height: 50px;">
+<div style=3D"text-align: center; font-family: &quot;Segoe UI&quot;; font-s=
+ize: 24px;"><b>CANCELLED RESERVATION</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: center; padding: 1px 4px; vertical-a=
+lign: top; color: rgb(255, 0, 0); height: 23px;">
+<div style=3D"text-align: center; font-family: &quot;Segoe UI&quot;; font-s=
+ize: 16px;"><b>No answer</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: right; padding: 1px 4px; vertical-al=
+ign: top; color: rgb(0, 128, 0); height: 19px;">
+<div style=3D"text-align: right; font-family: &quot;Segoe UI&quot;; font-si=
+ze: 13px;"><a href=3D"https://hotelbooking.anexvietnam.com/reservations?sam=
+o action=3DconfirmOrder&amp;order=3D4567422&amp;guid=3D49F7E47D-2786-49DC-9=
+CDC-6D0B43B70965&amp;lang=3Den" data-auth=3D"NotApplicable" id=3D"OWA5678a9=
+5e-29ef-9bdb-a1b7-b43fb6de5354" class=3D"OWAAutoLink"><b>confirmation
+ link</b></a></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Hotel:</div>
+</td>
+<td colspan=3D"7" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>Haya Hotel Phu Quoc =96 Trademark Collection By Wyndham (DUONG=
+ DONG)</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Room:</div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>1 room(s)</b></div>
+</td>
+<td colspan=3D"5" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>Standard Room - Double</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Accom.type:</div>
+</td>
+<td colspan=3D"7" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>DBL</b></div>
+</td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 19px;"></td>
+<td style=3D"padding: 1px 4px; height: 19px;"></td>
+<td colspan=3D"7" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(255, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>On request</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Reservation No:</div>
+</td>
+<td colspan=3D"4" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>112888584</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Reservation date:</div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>05.10.2026</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Check-in date:</div>
+</td>
+<td colspan=3D"3" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>11.10.2026</b></div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 1px;"><b>&nbsp;</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Meal:</div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>BB</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Check-out date:</div>
+</td>
+<td colspan=3D"3" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>21.10.2026</b></div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 1px;"><b>&nbsp;</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Touroperator:</div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>ANEX NOVOKUZNETSK</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Nights:</div>
+</td>
+<td colspan=3D"4" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>10</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">State:</div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>Russia</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Hotel SPO No:</div>
+</td>
+<td colspan=3D"7" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>Haya Hotel Phu Quoc SPO; Haya Hotel Phu Quoc BNO</b></div>
+</td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+<td style=3D"padding: 1px 4px; height: 23px;"></td>
+</tr>
+<tr>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Note:</div>
+</td>
+<td rowspan=3D"2" colspan=3D"7" style=3D"text-align: left; padding: 1px 4px=
+; vertical-align: top; color: rgb(0, 0, 0); height: 32px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>pls. french bed if possible; not ground floor</b></div>
+</td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 13px;"></td>
+<td style=3D"padding: 1px 4px; height: 13px;"></td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+<td style=3D"padding: 1px 4px; height: 8px;"></td>
+</tr>
+<tr>
+<td colspan=3D"6" style=3D"text-align: left; background-color: rgb(234, 234=
+, 234); padding: 1px 4px; vertical-align: top; color: rgb(0, 0, 0); height:=
+ 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Guest name</div>
+</td>
+<td colspan=3D"3" style=3D"text-align: left; background-color: rgb(234, 234=
+, 234); padding: 1px 4px; vertical-align: top; color: rgb(0, 0, 0); height:=
+ 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Age</div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; border-width: 1px 0px 0px; bor=
+der-style: solid none none; border-color: rgb(0, 0, 0); padding: 1px 4px; v=
+ertical-align: top; color: rgb(0, 0, 0); height: 4px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 1px;">&nbsp;</div>
+</td>
+</tr>
+<tr>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>MR</b></div>
+</td>
+<td colspan=3D"5" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>LIASHENKO ALEKSEI</b></div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>45</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>29.11.1980</b></div>
+</td>
+</tr>
+<tr>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>MRS</b></div>
+</td>
+<td colspan=3D"5" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>LIASHENKO IRINA</b></div>
+</td>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>44</b></div>
+</td>
+<td colspan=3D"2" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>12.11.1981</b></div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; border-width: 0px 0px 1px; bor=
+der-style: none none solid; border-color: rgb(0, 0, 0); padding: 1px 4px; v=
+ertical-align: top; color: rgb(0, 0, 0); height: 4px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 1px;">&nbsp;</div>
+</td>
+</tr>
+<tr>
+<td style=3D"text-align: left; padding: 1px 4px; vertical-align: top; color=
+: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;">Pax:</div>
+</td>
+<td colspan=3D"8" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 19px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 13px;"><b>2</b></div>
+</td>
+</tr>
+<tr>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+<td style=3D"padding: 1px 4px; height: 4px;"></td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; border-width: 0px 0px 1px; bor=
+der-style: none none solid; border-color: rgb(0, 0, 0); padding: 1px 4px; v=
+ertical-align: top; color: rgb(0, 0, 0); height: 39px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 1px;">&nbsp;</div>
+</td>
+</tr>
+<tr>
+<td colspan=3D"9" style=3D"text-align: left; padding: 1px 4px; vertical-ali=
+gn: top; color: rgb(0, 0, 0); height: 58px;">
+<div style=3D"text-align: left; font-family: &quot;Segoe UI&quot;; font-siz=
+e: 9px;">This message is a part of SAMO-Soft: Hotel-booking system. This me=
+ssage is generated automatically at 08.10.2026 12:25. Please do not answer =
+it.<br>
+To change your email notification subscription please use Hotel-booking onl=
+ine form.<br>
+CONFIDENTIALITY NOTICE: This email is confidential. If you are not the inte=
+nded recipient you are notified that using, copying, distributing or taking=
+ any action in reliance on the contents of this information is strictly pro=
+hibited. If you have received this
+ email in error please notify the sender and delete this email.</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>
+
+--_000_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_--
+
+--_004_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_
+Content-Type: image/png; name="ATT00001.png"
+Content-Description: ATT00001.png
+Content-Disposition: inline; filename="ATT00001.png"; size=15526;
+	creation-date="Thu, 08 Oct 2026 05:25:21 GMT";
+	modification-date="Thu, 08 Oct 2026 08:46:28 GMT"
+Content-ID: <content.files.img0.png@a0fde1db.ac7e.4a66.bda8.f5988f45d8b1>
+Content-Transfer-Encoding: base64
+
+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
+/w9kAFU1EVoGGgAAAABJRU5ErkJggg==
+
+--_004_SEZPR02MB7164FD8E388344BA7E8372BFE8932SEZPR02MB7164apcp_--
