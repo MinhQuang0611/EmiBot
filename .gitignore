@@ -13,3 +13,10 @@ emi-state.json
 .state-*.json
 __pycache__/
 *.py[cod]
+secrets/
+
+# SSH keys must never sit in the repo
+*_ssh_key
+*_ssh_key.pub
+id_ed25519*
+id_rsa*
