@@ -8,7 +8,7 @@ Dành cho dev dựng Emi. Quyết định 2026-10-09: Emi là **agent thứ hai*
 | VPS | Ubuntu 24.04, giờ hệ thống UTC, có git, rsync, flock, Docker |
 | OpenClaw | Container `openclaw-lk3h-openclaw-1`, image `ghcr.io/hostinger/hvps-openclaw`, **2026.9.4**, compose ở `/docker/openclaw-lk3h` |
 | Ổ bền | Host `/docker/openclaw-lk3h/data` = `/data` trong container (`HOME=/data`, nên `~/.openclaw` = `/data/.openclaw`) |
-| Trong container | Debian 13, Python 3.13 qua linuxbrew (nằm trong `/data`, không mất khi update image), flock. **Không có git, rsync** |
+| Trong container | Debian 13, Python 3.13 của hệ thống (không có ensurepip, có pip), flock, linuxbrew (chỉ có `brew`). **Không có git, rsync** |
 | Agent hiện có | `main` (mặc định, WhatsApp). `plugins.allow` có `telegram` |
 | Cũng chạy trên VPS | n8n, traefik |
 
@@ -16,7 +16,7 @@ Dành cho dev dựng Emi. Quyết định 2026-10-09: Emi là **agent thứ hai*
 | Host | Trong container | Là gì |
 |---|---|---|
 | `/docker/openclaw-lk3h/data/emi` | `/data/emi` | git clone repo `EmiBot` |
-| `…/data/emi/.venv` | `/data/emi/.venv` | venv tạo **trong container** (Python 3.13) |
+| `…/data/emi/.venv` | `/data/emi/.venv` | venv tạo **trong container** (Python 3.13). Nếu image đổi bản Python thì tạo lại venv |
 | `…/data/emi/.env` | `/data/emi/.env` | secret + cấu hình, chmod 600; `tools/config.py` tự đọc |
 | `…/data/emi/secrets/google-service-account.json` | `/data/emi/secrets/…` | key Google, chmod 600 |
 | `…/data/.openclaw/workspace-emi` | `/data/.openclaw/workspace-emi` | workspace agent `emi` (persona, skills, rate-knowledge) |
@@ -41,9 +41,11 @@ Host github-emibot
   IdentityFile ~/.ssh/emibot_deploy
 EOF
 D=/docker/openclaw-lk3h/data; C=openclaw-lk3h-openclaw-1
-git clone git@github-emibot:MinhQuang0611/EmiBot.git $D/emi
+git clone -b deploy-openclaw git@github-emibot:MinhQuang0611/EmiBot.git $D/emi
 chown -R 1000:1000 $D/emi
-docker exec $C sh -c 'cd /data/emi && python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt'
+git config --global --add safe.directory $D/emi   # repo thuộc uid 1000, git chạy bằng root
+# Python Debian trong container không có ensurepip: tạo venv không kèm pip, cài bằng pip hệ thống
+docker exec $C sh -c 'cd /data/emi && python3 -m venv --without-pip .venv && python3 -m pip --python .venv/bin/python install -q -r requirements.txt'
 docker exec $C sh -c 'cd /data/emi && .venv/bin/python -m unittest discover -s tools/tests -t . && .venv/bin/python -m tools.acceptance send-blocked'
 ```
 Đạt: unit test OK, `PASS: every send endpoint is refused`.
@@ -72,11 +74,28 @@ EMI_STATE_PATH=/data/emi/emi-state.json
 docker exec $C sh -c 'cd /data/emi && .venv/bin/python -m tools.acceptance sheet-header && .venv/bin/python -m tools.acceptance sheet-roundtrip'
 ```
 
+## Bước 2b — Chọn model AI (OpenAI hoặc Anthropic)
+Emi dùng model riêng, không đổi model mặc định của `main`. Hai chỗ cần điền:
+
+| File trên host | Biến | Ghi chú |
+|---|---|---|
+| `/docker/openclaw-lk3h/data/emi/.env` | `EMI_LLM_PROVIDER=anthropic` hoặc `openai` | Bắt buộc |
+| | `EMI_LLM_MODEL=` | Để trống = mặc định: `anthropic/claude-sonnet-5-5` / `openai/gpt-5.6-sol`. Nếu điền phải bắt đầu bằng tên provider |
+| `/docker/openclaw-lk3h/.env` (env của container OpenClaw) | `ANTHROPIC_API_KEY=...` hoặc `OPENAI_API_KEY=...` | Key thật. Chỉ nhập trên host, không dán vào chat/git |
+
+Sau khi thêm key: `cd /docker/openclaw-lk3h && docker compose up -d` (tạo lại container, `main` khởi động lại theo; dữ liệu `/data` giữ nguyên). Rồi:
+```bash
+/docker/openclaw-lk3h/data/emi/deploy/set-model.sh --dry-run   # kiểm tra, không ghi gì
+/docker/openclaw-lk3h/data/emi/deploy/set-model.sh             # áp model cho agent emi
+```
+Script báo key có/thiếu (không in giá trị), key đã vào container chưa, và nếu `emi` chưa được tạo thì in sẵn lệnh `agents add` với đúng model. Đổi provider sau này: sửa `EMI_LLM_PROVIDER`, thêm key tương ứng, chạy lại script.
+
 ## Bước 3 — Agent `emi`
 **Không** chạy lại onboarding, **không** bấm Restart trên trang Hostinger, **không** sửa tay `openclaw.json` (OpenClaw tự giữ `.bak` và `.last-good`, nhưng đừng thử).
 ```bash
 D=/docker/openclaw-lk3h/data; C=openclaw-lk3h-openclaw-1
-docker exec $C openclaw agents add emi --workspace /data/.openclaw/workspace-emi --non-interactive
+$D/emi/deploy/set-model.sh   # lần đầu: in ra lệnh agents add với model theo EMI_LLM_PROVIDER, chạy lệnh đó
+# docker exec $C openclaw agents add emi --workspace /data/.openclaw/workspace-emi --model <model> --non-interactive
 /docker/openclaw-lk3h/data/emi/deploy/sync-workspace.sh
 docker exec $C openclaw agents list --bindings
 ```
@@ -110,7 +129,7 @@ Host chạy UTC. `crontab -e` trên host:
 ## Cập nhật (mỗi lần có commit mới)
 Từ máy dev:
 ```bash
-ssh haya-openclaw 'D=/docker/openclaw-lk3h/data; git -C $D/emi pull --ff-only && chown -R 1000:1000 $D/emi && docker exec openclaw-lk3h-openclaw-1 sh -c "cd /data/emi && .venv/bin/pip install -q -r requirements.txt" && $D/emi/deploy/sync-workspace.sh && $D/emi/deploy/status.sh'
+ssh haya-openclaw 'D=/docker/openclaw-lk3h/data; git -C $D/emi pull --ff-only && chown -R 1000:1000 $D/emi && docker exec openclaw-lk3h-openclaw-1 sh -c "cd /data/emi && python3 -m pip --python .venv/bin/python install -q -r requirements.txt" && $D/emi/deploy/sync-workspace.sh && $D/emi/deploy/status.sh'
 ```
 `MEMORY.md` và `memory/` trong workspace không bị ghi đè — đó là phần Emi tự học.
 
