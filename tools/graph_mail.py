@@ -6,6 +6,7 @@ must also be granted Mail.Read + Mail.ReadWrite only, never Mail.Send (openclaw-
 """
 import base64
 import json
+import os
 import time
 import urllib.parse
 
@@ -50,10 +51,12 @@ class ClientCredentialsToken:
 
 
 class DeviceCodeToken:
-    """Delegated token for a personal Outlook.com test mailbox (EMI_AUTH=device).
+    """Delegated token, signed in once with a device code. No client secret.
 
+    EMI_AUTH=device: personal Outlook.com test mailbox (tenant "consumers").
+    EMI_AUTH=delegated: the HAYA tenant, signed in as sales@ itself (same pattern as Sunny).
     First run prints a link and a code to sign in with; the refresh token is cached in
-    `cache_path` so later runs don't ask again. Scope is Mail.ReadWrite only, no Mail.Send.
+    `cache_path` (mode 600) so later runs don't ask again. Scope is Mail.ReadWrite only, no Mail.Send.
     """
 
     SCOPE = "offline_access https://graph.microsoft.com/Mail.ReadWrite"
@@ -71,8 +74,14 @@ class DeviceCodeToken:
         self._token = resp["access_token"]
         self._expires = time.time() + int(resp.get("expires_in", 3600))
         if resp.get("refresh_token"):
-            with open(self.cache_path, "w", encoding="utf-8") as f:
+            fd = os.open(self.cache_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump({"refresh_token": resp["refresh_token"]}, f)
+
+    def signed_in_as(self):
+        """The account the token belongs to (upn / preferred_username claim), lower-cased."""
+        claims = jwt_claims(self())
+        return (claims.get("upn") or claims.get("preferred_username") or "").lower()
 
     def _refresh(self):
         try:
@@ -114,6 +123,15 @@ class DeviceCodeToken:
             if not self._refresh():
                 self._device_login()
         return self._token
+
+
+def jwt_claims(token):
+    """Payload of a JWT, unverified. Only used to show who signed in; {} if it isn't a JWT."""
+    try:
+        payload = token.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (IndexError, ValueError):
+        return {}
 
 
 def _is_send_path(path):

@@ -43,6 +43,11 @@ def mail():
         # Personal Outlook.com test mailbox: sign in once with a code, then the cached refresh token.
         token = DeviceCodeToken(_need("EMI_CLIENT_ID"), os.environ.get("EMI_TOKEN_CACHE", ".emi-token.json"))
         return GraphMail("me", token)
+    if os.environ.get("EMI_AUTH") == "delegated":
+        # HAYA tenant, no client secret: sign in once as sales@ with a code, then the cached refresh token.
+        token = DeviceCodeToken(_need("EMI_CLIENT_ID"), os.environ.get("EMI_TOKEN_CACHE", ".emi-token.json"),
+                                tenant=_need("EMI_TENANT_ID"))
+        return GraphMail(MAILBOX, token)
     token = ClientCredentialsToken(_need("EMI_TENANT_ID"), _need("EMI_CLIENT_ID"), _need("EMI_CLIENT_SECRET"))
     return GraphMail(MAILBOX, token)
 

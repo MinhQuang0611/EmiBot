@@ -18,6 +18,7 @@ Python 3.10+. Graph uses only the standard library. Google needs `pip install -r
 | `EMI_TENANT_ID`, `EMI_CLIENT_ID`, `EMI_CLIENT_SECRET` | App registration with **Mail.Read + Mail.ReadWrite application permissions only**, limited to sales@ by an Exchange application access policy |
 | `EMI_GOOGLE_KEYFILE` | Service-account JSON. Share only the intake sheet (Editor) and the two Drive folders (Viewer) |
 | `EMI_MAILBOX` | Default `sales@haya-hotels.com` |
+| `EMI_AUTH=delegated` | Production without a secret, same as Sunny: `EMI_TENANT_ID` + `EMI_CLIENT_ID`, sign in once as sales@ with a device code (delegated `Mail.ReadWrite`, no `Mail.Send`); refresh token cached in `EMI_TOKEN_CACHE`, mode 600. `acceptance mail-read` fails if the token belongs to any account other than `EMI_MAILBOX`. Do the first sign-in in a terminal: a cron run would sit waiting for the code. |
 | `EMI_AUTH=device` | Test mode on a personal Outlook.com mailbox: sign in once with a device code (delegated `Mail.ReadWrite`, no `Mail.Send`), refresh token cached in `EMI_TOKEN_CACHE` (default `.emi-token.json`). Needs only `EMI_CLIENT_ID` from an app registration that allows personal Microsoft accounts and public client flows. |
 | `EMI_TEST_SENDER` | Address `acceptance draft-reply` will answer; default `haya@haya-hotels.com` |
 | `EMI_SHEET_ID`, `EMI_SHEET_TAB` | Default the v2 intake sheet, tab `Intake` |

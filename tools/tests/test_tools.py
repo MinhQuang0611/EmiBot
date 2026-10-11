@@ -1,8 +1,10 @@
 """Offline tests: fake HTTP, no mailbox or sheet touched.  python -m unittest discover tools/tests"""
 import base64
+import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 import urllib.parse
 
 from tools.graph_mail import DeviceCodeToken, GraphMail, SendBlocked, MAX_INLINE_ATTACHMENT
@@ -255,3 +257,27 @@ class DeviceCodeTokenTest(unittest.TestCase):
             tok = DeviceCodeToken("cid", os.path.join(d, "none.json"), http=http, out=msgs.append)
             self.assertEqual(tok(), "AT2")
             self.assertEqual(msgs, ["go sign in"])
+
+    def test_delegated_uses_haya_tenant_and_reads_signed_in_account(self):
+        claims = base64.urlsafe_b64encode(json.dumps({"upn": "Sales@haya-hotels.com"}).encode()).decode().rstrip("=")
+        seen = []
+
+        def http(method, url, **kw):
+            seen.append(url)
+            return {"access_token": f"h.{claims}.s", "refresh_token": "r", "expires_in": 3600}
+        with tempfile.TemporaryDirectory() as d:
+            cache = os.path.join(d, "tok.json")
+            with open(cache, "w") as f:
+                f.write('{"refresh_token": "old"}')
+            tok = DeviceCodeToken("cid", cache, tenant="tenant-123", http=http, out=lambda m: self.fail("asked to sign in"))
+            self.assertEqual(tok.signed_in_as(), "sales@haya-hotels.com")
+            self.assertIn("/tenant-123/oauth2/v2.0/token", seen[0])
+
+    def test_config_delegated_targets_sales_mailbox_without_secret(self):
+        from tools import config
+        env = {"EMI_AUTH": "delegated", "EMI_TENANT_ID": "t", "EMI_CLIENT_ID": "c"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(config, "MAILBOX", "sales@haya-hotels.com"):
+            os.environ.pop("EMI_CLIENT_SECRET", None)
+            m = config.mail()
+        self.assertTrue(m.base.endswith("/users/sales%40haya-hotels.com"))
+        self.assertIn("/t/oauth2/", m.token.base)

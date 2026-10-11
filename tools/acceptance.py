@@ -25,6 +25,12 @@ FIXTURE = os.path.join(os.path.dirname(__file__), "..", "test", "fixtures", "int
 
 def mail_read():
     mail = config.mail()
+    if hasattr(mail.token, "signed_in_as"):
+        who = mail.token.signed_in_as()
+        print("signed in as:", who or "(unknown)")
+        if os.environ.get("EMI_AUTH") == "delegated" and who != config.MAILBOX.lower():
+            sys.exit(f"FAIL: signed in as {who}, expected {config.MAILBOX}. "
+                     f"Move {os.environ.get('EMI_TOKEN_CACHE', '.emi-token.json')} away and sign in as {config.MAILBOX}.")
     q = mail._query(select="subject,from,receivedDateTime", orderby="receivedDateTime desc", top="5")
     for m in mail._call("GET", f"/mailFolders/inbox/messages?{q}").get("value", []):
         print(m["receivedDateTime"], m["from"]["emailAddress"]["address"], "|", m["subject"])
