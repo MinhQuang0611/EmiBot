@@ -281,3 +281,16 @@ class DeviceCodeTokenTest(unittest.TestCase):
             m = config.mail()
         self.assertTrue(m.base.endswith("/users/sales%40haya-hotels.com"))
         self.assertIn("/t/oauth2/", m.token.base)
+
+
+class SetEnvTest(unittest.TestCase):
+    def test_replaces_adds_keeps_comments_and_respects_if_missing(self):
+        from tools import setenv
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, ".env")
+            with open(p, "w") as f:
+                f.write("# note\nEMI_TENANT_ID=\nEMI_SHEET_ID=sandbox\n")
+            setenv.set_keys([("EMI_TENANT_ID", "t"), ("EMI_AUTH", "delegated")], path=p)
+            setenv.set_keys([("EMI_SHEET_ID", "live"), ("EMI_SHEET_TAB", "Intake")], path=p, if_missing=True)
+            with open(p) as f:
+                self.assertEqual(f.read(), "# note\nEMI_TENANT_ID=t\nEMI_SHEET_ID=sandbox\nEMI_AUTH=delegated\nEMI_SHEET_TAB=Intake\n")
