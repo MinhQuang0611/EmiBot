@@ -118,6 +118,43 @@ class DeviceCodeToken:
                 raise
         raise RuntimeError("device code sign-in timed out")
 
+    # Two-step sign-in for shells that kill background processes when a command ends:
+    # start() saves the device code next to the cache and prints the message; once the person has
+    # signed in, finish() redeems it. No process has to stay alive in between.
+    def _pending_path(self):
+        return self.cache_path + ".pending"
+
+    def start(self):
+        dc = self.http("POST", f"{self.base}/devicecode", form={"client_id": self.client_id, "scope": self.SCOPE})
+        fd = os.open(self._pending_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"device_code": dc["device_code"], "expires_at": time.time() + int(dc.get("expires_in", 900))}, f)
+        self.out(dc["message"])
+
+    def finish(self):
+        """True once signed in; False while the person hasn't finished yet. Raises if expired or refused."""
+        try:
+            with open(self._pending_path(), encoding="utf-8") as f:
+                pending = json.load(f)
+        except (OSError, ValueError):
+            pending = {}
+        if "device_code" not in pending:
+            raise RuntimeError("no pending sign-in; run the start step first")
+        if time.time() > pending["expires_at"]:
+            raise RuntimeError("the sign-in code expired; run the start step again")
+        try:
+            self._save(self.http("POST", f"{self.base}/token", form={
+                "client_id": self.client_id, "device_code": pending["device_code"],
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}))
+        except httpjson.HttpError as e:
+            if "authorization_pending" in e.body or "slow_down" in e.body:
+                return False
+            raise
+        # Redeemed: the device code is single-use, so blank the pending file (no delete needed).
+        with open(self._pending_path(), "w", encoding="utf-8") as f:
+            f.write("{}")
+        return True
+
     def __call__(self):
         if not self._token or time.time() > self._expires - 300:
             if not self._refresh():

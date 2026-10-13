@@ -294,3 +294,30 @@ class SetEnvTest(unittest.TestCase):
             setenv.set_keys([("EMI_SHEET_ID", "live"), ("EMI_SHEET_TAB", "Intake")], path=p, if_missing=True)
             with open(p) as f:
                 self.assertEqual(f.read(), "# note\nEMI_TENANT_ID=t\nEMI_SHEET_ID=sandbox\nEMI_AUTH=delegated\nEMI_SHEET_TAB=Intake\n")
+
+
+class TwoStepSignInTest(unittest.TestCase):
+    def test_start_then_finish_pending_then_done(self):
+        answers = iter([HttpError(400, "t", '{"error":"authorization_pending"}'),
+                        {"access_token": "AT", "refresh_token": "RT", "expires_in": 3600}])
+
+        def http(method, url, **kw):
+            if url.endswith("/devicecode"):
+                return {"message": "go sign in", "device_code": "dc", "expires_in": 900}
+            self.assertEqual(kw["form"]["device_code"], "dc")
+            a = next(answers)
+            if isinstance(a, Exception):
+                raise a
+            return a
+        with tempfile.TemporaryDirectory() as d:
+            cache = os.path.join(d, "tok.json")
+            msgs = []
+            tok = DeviceCodeToken("cid", cache, tenant="t", http=http, out=msgs.append)
+            tok.start()
+            self.assertEqual(msgs, ["go sign in"])
+            self.assertFalse(tok.finish())
+            self.assertTrue(tok.finish())
+            with open(cache) as f:
+                self.assertEqual(json.load(f), {"refresh_token": "RT"})
+            with self.assertRaises(RuntimeError):
+                tok.finish()
