@@ -107,7 +107,8 @@ def _sender(m):
     return (m.get("from") or {}).get("emailAddress", {}).get("address", "").lower()
 
 
-def show(mail, message_id, work_dir=WORK_DIR, out=print):
+def show(mail, message_id, work_dir=None, out=print):
+    work_dir = work_dir or WORK_DIR
     target = mail.get_message_text(message_id)
     thread = [m for m in mail.get_thread(target["conversationId"], text=True) if not m.get("isDraft")]
     if not any(m["id"] == message_id for m in thread):
@@ -309,8 +310,9 @@ def _row(sheet, row):
     return r
 
 
-def pdf_fetch(sheet, row, work_dir=WORK_DIR, out=print):
+def pdf_fetch(sheet, row, work_dir=None, out=print):
     """Download the file behind pdf_link on one row; print it next to the row so they can be compared."""
+    work_dir = work_dir or WORK_DIR
     r = _row(sheet, row)
     url = sheet.link_in_cell(int(row), "pdf_link")
     if not url:

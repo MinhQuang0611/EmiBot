@@ -29,6 +29,13 @@ def b64(data):
 
 
 class InboxNewTest(unittest.TestCase):
+    def setUp(self):
+        # The host's .env may have test mode on; these tests set it themselves.
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("EMI_TEST_ONLY_FROM", None)
+
     def test_skips_processed_and_reports_scan_start(self):
         st = State(os.devnull + "-none")
         st.mark_scanned("2026-10-15T00:00:00Z")
