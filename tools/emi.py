@@ -73,6 +73,13 @@ def inbox_new(mail, st, out=print):
         since = (datetime.now(timezone.utc) - FIRST_SCAN_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
         out(f"first scan: no last_scan saved, reading the last {FIRST_SCAN_LOOKBACK.total_seconds() / 3600:.0f} hours")
     msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])]
+    only = [a.strip().lower() for a in os.environ.get("EMI_TEST_ONLY_FROM", "").split(",") if a.strip()]
+    if only:
+        # Test phase: real mail in the window is left alone (not read, not marked). Remove the variable to go live.
+        skipped = [m for m in msgs if _sender(m) not in only]
+        msgs = [m for m in msgs if _sender(m) in only]
+        out(f"TEST MODE (EMI_TEST_ONLY_FROM): only mail from {', '.join(only)}; "
+            f"{len(skipped)} other email(s) in the window ignored")
     out(f"scan_started={started}")
     out(f"since={since} ({vn(since)} Vietnam time)")
     out(f"new emails: {len(msgs)}")
@@ -81,6 +88,10 @@ def inbox_new(mail, st, out=print):
         out(f"\n- id: {m['id']}\n  received: {vn(m['receivedDateTime'])}\n  from: {addr(m.get('from'))}"
             f"\n  subject: {m.get('subject', '')}{clip}")
     return msgs, started
+
+
+def _sender(m):
+    return (m.get("from") or {}).get("emailAddress", {}).get("address", "").lower()
 
 
 def show(mail, message_id, work_dir=WORK_DIR, out=print):
@@ -276,6 +287,8 @@ def status(st, out=print):
     d = st.data
     out(f"last_scan: {d['last_scan']} ({vn(d['last_scan'])} Vietnam time)" if d["last_scan"] else "last_scan: never")
     out(f"processed emails remembered: {len(d['processed'])}")
+    if os.environ.get("EMI_TEST_ONLY_FROM"):
+        out(f"TEST MODE: inbox-new only reads mail from {os.environ['EMI_TEST_ONLY_FROM']}")
     out(f"drafts recorded: {len(d['drafts'])}, confirmations: {len(d['confirmations'])}, reminders: {len(d['reminders'])}")
     out(f"open questions to Karen: {len(st.open_questions())}")
 

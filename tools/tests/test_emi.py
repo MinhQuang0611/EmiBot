@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zipfile
 from types import SimpleNamespace
+from unittest import mock
 
 from tools import attachments, emi
 from tools import intake_schema as schema
@@ -43,6 +44,19 @@ class InboxNewTest(unittest.TestCase):
         self.assertIn("15/10/2026 10:12", text)  # Vietnam time
         self.assertIn("[attachments]", text)
         self.assertIn("receivedDateTime ge 2026-10-15T00:00:00Z", http.calls[0][1])
+
+    def test_test_mode_reads_only_the_test_sender(self):
+        st = State(os.devnull + "-none")
+        st.mark_scanned("2026-10-15T07:00:00Z")
+        mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
+            {"id": "real", "receivedDateTime": "2026-10-15T07:01:00Z", "from": {"emailAddress": {"address": "ops@agency.vn"}}},
+            {"id": "test", "receivedDateTime": "2026-10-15T07:05:00Z", "from": {"emailAddress": {"address": "Dev@Gmail.com"}}}]})])
+        lines = []
+        with mock.patch.dict(os.environ, {"EMI_TEST_ONLY_FROM": "dev@gmail.com"}):
+            msgs, _ = emi.inbox_new(mail, st, out=lines.append)
+        self.assertEqual([m["id"] for m in msgs], ["test"])
+        self.assertIn("1 other email(s) in the window ignored", "\n".join(lines))
+        self.assertFalse(st.is_processed("real"))  # left alone, not marked
 
     def test_first_scan_looks_back_24_hours(self):
         mail, http = mail_with([("GET", "/mailFolders/inbox/messages", {"value": []})])
