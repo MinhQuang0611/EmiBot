@@ -37,7 +37,13 @@ def _need(name):
     return v
 
 
+SIM_DIR = os.environ.get("EMI_SIM_DIR")  # test emails from files, drafts to files (tools/sim_mail.py)
+
+
 def mail():
+    if SIM_DIR:
+        from .sim_mail import SimMail
+        return SimMail(SIM_DIR)
     from .graph_mail import ClientCredentialsToken, DeviceCodeToken, GraphMail
     if os.environ.get("EMI_AUTH") == "device":
         # Personal Outlook.com test mailbox: sign in once with a code, then the cached refresh token.
@@ -59,4 +65,5 @@ def sheet():
 
 def state():
     from .state import State
-    return State(STATE_PATH)
+    # A simulation never moves the real scan clock or the real processed/draft records.
+    return State(os.path.join(SIM_DIR, "state.json") if SIM_DIR else STATE_PATH)

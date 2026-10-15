@@ -21,6 +21,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
+    python -m tools.emi sim-reset <scenario>              # test/sim/<scenario>: fresh test inbox, old TEST rows removed
+    python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
 Every draft stays in Drafts with the Emi category. Nothing here can send (graph_mail refuses).
 Exit 0 = done, 2 = refused or failed (reason on stderr).
@@ -36,6 +38,7 @@ from datetime import datetime, timedelta, timezone
 from . import attachments, config, drive
 from . import quote as quoting
 from . import cancel_fee as cancelling
+from . import sim
 from . import intake_schema as schema
 from .state import now_iso
 
@@ -83,7 +86,10 @@ def inbox_new(mail, st, out=print):
         since = (datetime.now(timezone.utc) - FIRST_SCAN_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
         out(f"first scan: no last_scan saved, reading the last {FIRST_SCAN_LOOKBACK.total_seconds() / 3600:.0f} hours")
     msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])]
-    only = [a.strip().lower() for a in os.environ.get("EMI_TEST_ONLY_FROM", "").split(",") if a.strip()]
+    if config.SIM_DIR:
+        out(f"SIM MODE: emails from {config.SIM_DIR}/inbox, drafts to files — the real mailbox is not touched")
+    only = [] if config.SIM_DIR else [a.strip().lower() for a in os.environ.get("EMI_TEST_ONLY_FROM", "").split(",")
+                                      if a.strip()]
     if only:
         # Test phase: real mail in the window is left alone (not read, not marked). Remove the variable to go live.
         skipped = [m for m in msgs if _sender(m) not in only]
@@ -494,6 +500,10 @@ def parser():
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
     sub.add_parser("status")
+    s = sub.add_parser("sim-reset", help="fresh copy of a test scenario + remove its old TEST rows")
+    s.add_argument("scenario")
+    s = sub.add_parser("sim-check", help="grade the sheet and drafts after a simulated run")
+    s.add_argument("scenario")
     return p
 
 
@@ -551,6 +561,11 @@ def main(argv=None):
             st.save()
         elif c == "draft-attach":
             draft_attach(config.mail(), args.draft_id, args.file)
+        elif c == "sim-reset":
+            sim.reset(config.sheet(), args.scenario, WORK_DIR)
+        elif c == "sim-check":
+            if not sim.check(config.sheet(), args.scenario, WORK_DIR):
+                return 2
         elif c == "status":
             status(st)
     except Exception as e:
