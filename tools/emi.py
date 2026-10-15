@@ -259,9 +259,14 @@ def sheet_schema(sheet, out=print):
                    "Room codes tab, below" if h == "room_code" else "")
         out(f"- {h} | {schema.level(h)} | {req} | {allowed} | {instr.get(h, '')}".replace(" |  |", " |"))
     codes = schema.room_codes(sheet) or {}
-    out("\nROOM CODES (room_code):")
+    # Agencies write the TA table's names ("Standard Double"), EZFOLIO's names differ ("STANDARD GARDEN").
+    ta_names = {r["code"]: r["name_en"] for r in quoting.load()["rooms"]}
+    ta_names.setdefault("STD-TWN", "Standard Twin (quoted at the Superior Twin rate)")
+    out("\nROOM CODES (room_code). Match the name in the email against the 'agencies call it' name:")
     for code, (name, note) in codes.items():
-        out(f"- {code} = {name}" + (f" — {note}" if note else ""))
+        alias = f" — agencies call it \"{ta_names[code]}\"" if code in ta_names else ""
+        out(f"- {code} = {name}{alias}" + (f" — {note}" if note else ""))
+    out("A room name in the email that matches none of these → leave room_code blank and name it in missing_info.")
     out("\nRULES (Rules tab):")
     for r in schema.rules(sheet):
         out(f"- {r}")
