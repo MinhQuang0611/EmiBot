@@ -6,7 +6,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
     python -m tools.emi sheet-find <text>                 # rows whose booking_ref or guest_names contain text
-    python -m tools.emi sheet-append <rows.json>          # new booking rows (list of {column: value})
+    python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
     python -m tools.emi draft-reply <message_id> <body.txt> [--all] [--kind K --ref R --row N]
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
@@ -129,27 +129,41 @@ def sheet_find(sheet, text, out=print):
     return hits
 
 
-def sheet_append(sheet, records, out=print):
-    if isinstance(records, dict):
-        records = [records]
+def expand_booking(data):
+    """{"booking": {shared columns}, "room_lines": [{room columns}, ...]} -> one row per room type.
+    A plain list of rows (or one row) passes through unchanged."""
+    if isinstance(data, dict) and "room_lines" in data:
+        shared = data.get("booking") or {}
+        lines = data["room_lines"]
+        if not lines:
+            raise Refused("room_lines is empty: one entry per room type")
+        return [{**shared, **line} for line in lines]
+    return [data] if isinstance(data, dict) else list(data)
+
+
+def sheet_append(sheet, data, out=print):
+    records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
     existing = sheet.rows()
-    for rec in records:
+    for i, rec in enumerate(records, 1):
         ref = str(rec.get("booking_ref", "")).strip().lower()
         if ref and any(r.get("booking_ref", "").strip().lower() == ref for r in existing):
             raise Refused(f"booking_ref {rec['booking_ref']!r} is already on the sheet: "
                           f"update that row with sheet-update instead of adding a second one")
-        gaps = missing_required(rec)
-        if gaps and not str(rec.get("missing_info", "")).strip():
-            raise Refused(f"{rec.get('booking_ref') or 'row'}: {gaps} empty and missing_info doesn't say why "
-                          f"(required: {list(REQUIRED)})")
+        # A blank required column must be named in missing_info, so a row can't lose its room by accident.
+        note = str(rec.get("missing_info", ""))
+        unexplained = [c for c in missing_required(rec) if c not in note]
+        if unexplained:
+            raise Refused(f"row {i} ({rec.get('booking_ref') or 'no ref'}, {rec.get('room_code') or 'no room_code'}): "
+                          f"{unexplained} empty. Fill them, or name each column in missing_info with the reason "
+                          f"(e.g. 'rate_per_night_vnd: rate not in email or TA table')")
     sheet.append_rows(records)
-    out(f"appended {len(records)} row(s)")
-    for rec in records:
-        refs = sheet.find_by_ref(rec["booking_ref"]) if rec.get("booking_ref") else []
-        if refs:
-            out(f"  {rec['booking_ref']}: sheet row(s) {[r['_row'] for r in refs]}")
+    out(f"appended {len(records)} row(s). Check them below; fix a wrong cell with sheet-update <row> by column name.")
+    for ref in dict.fromkeys(rec["booking_ref"] for rec in records if rec.get("booking_ref")):
+        for r in sheet.find_by_ref(ref):
+            out(f"row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != "_row"},
+                                                  ensure_ascii=False))
 
 
 def sheet_update(sheet, row, fields, out=print):

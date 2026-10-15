@@ -95,14 +95,32 @@ class SheetCommandsTest(unittest.TestCase):
             emi.sheet_append(sh, [self.ROW], out=lambda *_: None)
         self.assertFalse(any(":append" in c[1] for c in http.calls))
 
-    def test_append_needs_missing_info_for_gaps(self):
-        sh, _ = sheet_with([])
-        gap = dict(self.ROW, rate_per_night_vnd="")
-        with self.assertRaises(emi.Refused):
-            emi.sheet_append(sh, gap, out=lambda *_: None)
+    def test_append_gap_must_be_named_in_missing_info(self):
+        gap = dict(self.ROW, rate_per_night_vnd="", room_code="")
+        # missing_info about something else doesn't excuse a row with no room (TEST-1510, 2026-10-15)
+        for note in ("", "Full guest names; adults and children per room"):
+            sh, http = sheet_with([])
+            with self.assertRaises(emi.Refused):
+                emi.sheet_append(sh, dict(gap, missing_info=note), out=lambda *_: None)
+            self.assertFalse(any(":append" in c[1] for c in http.calls))
         sh, http = sheet_with([])
-        emi.sheet_append(sh, dict(gap, missing_info="rate not stated in the email"), out=lambda *_: None)
+        emi.sheet_append(sh, dict(gap, missing_info="room_code, rate_per_night_vnd: room type not stated"),
+                         out=lambda *_: None)
         self.assertTrue(any(":append" in c[1] for c in http.calls))
+
+    def test_booking_with_room_lines_becomes_one_row_per_room(self):
+        shared = {k: v for k, v in self.ROW.items() if k not in ("room_code", "rooms", "rate_per_night_vnd")}
+        data = {"booking": shared, "room_lines": [
+            {"room_code": "DLX-SV", "rooms": "2", "rate_per_night_vnd": "2000000"},
+            {"room_code": "TPL", "rooms": "1", "rate_per_night_vnd": "2300000"}]}
+        sh, http = sheet_with([])
+        emi.sheet_append(sh, data, out=lambda *_: None)
+        values = next(c for c in http.calls if ":append" in c[1])[2]["values"]
+        col = {h: i for i, h in enumerate(HEADER)}
+        self.assertEqual([(v[col["booking_ref"]], v[col["room_code"]], v[col["rooms"]]) for v in values],
+                         [("SB-2", "DLX-SV", "2"), ("SB-2", "TPL", "1")])
+        with self.assertRaises(emi.Refused):
+            emi.sheet_append(sh, {"booking": shared, "room_lines": []}, out=lambda *_: None)
 
     def test_find_by_ref_or_guest(self):
         sh, _ = sheet_with([["NEW", "SB-2", "Nguyen An"], ["NEW", "AN-9", "Ivan Petrov"]])

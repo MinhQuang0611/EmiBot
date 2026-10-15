@@ -32,7 +32,13 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
 3. For each email listed, oldest first:
    1. `py -m tools.emi show <id>` → the whole thread, with attachments saved and their text printed. Image attachments: open the saved file to read it.
    2. Classify it (`skills/inbox-triage.md`).
-   3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`. Already there → `sheet-update <row> emi-work/out/<ref>-update.json`. Not there → `sheet-append emi-work/out/<ref>.json` (a JSON list, one object per room type, column names exactly as on the sheet). If `sheet-append` refuses, read the reason and fix the rows; never work around it.
+   3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`. Already there → `sheet-update <row> emi-work/out/<ref>-update.json` (`{"column": "value"}`). Not there → `sheet-append emi-work/out/<ref>.json` in this shape, column names exactly as on the sheet:
+      ```json
+      {"booking":    {"action": "NEW", "booking_ref": "...", "company": "...", "arrival": "...", "...": "..."},
+       "room_lines": [{"room_code": "DLX-SV", "rooms": "2", "rate_per_night_vnd": "2000000", "total_vnd": "8000000", "...": "..."},
+                      {"room_code": "TPL", "rooms": "1", "...": "..."}]}
+      ```
+      Shared columns go in `booking`, room-type columns (`room_code`, `rooms`, `adults`, `children`, `child_ages`, `meal_plan`, `rate_source`, `rate_per_night_vnd`, `total_vnd`, `notes`, …) in each `room_lines` entry. A required column left blank must be named in `missing_info` with the reason. `sheet-append` prints the rows back: check them. A wrong cell → `sheet-update <row>` by column name. If a command refuses, read the reason and fix the JSON; never write to the sheet any other way.
    4. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
    5. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
 4. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
