@@ -29,9 +29,16 @@ done < <(grep -E '^OPENCLAW_GATEWAY_(URL|TOKEN)=' "$ENV_FILE" || true)
 [ -n "$URL" ] && [ -n "$TOKEN" ] || { echo "set OPENCLAW_GATEWAY_URL and OPENCLAW_GATEWAY_TOKEN in .env" >&2; exit 2; }
 
 HTTPS="${URL/#wss:/https:}"
-COOKIE="$(curl -s -m 30 -o /dev/null -D - -X POST --data-urlencode "token=$TOKEN" --data-urlencode "next=/" \
-  "$HTTPS/login" | tr -d '\r' | sed -nE 's/^[Ss]et-[Cc]ookie: (u4s-openclaw-session=[^;]+).*/\1/p' | head -1)"
-[ -n "$COOKIE" ] || { echo "Hostinger login gave no session cookie: wrong token, or the access page changed" >&2; exit 2; }
+COOKIE="" STATUS=""
+for attempt in 1 2 3; do  # the access page now and then answers without a cookie; a retry gets one
+  HEADERS="$(curl -s -m 30 -o /dev/null -D - -X POST --data-urlencode "token=$TOKEN" --data-urlencode "next=/" \
+    "$HTTPS/login" | tr -d '\r' || true)"
+  COOKIE="$(printf '%s\n' "$HEADERS" | sed -nE 's/^[Ss]et-[Cc]ookie: (u4s-openclaw-session=[^;]+).*/\1/p' | head -1)"
+  [ -n "$COOKIE" ] && break
+  STATUS="$(printf '%s\n' "$HEADERS" | head -1)"
+  sleep $((attempt * 3))
+done
+[ -n "$COOKIE" ] || { echo "Hostinger login gave no session cookie after 3 tries (last: ${STATUS:-no answer})" >&2; exit 2; }
 
 export OPENCLAW_GATEWAY_TOKEN="$TOKEN" HOSTINGER_OPENCLAW_COOKIE="$COOKIE"
 unset OPENCLAW_GATEWAY_URL  # an explicit URL would skip the profile's edgeAuth cookie
