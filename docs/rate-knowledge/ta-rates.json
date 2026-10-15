@@ -1,0 +1,64 @@
+{
+  "_source": "docs/rate-knowledge/ta.md (from 'BẢNG GIÁ CHO TA HAYA HOTEL.pdf', copied 2026-10-09). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/quote.py (python -m tools.emi quote). Change a number here and in ta.md together.",
+  "valid_from": "2026-02-03",
+  "valid_to": "2026-12-31",
+  "valid_note": "Karen 2026-10-03: the 2026 table also applies to 2027 dates until a new one is provided.",
+  "currency": "VND",
+  "includes": "breakfast, pool, gym, 8% VAT and service charge",
+  "min_nights": 2,
+  "seasons_by_month": {
+    "normal": [3, 4, 5, 8, 9, 10],
+    "summer": [6, 7],
+    "winter": [1, 2, 11, 12]
+  },
+  "holidays": [
+    {"from": "2026-02-14", "to": "2026-02-22", "name": "Tết Nguyên Đán"},
+    {"from": "2026-04-26", "to": "2026-04-26", "name": "Giỗ Tổ Hùng Vương"},
+    {"from": "2026-04-30", "to": "2026-05-01", "name": "30/4 + 1/5"},
+    {"from": "2026-09-02", "to": "2026-09-03", "name": "Quốc Khánh"},
+    {"from": "2026-12-24", "to": "2026-12-26", "name": "Giáng sinh"},
+    {"from": "2026-12-31", "to": "2027-01-02", "name": "Tết Dương lịch 2027"}
+  ],
+  "holidays_known_until": "2027-01-02",
+  "rooms": [
+    {"code": "STD", "name_vi": "Standard Double", "name_en": "Standard Double", "beds": "1×1m6", "persons": 2,
+     "rates": {"normal": 1050000, "summer": 1500000, "winter": 1700000, "holiday": 2200000}},
+    {"code": "SUP-TWN", "name_vi": "Superior Twin", "name_en": "Superior Twin", "beds": "2×1m2", "persons": 2, "twin": true,
+     "rates": {"normal": 1250000, "summer": 1700000, "winter": 1900000, "holiday": 2450000}},
+    {"code": "SUP-DBL", "name_vi": "Superior Double Pool View", "name_en": "Superior Double Pool View", "beds": "1×1m8", "persons": 2,
+     "rates": {"normal": 1250000, "summer": 1700000, "winter": 1900000, "holiday": 2450000}},
+    {"code": "DLX-SV", "name_vi": "Deluxe Double Seaview", "name_en": "Deluxe Double Seaview", "beds": "1×1m8", "persons": 2,
+     "rates": {"normal": 1500000, "summer": 1800000, "winter": 2000000, "holiday": 2600000}},
+    {"code": "SUITE-SV", "name_vi": "Suite Seaview", "name_en": "Suite Seaview", "beds": "1×2m", "persons": 2,
+     "rates": {"normal": 1950000, "summer": 2500000, "winter": 2700000, "holiday": 3500000}},
+    {"code": "TPL", "name_vi": "Triple", "name_en": "Triple", "beds": "1×1m2 + 1×1m6", "persons": 3,
+     "rates": {"normal": 1750000, "summer": 2100000, "winter": 2300000, "holiday": 3000000}},
+    {"code": "QPL", "name_vi": "Quadruple", "name_en": "Quadruple", "beds": "2×1m8", "persons": 4,
+     "rates": {"normal": 1950000, "summer": 2500000, "winter": 2700000, "holiday": 3500000}}
+  ],
+  "never_for_agencies": ["TW-DLX", "APT"],
+  "child_slot_per_room": 1,
+  "child_slot_note": "Every room takes 1 child under 12 sharing the bed on top of its persons (Triple 3+1, Quadruple 4+1, others 2+1).",
+  "children": {
+    "free_under": 3,
+    "adult_from": 12,
+    "surcharge_per_night": {"normal": 350000, "summer": 350000, "winter": 350000, "holiday": 400000}
+  },
+  "one_night_surcharge_per_guest": {"normal": 250000, "summer": 250000, "winter": 250000, "holiday": 300000},
+  "roh": {"min_rooms": 16, "rate_like": "STD",
+          "note": "More than 15 double/twin rooms: all at the Standard Double rate, hotel assigns the room types. The only group offer on the TA table."},
+  "indian_surcharge_pct": 20,
+  "indian_note": "Karen's rule, not on the PDF: +20% on the TA room rate for Indian guests (not on child surcharges).",
+  "transfers_one_way": {
+    "airport": {"4 seats": {"normal": 200000, "holiday": 300000}, "7 seats": {"normal": 250000, "holiday": 400000},
+                "16 seats": {"normal": 400000, "holiday": 650000}},
+    "port": {"4 seats": {"normal": 300000}, "7 seats": {"normal": 400000}, "16 seats": {"normal": 500000}},
+    "port_holiday_note": "The 4th column of the PDF is printed 'Ngày thường' twice; port holiday prices not confirmed — ask Karen."
+  },
+  "check_in": "14:00",
+  "check_out": "12:00",
+  "breakfast": "06:30–10:30",
+  "pool": "09:00–22:00",
+  "deposit": "50% within 48 hours of receiving the confirmation; remaining 50% 7 days before check-in"
+}

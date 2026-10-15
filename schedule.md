@@ -40,8 +40,9 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
       - `py -m tools.emi sheet-append emi-work/out/<ref>.json` → prints the rows as written: compare with the email.
       - A wrong cell on an existing row → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row.
       - If a command refuses, read the reason and fix the JSON. Never write to the sheet any other way.
-   4. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
-   5. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
+   4. Inquiry or quote request (no booking yet) → `py -m tools.emi quote …` as in `skills/inquiries-and-quotes.md`, write the reply from its template with the command's numbers, `py -m tools.emi draft-reply <id> emi-work/out/<sender>-inquiry.txt --kind inquiry`. List every `GAP:` line in the report.
+   5. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
+   6. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
 5. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
 6. If any `show` or sheet command failed, **don't** run step 7: the next run starts from the same point and skips what's already `done`.
 7. `py -m tools.emi mark-scanned <scan_started>`.

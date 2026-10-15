@@ -32,6 +32,50 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 
 - **Read the transcribed version, not the PDF:** `docs/rate-knowledge/<name>.md` (one per row above, index and offer comparison in `docs/rate-knowledge/README.md`). Three of the PDFs are scans with no text layer; these files are the readable copy. If a figure looks wrong, check the PDF page — the PDF wins.
 
+## Working out the numbers — the `quote` command (TA senders)
+Never price a stay by hand. Run, from `/data/emi`:
+```
+.venv/bin/python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N --children "13;5;2"
+```
+- `--children`: every child's age; 12 and over is counted as an adult by the command. Age not given → ask for it in the reply, don't guess.
+- The sender said how to split the rooms ("3 rooms for 2 adults, 1 room 2 adults + extra bed") → price exactly that: `--alloc "STD:3,TPL:1"` (extra bed = Triple). They gave a room count only → `--rooms N`. They named a type → `--room-type DLX-SV`. Two separate beds → `--twin`. Indian guests → `--indian`.
+- Nothing said about rooms → the command lists options (cheapest, fewest rooms, only doubles, sea-view upgrade). Offer **one** allocation — the cheapest unless the guests' make-up says otherwise (4 adult friends ≠ one Quadruple; a family of 4 = Quadruple) — and at most one alternative line.
+- Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
+- `GAP:` lines are things the data can't answer. Availability is always one (not connected yet): the draft is still written, and the scan report lists it as "check availability before sending". A 2027-holiday gap → the night's rate goes to Karen, not into the reply.
+- Not a TA sender → the command says where to look (tour operator contract file, or Karen for OTA/direct).
+
+## Reply to an inquiry — template (draft wording, not yet approved by Karen)
+Same rules as `email-templates.md` (anh/chị unless the thread shows it, `**Label:**`, `•` lists, "Best, / HAYA Team", sender's language). Drop any line that doesn't apply.
+```
+Kính gửi anh/chị [Tên],
+
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn anh/chị đã quan tâm đến khách sạn.
+
+Với yêu cầu [n người lớn, n trẻ em (tuổi)] từ [DD/MM/YYYY] đến [DD/MM/YYYY] ([n] đêm), HAYA xin gửi phương án như sau:
+
+**Hạng phòng:** [n] [hạng phòng][ + n hạng phòng]
+**Đơn giá:** [giá] VND/phòng/đêm ([hạng phòng])[; …]
+**Phụ thu:** [trẻ [tuổi] tuổi ngủ chung giường [số tiền] VND / ở 1 đêm [số tiền] VND]
+**Tổng tiền:** [tổng] VND cho [n] đêm, bao gồm ăn sáng, VAT và phí dịch vụ.
+[**Phương án khác:** [một dòng, ví dụ nâng lên Deluxe Double Seaview: tổng [tổng] VND]]
+
+**Bao gồm:** ăn sáng (06:30–10:30), hồ bơi, phòng gym, wifi.
+**Nhận phòng / trả phòng:** sau 14:00 / trước 12:00.
+
+**Điều khoản thanh toán:**
+
+• Đặt cọc 50% trong vòng 48 giờ sau khi nhận được xác nhận đặt phòng.
+• 50% còn lại vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
+
+[Trả lời từng câu hỏi khác trong email: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em…]
+
+Để giữ phòng, anh/chị vui lòng gửi giúp HAYA: tên khách, ngày ở, hạng phòng, số người lớn và trẻ em, quốc tịch và yêu cầu đặc biệt (nếu có).
+
+Best,
+HAYA Team
+```
+English: same blocks — "Thank you for your interest in HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.", **Room / Rate / Surcharge / Total / Alternative / Included / Check-in / check-out / Payment terms**, "To hold the rooms, please send the guest names, stay dates, room type, number of adults and children, nationality and any special requests."
+
 ## Questions about offers, children, cancellation, payment
 Answer from the sender's own file in `docs/rate-knowledge/`. Example: "do we get anything for booking early or for a big group?"
 - Give what the file has, with its conditions: the early-bird tiers and dates, the long-stay offer, whether they combine, what they don't apply to (meals, extra bed, child surcharge).
