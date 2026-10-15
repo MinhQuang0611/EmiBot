@@ -28,23 +28,24 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Use only these commands to reach the mailbox and the sheet; never write your own Python for it. Write your own files (row JSON, draft text) under `emi-work/out/`.
 
 1. `py -m tools.precheck inbox` → prints `quiet` (exit 1): answer `QUIET` and stop. Exit 2: report the error line to Karen and stop.
-2. `py -m tools.emi inbox-new` → note the `scan_started=` value; you need it in step 6.
-3. For each email listed, oldest first:
+2. `py -m tools.emi sheet-schema` → every sheet column with its level, required rule, allowed values and the sheet's own instruction, plus the room codes and the Rules tab. Read it once per run; it is the only reference for column names and values. Never guess a column name or a value format.
+3. `py -m tools.emi inbox-new` → note the `scan_started=` value; you need it in step 7.
+4. For each email listed, oldest first:
    1. `py -m tools.emi show <id>` → the whole thread, with attachments saved and their text printed. Image attachments: open the saved file to read it.
    2. Classify it (`skills/inbox-triage.md`).
-   3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`. Already there → `sheet-update <row> emi-work/out/<ref>-update.json` (`{"column": "value"}`). Not there → `sheet-append emi-work/out/<ref>.json` in this shape, column names exactly as on the sheet:
-      ```json
-      {"booking":    {"action": "NEW", "booking_ref": "...", "company": "...", "arrival": "...", "...": "..."},
-       "room_lines": [{"room_code": "DLX-SV", "rooms": "2", "rate_per_night_vnd": "2000000", "total_vnd": "8000000", "...": "..."},
-                      {"room_code": "TPL", "rooms": "1", "...": "..."}]}
-      ```
-      Shared columns go in `booking`, room-type columns (`room_code`, `rooms`, `adults`, `children`, `child_ages`, `meal_plan`, `rate_source`, `rate_per_night_vnd`, `total_vnd`, `notes`, …) in each `room_lines` entry. A required column left blank must be named in `missing_info` with the reason. `sheet-append` prints the rows back: check them. A wrong cell → `sheet-update <row>` by column name. If a command refuses, read the reason and fix the JSON; never write to the sheet any other way.
+   3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`.
+      - Not there (new booking) → `py -m tools.emi sheet-template NEW emi-work/out/<ref>.json`. Fill the values: shared columns in `booking`, one `room_lines` entry per room type (copy the entry for each extra type). Don't add or rename keys. Unknown → leave blank; a blank REQUIRED column goes in `missing_info` as `REQUIRED blank: <column> – <reason>`.
+      - Change or cancellation of a booking already there → `sheet-template CHANGE` (or `CANCEL`) the same way; per the Rules tab it becomes new rows with the same `booking_ref` and `what_changed` filled.
+      - `py -m tools.emi sheet-check emi-work/out/<ref>.json` → fix every line it lists, run it again until `OK`. Warnings: fix them or say why in `notes`.
+      - `py -m tools.emi sheet-append emi-work/out/<ref>.json` → prints the rows as written: compare with the email.
+      - A wrong cell on an existing row → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row.
+      - If a command refuses, read the reason and fix the JSON. Never write to the sheet any other way.
    4. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
    5. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
-4. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
-5. If any `show` or sheet command failed, **don't** run step 6: the next run starts from the same point and skips what's already `done`.
-6. `py -m tools.emi mark-scanned <scan_started>`.
-7. Answer with the scan report table from `skills/inbox-triage.md` §4.
+5. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
+6. If any `show` or sheet command failed, **don't** run step 7: the next run starts from the same point and skips what's already `done`.
+7. `py -m tools.emi mark-scanned <scan_started>`.
+8. Answer with the scan report table from `skills/inbox-triage.md` §4.
 
 ## 2. Confirmation drafts — `30 6-22 * * *`
 Skills: `confirmation-replies.md`, `email-templates.md`.

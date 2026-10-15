@@ -8,6 +8,7 @@ import zipfile
 from types import SimpleNamespace
 
 from tools import attachments, emi
+from tools import intake_schema as schema
 from tools.intake_sheet import IntakeSheet
 from tools.state import State
 from tools.tests.test_tools import FakeHttp, mail_with
@@ -84,43 +85,123 @@ class ShowTest(unittest.TestCase):
         self.assertIn("conversationId eq 'c1'", thread_call[1])
 
 
+REAL_HEADER = open(os.path.join(os.path.dirname(__file__), "..", "..", "test", "fixtures", "intake-columns.csv"),
+                   encoding="utf-8").readline().strip().split(",")
+ROOM_CODES = [["DLX-SV", "DELUXE SEAVIEW", "HAYA"], ["TPL", "TRIPLE", "HAYA"],
+              ["TW-DLX", "TWIN DELUXE", "HAYA", "Never for agencies"]]
+
+
+def real_sheet(data_rows=(), codes=True):
+    rules = [("GET", "!1:1", {"values": [REAL_HEADER]}), ("GET", "!A3:", {"values": [list(r) for r in data_rows]})]
+    if codes:
+        rules.insert(0, ("GET", "Room codes", {"values": ROOM_CODES}))
+    http = FakeHttp(rules)
+    return IntakeSheet("SID", lambda m, u, body=None: http(m, u, body=body)), http
+
+
+def appended(http):
+    call = next((c for c in http.calls if ":append" in c[1]), None)
+    return None if call is None else [dict(zip(REAL_HEADER, v)) for v in call[2]["values"]]
+
+
+BOOKING = {"action": "NEW", "received_at": "15/10/2026 11:56", "source_email": "TEST - Đặt phòng mới TEST-1510",
+           "property": "HAYA", "channel_type": "TA", "company": "Công ty TEST Travel", "booking_ref": "TEST-1510",
+           "guest_names": "Nguyễn Văn Test; TBA", "nationality": "Vietnam", "arrival": "20/11/2026",
+           "departure": "22/11/2026", "nights": "2", "status": "Tentative", "priority": "Normal",
+           "missing_info": "Full guest names; adults per room"}
+DLX = {"room_code": "DLX-SV", "rooms": "2", "meal_plan": "BB", "rate_source": "TA card",
+       "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000", "total_vnd": "8000000"}
+TPL = dict(DLX, room_code="TPL", rooms="1", rate_per_night_vnd="2300000",
+           **{"Average rate per night after discount": "2300000", "total_vnd": "4600000"})
+
+
 class SheetCommandsTest(unittest.TestCase):
-    ROW = {"action": "NEW", "booking_ref": "SB-2", "guest_names": "Nguyen An", "company": "Sao Bien",
-           "arrival": "21/11/2026", "departure": "23/11/2026", "rate_per_night_vnd": "1150000",
-           "room_code": "DLX", "rooms": "1"}
-
-    def test_append_refuses_existing_ref(self):
-        sh, http = sheet_with([["NEW", "sb-2"]])
-        with self.assertRaises(emi.Refused):
-            emi.sheet_append(sh, [self.ROW], out=lambda *_: None)
-        self.assertFalse(any(":append" in c[1] for c in http.calls))
-
-    def test_append_gap_must_be_named_in_missing_info(self):
-        gap = dict(self.ROW, rate_per_night_vnd="", room_code="")
-        # missing_info about something else doesn't excuse a row with no room (TEST-1510, 2026-10-15)
-        for note in ("", "Full guest names; adults and children per room"):
-            sh, http = sheet_with([])
-            with self.assertRaises(emi.Refused):
-                emi.sheet_append(sh, dict(gap, missing_info=note), out=lambda *_: None)
-            self.assertFalse(any(":append" in c[1] for c in http.calls))
-        sh, http = sheet_with([])
-        emi.sheet_append(sh, dict(gap, missing_info="room_code, rate_per_night_vnd: room type not stated"),
-                         out=lambda *_: None)
-        self.assertTrue(any(":append" in c[1] for c in http.calls))
-
     def test_booking_with_room_lines_becomes_one_row_per_room(self):
-        shared = {k: v for k, v in self.ROW.items() if k not in ("room_code", "rooms", "rate_per_night_vnd")}
-        data = {"booking": shared, "room_lines": [
-            {"room_code": "DLX-SV", "rooms": "2", "rate_per_night_vnd": "2000000"},
-            {"room_code": "TPL", "rooms": "1", "rate_per_night_vnd": "2300000"}]}
-        sh, http = sheet_with([])
-        emi.sheet_append(sh, data, out=lambda *_: None)
-        values = next(c for c in http.calls if ":append" in c[1])[2]["values"]
-        col = {h: i for i, h in enumerate(HEADER)}
-        self.assertEqual([(v[col["booking_ref"]], v[col["room_code"]], v[col["rooms"]]) for v in values],
-                         [("SB-2", "DLX-SV", "2"), ("SB-2", "TPL", "1")])
+        sh, http = real_sheet()
+        emi.sheet_append(sh, {"booking": BOOKING, "room_lines": [DLX, TPL]}, out=lambda *_: None)
+        got = [(r["booking_ref"], r["room_code"], r["rooms"], r["arrival"], r["tracy_status"]) for r in appended(http)]
+        self.assertEqual(got, [("TEST-1510", "DLX-SV", "2", "20/11/2026", "Pending"),
+                               ("TEST-1510", "TPL", "1", "20/11/2026", "Pending")])
         with self.assertRaises(emi.Refused):
-            emi.sheet_append(sh, {"booking": shared, "room_lines": []}, out=lambda *_: None)
+            emi.sheet_append(sh, {"booking": BOOKING, "room_lines": []}, out=lambda *_: None)
+
+    def test_row_without_room_is_refused_unless_named_in_missing_info(self):
+        # 2026-10-15: row 50 went in with no room_code/rate because any missing_info text excused it
+        bare = {k: v for k, v in DLX.items() if k not in ("room_code", "rate_per_night_vnd")}
+        sh, http = real_sheet()
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": BOOKING, "room_lines": [bare]}, out=lambda *_: None)
+        self.assertIn("room_code: required", str(e.exception))
+        self.assertIsNone(appended(http))
+        named = dict(BOOKING, missing_info="REQUIRED blank: room_code – not stated; rate_per_night_vnd – no room")
+        sh, http = real_sheet()
+        emi.sheet_append(sh, {"booking": named, "room_lines": [bare]}, out=lambda *_: None)
+        self.assertEqual(len(appended(http)), 1)
+
+    def test_all_problems_reported_at_once(self):
+        bad = dict(BOOKING, arrival="2026-11-20", channel_type="Agency", property="Palma")
+        line = dict(DLX, rate_per_night_vnd="2.000.000", room_code="DLX")
+        sh, http = real_sheet()
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": bad, "room_lines": [line]}, out=lambda *_: None)
+        msg = str(e.exception)
+        for part in ("arrival: '2026-11-20' is not DD/MM/YYYY", "channel_type: 'Agency' not allowed",
+                     "property: 'Palma' not allowed", "rate_per_night_vnd: '2.000.000' must be digits only",
+                     "room_code: 'DLX' is not on the Room codes tab"):
+            self.assertIn(part, msg)
+        self.assertIsNone(appended(http))
+
+    def test_nights_children_and_agency_room_rules(self):
+        cases = [(dict(BOOKING, nights="3"), DLX, "nights: 3 but arrival→departure is 2"),
+                 (BOOKING, dict(DLX, children="2", child_ages="9"), "child_ages: 1 ages for 2 children"),
+                 (BOOKING, dict(DLX, room_code="TW-DLX"), "never sold to agencies"),
+                 (dict(BOOKING, source_email="see https://x"), DLX, "no links or email IDs"),
+                 (dict(BOOKING, pdf_link="x"), DLX, "pdf_link: filled by the build tool")]
+        for booking, line, expected in cases:
+            sh, _ = real_sheet()
+            with self.assertRaises(emi.Refused, msg=expected) as e:
+                emi.sheet_check(sh, {"booking": booking, "room_lines": [line]}, out=lambda *_: None)
+            self.assertIn(expected, str(e.exception))
+
+    def test_total_mismatch_is_only_a_warning(self):
+        sh, _ = real_sheet()
+        lines = []
+        emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [dict(DLX, total_vnd="7000000")]}, out=lines.append)
+        self.assertTrue(any(x.startswith("WARNING") and "total_vnd" in x for x in lines))
+
+    def test_new_with_existing_ref_refused_change_allowed(self):
+        existing = [["NEW", "", "", "", "", "", "", "", "TEST-1510"]]
+        sh, http = real_sheet(existing)
+        with self.assertRaises(emi.Refused):
+            emi.sheet_append(sh, {"booking": BOOKING, "room_lines": [DLX]}, out=lambda *_: None)
+        change = dict(BOOKING, action="CHANGE", what_changed="Dates 20–22 Nov → 21–23 Nov",
+                      arrival="21/11/2026", departure="23/11/2026",
+                      missing_info="ezfolio_group_code: not known yet")
+        sh, http = real_sheet(existing)
+        emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
+        self.assertEqual(appended(http)[0]["action"], "CHANGE")
+
+    def test_unknown_room_codes_tab_skips_that_check(self):
+        sh, _ = real_sheet(codes=False)
+        emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [dict(DLX, room_code="ANY")]}, out=lambda *_: None)
+
+    def test_update_checks_the_merged_row(self):
+        row = [BOOKING.get(h, DLX.get(h, "")) for h in REAL_HEADER]
+        sh, http = real_sheet([row])
+        with self.assertRaises(emi.Refused):
+            emi.sheet_update(sh, 3, {"arrival": "20-11-2026"}, out=lambda *_: None)
+        emi.sheet_update(sh, 3, {"guest_names": "Nguyễn Văn Test; Trần Thị Test"}, out=lambda *_: None)
+        self.assertTrue(any("values:batchUpdate" in c[1] for c in http.calls))
+
+    def test_template_splits_booking_and_room_columns(self):
+        sh, _ = real_sheet()
+        t = schema.template(sh, "NEW")
+        self.assertIn("arrival", t["booking"])
+        self.assertIn("room_code", t["room_lines"][0])
+        for col in ("tracy_status", "pdf_link", "ezfolio_group_code", "Payment 1"):
+            self.assertNotIn(col, t["booking"])
+            self.assertNotIn(col, t["room_lines"][0])
+        self.assertIn("ezfolio_group_code", schema.template(sh, "CHANGE")["booking"])
 
     def test_find_by_ref_or_guest(self):
         sh, _ = sheet_with([["NEW", "SB-2", "Nguyen An"], ["NEW", "AN-9", "Ivan Petrov"]])

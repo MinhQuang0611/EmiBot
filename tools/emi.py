@@ -5,6 +5,9 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi show <message_id>                 # whole thread + attachments saved and read
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
+    python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
+    python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
+    python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
     python -m tools.emi sheet-find <text>                 # rows whose booking_ref or guest_names contain text
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
@@ -23,7 +26,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config
-from .intake_sheet import REQUIRED, missing_required
+from . import intake_schema as schema
 from .state import now_iso
 
 VN = timezone(timedelta(hours=7))
@@ -141,23 +144,45 @@ def expand_booking(data):
     return [data] if isinstance(data, dict) else list(data)
 
 
+def check_rows(sheet, records):
+    """Check every row against tools/intake_schema.py; all problems at once, so one fix covers them."""
+    codes = schema.room_codes(sheet)
+    errors, warnings = [], []
+    for i, rec in enumerate(records, 1):
+        unknown = sorted(set(rec) - set(sheet.header) - {"_row"})
+        label = f"row {i} ({rec.get('room_code') or 'no room_code'})"
+        if unknown:
+            errors.append(f"{label}: not sheet columns {unknown} — run sheet-schema for the exact names")
+        e, w = schema.check_row(rec, codes)
+        errors += [f"{label}: {x}" for x in e]
+        warnings += [f"{label}: {x}" for x in w]
+    if len({r.get("booking_ref", "") for r in records}) > 1:
+        errors.append("rows of one booking must share one booking_ref")
+    return errors, warnings
+
+
+def sheet_check(sheet, data, out=print):
+    records = expand_booking(data)
+    errors, warnings = check_rows(sheet, records)
+    for w in warnings:
+        out(f"WARNING {w}")
+    if errors:
+        raise Refused("fix these, then run sheet-check again:\n  " + "\n  ".join(errors))
+    out(f"OK: {len(records)} row(s) pass the checks")
+    return records
+
+
 def sheet_append(sheet, data, out=print):
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
-    existing = sheet.rows()
-    for i, rec in enumerate(records, 1):
+    for rec in records:
         ref = str(rec.get("booking_ref", "")).strip().lower()
-        if ref and any(r.get("booking_ref", "").strip().lower() == ref for r in existing):
-            raise Refused(f"booking_ref {rec['booking_ref']!r} is already on the sheet: "
-                          f"update that row with sheet-update instead of adding a second one")
-        # A blank required column must be named in missing_info, so a row can't lose its room by accident.
-        note = str(rec.get("missing_info", ""))
-        unexplained = [c for c in missing_required(rec) if c not in note]
-        if unexplained:
-            raise Refused(f"row {i} ({rec.get('booking_ref') or 'no ref'}, {rec.get('room_code') or 'no room_code'}): "
-                          f"{unexplained} empty. Fill them, or name each column in missing_info with the reason "
-                          f"(e.g. 'rate_per_night_vnd: rate not in email or TA table')")
+        # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
+        if ref and rec.get("action") == "NEW" and sheet.find_by_ref(ref):
+            raise Refused(f"booking_ref {rec['booking_ref']!r} is already on the sheet: this is not a NEW "
+                          f"booking. Use action CHANGE (new rows, what_changed filled) or sheet-update for a fix")
+    sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     out(f"appended {len(records)} row(s). Check them below; fix a wrong cell with sheet-update <row> by column name.")
     for ref in dict.fromkeys(rec["booking_ref"] for rec in records if rec.get("booking_ref")):
@@ -169,8 +194,51 @@ def sheet_append(sheet, data, out=print):
 def sheet_update(sheet, row, fields, out=print):
     if not fields:
         raise Refused("no fields given")
+    current = next((r for r in sheet.rows() if r["_row"] == int(row)), None)
+    if current is None:
+        raise Refused(f"row {row} is empty or not a data row")
+    merged = {k: v for k, v in {**current, **fields}.items() if k != "_row"}
+    errors, warnings = check_rows(sheet, [merged])
+    for w in warnings:
+        out(f"WARNING {w}")
+    if errors:
+        raise Refused(f"row {row} would not pass the checks after this update:\n  " + "\n  ".join(errors))
     sheet.update_cells(int(row), fields)
     out(f"updated row {row}: {sorted(fields)}")
+
+
+def sheet_schema(sheet, out=print):
+    """Every column with where it goes, what it takes and the sheet's own instruction (row 2)."""
+    instr = schema.instructions(sheet)
+    out("COLUMNS (exact names). level: booking = same on every row of the booking; room_lines = one per room type;")
+    out("build tool / payment (later) = not filled when a booking first arrives.")
+    for h in sheet.header:
+        req = ("REQUIRED (NEW/CHANGE)" if h in schema.REQUIRED_BOOKING_ROW else
+               "never blank" if h in schema.ALWAYS else "")
+        allowed = (f"one of {list(schema.ENUMS[h])}" if h in schema.ENUMS else
+                   "starts with Yes / No" if h in schema.PREFIX_ENUMS else
+                   "DD/MM/YYYY" if h in schema.DATES else "DD/MM/YYYY HH:MM" if h in schema.DATETIMES else
+                   "whole number" if h in schema.INTEGERS else "VND digits only" if h in schema.AMOUNTS else
+                   "Room codes tab, below" if h == "room_code" else "")
+        out(f"- {h} | {schema.level(h)} | {req} | {allowed} | {instr.get(h, '')}".replace(" |  |", " |"))
+    codes = schema.room_codes(sheet) or {}
+    out("\nROOM CODES (room_code):")
+    for code, (name, note) in codes.items():
+        out(f"- {code} = {name}" + (f" — {note}" if note else ""))
+    out("\nRULES (Rules tab):")
+    for r in schema.rules(sheet):
+        out(f"- {r}")
+    out("\nWrite a booking with: sheet-template NEW <file>, fill it, sheet-check <file>, then sheet-append <file>.")
+
+
+def sheet_template(sheet, action, path, out=print):
+    if action not in schema.ENUMS["action"]:
+        raise Refused(f"action must be one of {list(schema.ENUMS['action'])}")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(schema.template(sheet, action), f, ensure_ascii=False, indent=2)
+    out(f"wrote {path}: fill the values (one room_lines entry per room type), delete nothing, "
+        f"leave unknowns blank and name them in missing_info")
 
 
 # --- drafts ---
@@ -220,6 +288,9 @@ def parser():
     s = sub.add_parser("show"); s.add_argument("message_id")
     s = sub.add_parser("done"); s.add_argument("message_id"); s.add_argument("outcome", nargs="+")
     s = sub.add_parser("mark-scanned"); s.add_argument("scan_started")
+    sub.add_parser("sheet-schema")
+    s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
+    s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
     s = sub.add_parser("sheet-append"); s.add_argument("file")
     s = sub.add_parser("sheet-update"); s.add_argument("row", type=int); s.add_argument("file")
@@ -258,6 +329,12 @@ def main(argv=None):
             st.mark_scanned(args.scan_started)
             st.save()
             print(f"last_scan = {args.scan_started}")
+        elif c == "sheet-schema":
+            sheet_schema(config.sheet())
+        elif c == "sheet-template":
+            sheet_template(config.sheet(), args.action, args.file)
+        elif c == "sheet-check":
+            sheet_check(config.sheet(), read_json(args.file))
         elif c == "sheet-find":
             sheet_find(config.sheet(), args.text)
         elif c == "sheet-append":
