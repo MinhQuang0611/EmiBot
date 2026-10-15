@@ -83,6 +83,7 @@ def _price(alloc, night_list, rooms_by_code, data, adults_eq, kids_in_slots, ind
         subtotal = sum(per_night) * count
         room_total += subtotal
         lines.append({"code": code, "name_vi": room["name_vi"], "name_en": room["name_en"], "count": count,
+                      "beds": room["beds"], "persons": room["persons"],
                       "rates": sorted(set(per_night)), "subtotal": subtotal})
     surcharge_kids = [a for a in kids_in_slots if child["free_under"] <= a < child["adult_from"]]
     child_total = sum(child["surcharge_per_night"][s] for _, s, _ in night_list) * len(surcharge_kids)
@@ -90,7 +91,8 @@ def _price(alloc, night_list, rooms_by_code, data, adults_eq, kids_in_slots, ind
     if len(night_list) < data["min_nights"]:
         guests = adults_eq + len(kids_in_slots)
         one_night = sum(data["one_night_surcharge_per_guest"][s] for _, s, _ in night_list) * guests
-    return {"rooms": lines, "room_total": room_total, "child_surcharge": child_total,
+    child_rates = sorted({child["surcharge_per_night"][s] for _, s, _ in night_list})
+    return {"rooms": lines, "room_total": room_total, "child_surcharge": child_total, "child_rates": child_rates,
             "children_charged": surcharge_kids, "one_night_surcharge": one_night,
             "total": room_total + child_total + one_night, "roh": roh}
 
@@ -195,13 +197,19 @@ def render(q):
         out.append(f"\nOPTION — {label}: {o['room_count']} room(s), total {money(o['total'])} VND")
         for r in o["rooms"]:
             rate = " / ".join(money(x) for x in r["rates"])
-            out.append(f"  {r['count']} × {r['code']} {r['name_vi']}: {rate} VND/room/night → {money(r['subtotal'])}")
+            out.append(f"  {r['count']} × {r['code']} {r['name_vi']} ({r['beds']}, {r['persons']} persons + 1 child under 12): "
+                       f"{rate} VND/room/night → {money(r['subtotal'])}")
         if o["kids_as_persons"]:
             out.append(f"  children counted in a bed of their own (no surcharge): ages {o['kids_as_persons']}")
         if o["kids_sharing_bed"]:
             out.append(f"  children sharing a bed: ages {o['kids_sharing_bed']}")
         if o["child_surcharge"]:
-            out.append(f"  child surcharge (ages {o['children_charged']}): {money(o['child_surcharge'])}")
+            per = " / ".join(money(x) for x in o["child_rates"])
+            out.append(f"  child surcharge: {len(o['children_charged'])} child(ren) aged {o['children_charged']} × "
+                       f"{per} VND/night × {len(q['nights'])} night(s) = {money(o['child_surcharge'])}")
+        free = [a for a in o["kids_sharing_bed"] if a < q["data"]["children"]["free_under"]]
+        if free:
+            out.append(f"  free (under {q['data']['children']['free_under']}): ages {free}")
         if o["one_night_surcharge"]:
             out.append(f"  1-night surcharge: {money(o['one_night_surcharge'])}")
         out.append(f"  rooms {money(o['room_total'])} + surcharges "

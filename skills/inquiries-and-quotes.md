@@ -54,8 +54,10 @@ HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn anh/chị đ�
 Với yêu cầu [n người lớn, n trẻ em (tuổi)] từ [DD/MM/YYYY] đến [DD/MM/YYYY] ([n] đêm), HAYA xin gửi phương án như sau:
 
 **Hạng phòng:** [n] [hạng phòng][ + n hạng phòng]
+**Gợi ý:** [một câu vì sao chọn cách xếp này, từ giường và sức chứa trong output, ví dụ: Phòng Quadruple (2 giường 1m8) ở được 4 người lớn và 1 bé dưới 12 tuổi, phòng Standard Double (giường 1m6) cho 2 người lớn và bé còn lại, nên cả nhà chỉ cần 2 phòng.]
 **Đơn giá:** [giá] VND/phòng/đêm ([hạng phòng])[; …]
-**Phụ thu:** [trẻ [tuổi] tuổi ngủ chung giường [số tiền] VND / ở 1 đêm [số tiền] VND]
+**Phụ thu trẻ em:** [bé [tuổi] tuổi ngủ chung giường: [giá] VND/đêm × [n] đêm = [số tiền] VND][; bé dưới 3 tuổi miễn phí]
+**Phụ thu ở 1 đêm:** [[giá] VND/khách × [n] khách = [số tiền] VND — chỉ khi ở 1 đêm]
 **Tổng tiền:** [tổng] VND cho [n] đêm, bao gồm ăn sáng, VAT và phí dịch vụ.
 [**Phương án khác:** [một dòng, ví dụ nâng lên Deluxe Double Seaview: tổng [tổng] VND]]
 
