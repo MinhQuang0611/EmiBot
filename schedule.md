@@ -57,6 +57,11 @@ Skills: `confirmation-replies.md`, `email-templates.md`.
 
 Hourly because this is the step the agency is waiting on. It does nothing on a run where no row has changed.
 
+### Job 2 — the commands (confirmation for one row)
+1. `py -m tools.emi pdf-fetch <row>` → the PDF behind `pdf_link`, saved, its text printed next to the row. Compare every date, room, rate and total. Mismatch → report to Karen, stop for this booking.
+2. Write the confirmation text (`skills/email-templates.md`, sender's language, deposit deadline as exact date, time and "Vietnam time (UTC+7)") to `emi-work/out/<ref>-confirmation.txt`.
+3. `py -m tools.emi draft-confirmation <message_id of the agency's email> <row> emi-work/out/<ref>-confirmation.txt` → reply draft on the agency's thread with the PDF attached. It refuses a row with no `pdf_link`, a file that isn't a PDF, and a booking that already has a confirmation draft.
+
 ## 3. Payment deadline check — `0 8,15 * * *`
 08:00 and 15:00 (Karen, 2026-10-08): early enough that the client can still pay the same day. A 17:00 check is too late to get anything resolved.
 

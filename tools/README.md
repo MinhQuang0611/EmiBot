@@ -6,6 +6,7 @@ Python 3.10+. Graph uses only the standard library. Google needs `pip install -r
 |---|---|
 | `emi.py` | The fixed commands the scheduled jobs call (`python -m tools.emi --help`): list new inbox mail, show a thread with attachments, mark handled, move the scan clock, find / append / update sheet rows, save reply / forward drafts, attach a file. Job 1's order is in `schedule.md`. |
 | `intake_schema.py` | What each sheet column takes (booking vs room level, required, allowed values, formats) and `check_row`, run by `sheet-check`, `sheet-append` and `sheet-update`. Column instructions, room codes and rules are read live from the sheet (row 2, tabs `Room codes` and `Rules`) by `sheet-schema`. |
+| `drive.py` | Downloads a Drive file (the confirmation PDF behind `pdf_link`) with the service account. Needs the Drive API enabled in the GCP project and the file or folder shared with the service account. |
 | `attachments.py` | Saves attachments under `EMI_WORK_DIR` (default `emi-work/`) and extracts text: PDF (pypdf), Excel .xlsx (openpyxl), .docx, .csv/.txt. Images are saved for the agent to open. |
 | `graph_mail.py` | Outlook for sales@ via Microsoft Graph: read inbox, thread, attachments, Sent, Drafts; create reply / forward / new **drafts**, attach a PDF, tag drafts `Emi`. No send method; `_call` refuses `send`, `sendMail`, `reply`, `replyAll`, `forward`. |
 | `intake_sheet.py` | Intake sheet: read rows by header name, find by `booking_ref`, append rows, update single cells. Refuses unknown columns and refuses to write `tracy_status` / `pdf_link` (except `Pending` on a new row). Deletes only `TEST-` rows. |
@@ -37,6 +38,6 @@ python -m tools.acceptance mail-read              # real, read-only — then the
 
 ## Not built yet
 - Attachments over 3 MB (Graph upload session).
-- Reading the Drive confirmations folder and "FUTURE AVAILABILITY" (Drive API; same service account).
+- Reading "FUTURE AVAILABILITY" from Drive. (The confirmation PDF behind `pdf_link` is read by `pdf-fetch`.)
 - The signal for a cancellation done in EZFOLIO; `precheck confirmations` only sees `pdf_link`.
 - Telegram bot.

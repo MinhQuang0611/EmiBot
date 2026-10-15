@@ -39,10 +39,10 @@ def google_service_account_transport(keyfile):
         keyfile, scopes=["https://www.googleapis.com/auth/spreadsheets",
                          "https://www.googleapis.com/auth/drive.readonly"])
 
-    def call(method, url, body=None):
+    def call(method, url, body=None, raw=False):
         if not creds.valid:
             creds.refresh(Request())
-        return httpjson.request(method, url, headers={"Authorization": f"Bearer {creds.token}"}, body=body)
+        return httpjson.request(method, url, headers={"Authorization": f"Bearer {creds.token}"}, body=body, raw=raw)
 
     return call
 
@@ -91,6 +91,25 @@ class IntakeSheet:
     def find_by_ref(self, booking_ref):
         ref = booking_ref.strip().lower()
         return [r for r in self.rows() if r.get("booking_ref", "").strip().lower() == ref]
+
+    def link_in_cell(self, row_number, column):
+        """The URL behind one cell: a Drive smart chip, a hyperlink, or a URL typed as text.
+        The values API only returns the chip's file name, so this reads the cell's grid data."""
+        a1 = f"{col_letter(self.header.index(column))}{row_number}"
+        resp = self.call("GET", f"{self.base}?ranges={self._range(a1)}"
+                                "&fields=sheets.data.rowData.values(hyperlink,chipRuns,formattedValue)")
+        try:
+            cell = resp["sheets"][0]["data"][0]["rowData"][0]["values"][0]
+        except (KeyError, IndexError):
+            return None
+        for run in cell.get("chipRuns", []):
+            uri = run.get("chip", {}).get("richLinkProperties", {}).get("uri")
+            if uri:
+                return uri
+        if cell.get("hyperlink"):
+            return cell["hyperlink"]
+        text = (cell.get("formattedValue") or "").strip()
+        return text if text.startswith("http") else None
 
     def rows_awaiting_confirmation(self, already_drafted):
         """Rows with a pdf_link whose (booking_ref, row) has no confirmation draft yet."""

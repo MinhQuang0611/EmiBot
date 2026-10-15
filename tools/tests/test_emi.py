@@ -3,12 +3,13 @@ import base64
 import io
 import os
 import tempfile
+import urllib.parse
 import unittest
 import zipfile
 from types import SimpleNamespace
 from unittest import mock
 
-from tools import attachments, emi
+from tools import attachments, drive, emi
 from tools import intake_schema as schema
 from tools.intake_sheet import IntakeSheet
 from tools.state import State
@@ -221,6 +222,86 @@ class SheetCommandsTest(unittest.TestCase):
         sh, _ = sheet_with([["NEW", "SB-2", "Nguyen An"], ["NEW", "AN-9", "Ivan Petrov"]])
         self.assertEqual(len(emi.sheet_find(sh, "petrov", out=lambda *_: None)), 1)
         self.assertEqual(len(emi.sheet_find(sh, "sb-2", out=lambda *_: None)), 1)
+
+
+def chip(uri):
+    return {"sheets": [{"data": [{"rowData": [{"values": [{"formattedValue": "conf.pdf", "chipRuns": [
+        {"chip": {"richLinkProperties": {"uri": uri, "mimeType": "application/pdf"}}}]}]}]}]}]}
+
+
+class ConfirmationPdfTest(unittest.TestCase):
+    URL = "https://drive.google.com/file/d/1GweAj-7rXEtOT9lLsQkZF65_Hq3nGedU/view?usp=drive_link"
+    FID = "1GweAj-7rXEtOT9lLsQkZF65_Hq3nGedU"
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.body = os.path.join(self.dir.name, "body.txt")
+        with open(self.body, "w", encoding="utf-8") as f:
+            f.write("Dear Minh,\n\nPlease find the confirmation attached.\n\nBest,\nHAYA Team")
+        self.row = [BOOKING.get(h, DLX.get(h, "")) for h in REAL_HEADER]
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def sheet(self, cell, mime="application/pdf", data=b"%PDF-1.4 conf"):
+        def http(method, url, body=None, raw=False):
+            u = urllib.parse.unquote(url)
+            if "fields=sheets.data.rowData" in u:
+                return cell
+            if "alt=media" in u:
+                self.assertTrue(raw)
+                return data
+            if "/drive/v3/files/" in u:
+                return {"name": "TEST-1511 confirmation.pdf", "mimeType": mime}
+            if "!1:1" in u:
+                return {"values": [REAL_HEADER]}
+            if "!A3:" in u:
+                return {"values": [self.row]}
+            return {}
+        return IntakeSheet("SID", http)
+
+    def args(self):
+        return SimpleNamespace(message_id="m1", row=3, body=self.body, all=False)
+
+    def test_file_id_from_drive_links(self):
+        self.assertEqual(drive.file_id(self.URL), self.FID)
+        self.assertEqual(drive.file_id(f"https://drive.google.com/open?id={self.FID}"), self.FID)
+        self.assertIsNone(drive.file_id("https://example.com/conf.pdf"))
+
+    def test_link_in_cell_reads_chip_hyperlink_or_text(self):
+        self.assertEqual(self.sheet(chip(self.URL)).link_in_cell(3, "pdf_link"), self.URL)
+        hyper = {"sheets": [{"data": [{"rowData": [{"values": [{"hyperlink": self.URL, "formattedValue": "x"}]}]}]}]}
+        self.assertEqual(self.sheet(hyper).link_in_cell(3, "pdf_link"), self.URL)
+        empty = {"sheets": [{"data": [{"rowData": [{"values": [{"formattedValue": "conf.pdf"}]}]}]}]}
+        self.assertIsNone(self.sheet(empty).link_in_cell(3, "pdf_link"))
+
+    def test_no_pdf_link_no_draft(self):
+        mail, http = mail_with()
+        empty = {"sheets": [{"data": [{"rowData": [{}]}]}]}
+        with self.assertRaises(emi.Refused):
+            emi.draft_confirmation(mail, self.sheet(empty), State(os.devnull + "-none"), self.args(), out=lambda *_: None)
+        self.assertEqual(http.calls, [])
+
+    def test_not_a_pdf_no_draft(self):
+        mail, http = mail_with()
+        with mock.patch.object(emi, "WORK_DIR", self.dir.name), self.assertRaises(emi.Refused) as e:
+            emi.draft_confirmation(mail, self.sheet(chip(self.URL), mime="image/png", data=b"\x89PNG"),
+                                   State(os.devnull + "-none"), self.args(), out=lambda *_: None)
+        self.assertIn("not a PDF", str(e.exception))
+        self.assertEqual(http.calls, [])
+
+    def test_pdf_attached_to_reply_draft_and_recorded(self):
+        mail, http = mail_with([("POST", "/createReply", {"id": "d1"}),
+                                ("GET", "/messages/d1?$select=body", {"body": {"content": "<html><body></body></html>"}})])
+        st = State(os.path.join(self.dir.name, "s.json"))
+        with mock.patch.object(emi, "WORK_DIR", self.dir.name):
+            emi.draft_confirmation(mail, self.sheet(chip(self.URL)), st, self.args(), out=lambda *_: None)
+        att = next(c for c in http.calls if c[1].endswith("/messages/d1/attachments"))[2]
+        self.assertEqual((att["name"], att["contentType"]), ("TEST-1511 confirmation.pdf", "application/pdf"))
+        self.assertEqual(base64.b64decode(att["contentBytes"]), b"%PDF-1.4 conf")
+        self.assertEqual(st.confirmation_drafted(), {("TEST-1510", 3)})
+        with mock.patch.object(emi, "WORK_DIR", self.dir.name), self.assertRaises(emi.Refused):
+            emi.draft_confirmation(mail, self.sheet(chip(self.URL)), st, self.args(), out=lambda *_: None)
 
 
 class DraftCommandsTest(unittest.TestCase):

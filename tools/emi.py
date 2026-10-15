@@ -14,6 +14,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-reply <message_id> <body.txt> [--all] [--kind K --ref R --row N]
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
+    python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
+    python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
 
 Every draft stays in Drafts with the Emi category. Nothing here can send (graph_mail refuses).
@@ -21,11 +23,12 @@ Exit 0 = done, 2 = refused or failed (reason on stderr).
 """
 import argparse
 import json
+import mimetypes
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import attachments, config
+from . import attachments, config, drive
 from . import intake_schema as schema
 from .state import now_iso
 
@@ -278,9 +281,62 @@ def draft_forward(mail, st, args, out=print):
 def draft_attach(mail, draft_id, path, out=print):
     with open(path, "rb") as f:
         data = f.read()
-    ctype = "application/pdf" if path.lower().endswith(".pdf") else "application/octet-stream"
+    ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
     mail.add_attachment(draft_id, os.path.basename(path), data, content_type=ctype)
     out(f"attached {os.path.basename(path)} to {draft_id}")
+
+
+# --- confirmation PDF (job 2) ---
+
+ROW_SUMMARY = ("booking_ref", "company", "guest_names", "arrival", "departure", "nights", "room_code", "rooms",
+               "adults", "children", "rate_per_night_vnd", "Average rate per night after discount", "total_vnd")
+
+
+def _row(sheet, row):
+    r = next((x for x in sheet.rows() if x["_row"] == int(row)), None)
+    if r is None:
+        raise Refused(f"row {row} is empty or not a data row")
+    return r
+
+
+def pdf_fetch(sheet, row, work_dir=WORK_DIR, out=print):
+    """Download the file behind pdf_link on one row; print it next to the row so they can be compared."""
+    r = _row(sheet, row)
+    url = sheet.link_in_cell(int(row), "pdf_link")
+    if not url:
+        raise Refused(f"row {row} has no pdf_link: the booking isn't built yet, no confirmation (AGENTS.md rule 2)")
+    fid = drive.file_id(url)
+    if not fid:
+        raise Refused(f"row {row}: pdf_link is not a Google Drive file link: {url}")
+    name, mime, data = drive.download(sheet.call, fid)
+    folder = os.path.join(work_dir, "confirmations")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, attachments.safe_name(f"{r.get('booking_ref') or 'row'}-row{row}-{name}"))
+    with open(path, "wb") as f:
+        f.write(data)
+    out(f"saved: {os.path.abspath(path)} ({mime}, {len(data)} bytes)")
+    out("row: " + json.dumps({k: r.get(k, "") for k in ROW_SUMMARY if r.get(k)}, ensure_ascii=False))
+    out("file text (check every date, room, rate and total against the row):")
+    out(attachments.clip(attachments.extract_text(path, data)))
+    return path, name, mime, data
+
+
+def draft_confirmation(mail, sheet, st, args, out=print):
+    """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made."""
+    r = _row(sheet, args.row)
+    ref = r.get("booking_ref", "")
+    if (ref, int(args.row)) in st.confirmation_drafted():
+        raise Refused(f"{ref} row {args.row} already has a confirmation draft")
+    body = read_text(args.body)
+    _, name, mime, data = pdf_fetch(sheet, args.row, out=out)
+    if mime != "application/pdf":
+        raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
+                      f"exported from EZFOLIO. No draft made.")
+    d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all)
+    mail.add_attachment(d["id"], name, data, content_type="application/pdf")
+    st.record_draft(d["id"], ref, int(args.row), "confirmation")
+    out(f"confirmation draft saved in Drafts with the PDF attached: {d['id']}")
+    return d
 
 
 def status(st, out=print):
@@ -320,6 +376,10 @@ def parser():
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
+    s = sub.add_parser("pdf-fetch"); s.add_argument("row", type=int)
+    s = sub.add_parser("draft-confirmation")
+    s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
+    s.add_argument("--all", action="store_true", help="reply all")
     sub.add_parser("status")
     return p
 
@@ -359,6 +419,11 @@ def main(argv=None):
             st.save()
         elif c == "draft-forward":
             draft_forward(config.mail(), st, args)
+            st.save()
+        elif c == "pdf-fetch":
+            pdf_fetch(config.sheet(), args.row)
+        elif c == "draft-confirmation":
+            draft_confirmation(config.mail(), config.sheet(), st, args)
             st.save()
         elif c == "draft-attach":
             draft_attach(config.mail(), args.draft_id, args.file)
