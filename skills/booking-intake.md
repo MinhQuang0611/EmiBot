@@ -50,6 +50,17 @@ If the email doesn't make clear whether the sender is a travel company or a priv
 - Average rate = total after promos ÷ nights.
 - **If the rate in the email and the rate table disagree, I don't pick one. I flag it to Karen.**
 
+## Cancellations — the charge
+For every TA cancellation, before writing the CANCEL row:
+```
+.venv/bin/python -m tools.emi cancel-fee <booking_ref> --cancelled-at "<received_at of the cancellation email>"
+```
+- It reads the booking's current rows (latest CHANGE, else NEW) and the TA policy, counts days from the email's date to check-in, and prints the charge, what's been paid (Payment 1/2) and paid − charge.
+- Put one line in the CANCEL row's `notes`: "Cancellation charge (TA policy): [amount] VND — [days] days before check-in, [rule]. Paid: [amount]." Copy the figures from the output.
+- `CHARGE: UNCLEAR` (exactly 7 days) or any `GAP:` → the row's `missing_info` says "cancellation charge: Karen to decide", and the scan report shows both figures.
+- Tour operator, OTA or Direct → the command refuses; take the charge from that operator's own cancellation table in `docs/rate-knowledge/<name>.md` and mark it "to check" for Karen, or give it to Karen.
+- A refund is never promised. Paid − charge is shown to Karen; accounting gets the refund request only after she decides (`department-forwards.md`).
+
 ## Before a row is ready for Tracy
 - `missing_info` is blank, or Karen has said to proceed anyway.
 - For a CANCEL row: Karen has OK'd the cancellation. Tracy never cancels without it.

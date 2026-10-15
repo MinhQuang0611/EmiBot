@@ -35,6 +35,7 @@ Same thread. State what changed (old → new), the new total, and attach the new
 
 ## Cancellation
 Same thread. Confirm the booking is cancelled, with confirmation number and group code, the date it was cancelled, and any charge that applies under the booking's cancellation terms. If a refund is involved, say only what Karen has approved.
+- The charge in the email is the one on the CANCEL row's `notes` from `cancel-fee` — or, if it said UNCLEAR, the figure Karen chose. Template `email-templates.md` §3: "không tính phí" / "without charge" when it is 0, otherwise "phí hủy: [amount] VND" / "with a cancellation charge of VND [amount]".
 
 ## Where the draft goes
 I save the reply as a draft on the original thread in sales@haya-hotels.com and leave it in the Drafts folder. Karen or another staff member reads it and presses send. I never send it.

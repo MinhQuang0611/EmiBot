@@ -56,6 +56,20 @@
     "port": {"4 seats": {"normal": 300000}, "7 seats": {"normal": 400000}, "16 seats": {"normal": 500000}},
     "port_holiday_note": "The 4th column of the PDF is printed 'Ngày thường' twice; port holiday prices not confirmed — ask Karen."
   },
+  "cancellation": {
+    "_source": "ta.md 'Chính sách hủy'. Days = calendar days from the day the cancellation email arrived (Vietnam time) to the check-in date.",
+    "tiers": [
+      {"min_days": 8, "max_days": null, "normal": {"free": true},         "holiday": {"pct_of_rooms": 50}},
+      {"min_days": 3, "max_days": 6,    "normal": {"first_nights": 1},    "holiday": {"pct_of_rooms": 50}},
+      {"min_days": 0, "max_days": 2,    "normal": {"pct_of_rooms": 50},   "holiday": {"pct_of_rooms": 100}}
+    ],
+    "no_show": {"pct_of_rooms": 100},
+    "early_departure": {"pct_of_rooms": 100},
+    "unclear_days": [7],
+    "unclear_note": "The table says '> 7 days' free and '3–6 days' one night: exactly 7 days is on neither line.",
+    "holiday_column_note": "The table doesn't say when the 'Ngày lễ' column applies; this assumes: when any night of the stay is a holiday.",
+    "deposit_note": "ta.md Thanh toán 3: on cancellation the deposit is kept under the cancellation policy. Any refund is Karen's decision."
+  },
   "check_in": "14:00",
   "check_out": "12:00",
   "breakfast": "06:30–10:30",

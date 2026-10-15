@@ -17,6 +17,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian]
+    python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
@@ -34,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive
 from . import quote as quoting
+from . import cancel_fee as cancelling
 from . import intake_schema as schema
 from .state import now_iso
 
@@ -333,6 +335,25 @@ def run_quote(args, out=print):
     return q
 
 
+def run_cancel_fee(sheet, args, out=print):
+    rows = sheet.find_by_ref(args.booking_ref)
+    if not rows:
+        raise Refused(f"no rows for booking_ref {args.booking_ref!r} on the sheet")
+    if args.cancelled_at:
+        try:
+            when = datetime.strptime(args.cancelled_at.strip(), "%d/%m/%Y %H:%M")
+        except ValueError:
+            raise Refused("--cancelled-at is 'DD/MM/YYYY HH:MM' Vietnam time, from the cancellation email") from None
+    else:
+        when = datetime.now(VN).replace(tzinfo=None)
+    try:
+        c = cancelling.cancel_fee(rows, when, no_show=args.no_show)
+    except (cancelling.CancelFeeError, quoting.QuoteError) as e:
+        raise Refused(str(e)) from None
+    out(cancelling.render(c))
+    return c
+
+
 # --- confirmation PDF (job 2) ---
 
 ROW_SUMMARY = ("booking_ref", "company", "guest_names", "arrival", "departure", "nights", "room_code", "rooms",
@@ -463,6 +484,10 @@ def parser():
     s.add_argument("--twin", action="store_true", help="two separate beds wanted")
     s.add_argument("--indian", action="store_true", help="Indian guests: +20%% on room rate")
     s.add_argument("--channel", default="TA", choices=["TA", "Tour operator", "OTA", "Direct"])
+    s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
+    s.add_argument("booking_ref")
+    s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
+    s.add_argument("--no-show", action="store_true")
     s = sub.add_parser("pdf-fetch"); s.add_argument("row", type=int)
     s = sub.add_parser("forget-confirmation"); s.add_argument("ref"); s.add_argument("row", type=int)
     s = sub.add_parser("draft-confirmation")
@@ -517,6 +542,8 @@ def main(argv=None):
             print(f"forgot the confirmation draft for {args.ref} row {args.row}; delete the draft itself in Outlook")
         elif c == "quote":
             run_quote(args)
+        elif c == "cancel-fee":
+            run_cancel_fee(config.sheet(), args)
         elif c == "pdf-fetch":
             pdf_fetch(config.sheet(), args.row)
         elif c == "draft-confirmation":
