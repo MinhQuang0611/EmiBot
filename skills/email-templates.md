@@ -7,6 +7,10 @@ Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 
 - **Reply on the agency's own thread** (RE: their subject). No new subject line.
 - **Language (Karen, 2026-10-08):** the language of the email, not the nationality of the agency. Sender wrote in Vietnamese → reply in Vietnamese. Sender wrote in English → reply in English. A Vietnamese agency that writes in English gets English. If a thread mixes both, use the language of the sender's most recent email. Any other language (Chinese, Korean, Russian) → English.
 - **Greeting:** Vietnamese "Kính gửi chị/anh [Name]"; if no name is known, "Kính gửi Quý Đối tác". English "Dear Ms./Mr. [Name]," or "Dear [Agency] team,".
+- **Never guess anh/chị or Mr./Ms.** Use "chị"/"anh" (Ms./Mr.) only when the thread shows it: a title in the signature ("Ms. Hương"), how the sender writes about themselves, or an earlier HAYA email to the same person. Otherwise "Kính gửi anh/chị [Name]," and "Anh/Chị vui lòng…" for every "Chị vui lòng…" in the template; English "Dear [Name]," with no title.
+- **Nationality and words in the email's language:** the sheet stores "Vietnam", "India"; a Vietnamese email writes "Việt Nam", "Ấn Độ".
+- **Surcharges in the total:** if any row has a surcharge (child, Indian +20%, 1-night), the Total line names it, as in HAYA's sent confirmation for An0109: "Tổng tiền: 22.040.000 VND, gồm phòng 20.640.000 VND và phụ thu trẻ 4 tuổi 1.400.000 VND; bao gồm ăn sáng, VAT và phí dịch vụ." English: "Total: VND 22,040,000 (rooms VND 20,640,000 + child surcharge VND 1,400,000), including breakfast, VAT and service charge."
+- **Deadline wording:** Vietnamese "[HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)"; English "by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)". Never mix the two.
 - **Dates** DD/MM/YYYY. **Money in Vietnamese** 7.200.000 VND; **in English** VND 7,200,000.
 - **Fields come from the intake row and the PDF.** A field I don't have is left as a visible [gap] for the person sending — never filled by guess.
 - **Attach the confirmation PDF** on new and changed bookings.
@@ -46,7 +50,7 @@ Vui lòng xem thông tin xác nhận đặt phòng và PDF đính kèm như sau:
 
 **Điều khoản thanh toán:**
 
-• Đặt cọc 50% ([số tiền] VND); hạn giữ phòng [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam), 48 giờ sau khi khách nhận được xác nhận.
+• Đặt cọc 50% ([số tiền] VND); hạn giữ phòng [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7), 48 giờ sau khi khách nhận được xác nhận.
 • 50% còn lại ([số tiền] VND) vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 Đặt phòng sẽ được tự động hủy mà không cần thông báo trước nếu khách sạn không nhận được khoản đặt cọc đúng hạn.
 
@@ -99,7 +103,7 @@ Please find the booking confirmation below and the attached PDF:
 
 **Payment terms:**
 
-  * 50% deposit (VND [amount]) within 48 hours of receiving this confirmation: by [HH:MM] on [DD/MM/YYYY], Vietnam time.
+  * 50% deposit (VND [amount]) within 48 hours of receiving this confirmation: by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7).
   * The remaining 50% (VND [amount]) is payable 7 days before check-in.
 
 The booking will be automatically released without further notice if the deposit is not received by the deadline.
@@ -161,7 +165,7 @@ HAYA xin gửi xác nhận điều chỉnh đặt phòng theo yêu cầu của c
 **Điều khoản thanh toán:**
 
 [KHỐI A — chưa nhận được tiền cọc]
-• HAYA chưa nhận được khoản đặt cọc cho booking này. Chị vui lòng chuyển khoản đặt cọc 50% ([số tiền] VND) vào tài khoản khách sạn trong vòng 48 giờ kể từ khi nhận được email này: trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam).
+• HAYA chưa nhận được khoản đặt cọc cho booking này. Chị vui lòng chuyển khoản đặt cọc 50% ([số tiền] VND) vào tài khoản khách sạn trong vòng 48 giờ kể từ khi nhận được email này: trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7).
 • 50% còn lại ([số tiền] VND) vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 Đặt phòng sẽ được tự động hủy mà không cần thông báo trước nếu khách sạn không nhận được khoản đặt cọc đúng hạn.
 
@@ -204,7 +208,7 @@ Please find the revised booking confirmation as requested:
 **Payment terms:**
 
 [BLOCK A — no deposit received yet]
-  * We have not yet received the deposit for this booking. Please transfer the 50% deposit (VND [amount]) to the hotel's bank account within 48 hours of receiving this email: by [HH:MM] on [DD/MM/YYYY], Vietnam time.
+  * We have not yet received the deposit for this booking. Please transfer the 50% deposit (VND [amount]) to the hotel's bank account within 48 hours of receiving this email: by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7).
   * The remaining 50% (VND [amount]) is payable 7 days before check-in.
 The booking will be automatically released without further notice if the deposit is not received by the deadline.
 
@@ -270,7 +274,7 @@ Kính gửi chị [Tên],
 
 HAYA chưa nhận được khoản đặt cọc cho booking [mã đặt phòng] (mã đoàn #[mã đoàn]), lưu trú [DD/MM/YYYY] – [DD/MM/YYYY].
 
-Hạn đặt cọc 50% ([số tiền] VND) là [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam). Chị vui lòng gửi ủy nhiệm chi qua email sau khi chuyển khoản để kế toán khách sạn kiểm tra. Nếu chị đã chuyển khoản, chị gửi giúp HAYA ủy nhiệm chi nhé.
+Hạn đặt cọc 50% ([số tiền] VND) là [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7). Chị vui lòng gửi ủy nhiệm chi qua email sau khi chuyển khoản để kế toán khách sạn kiểm tra. Nếu chị đã chuyển khoản, chị gửi giúp HAYA ủy nhiệm chi nhé.
 
 Đặt phòng sẽ được tự động hủy nếu khách sạn không nhận được khoản đặt cọc đúng hạn.
 
@@ -289,7 +293,7 @@ Dear Ms. [Name],
 
 We have not yet received the deposit for booking [agency ref] (group code #[group code]), [DD/MM/YYYY] – [DD/MM/YYYY].
 
-The 50% deposit of VND [amount] is due by [HH:MM] on [DD/MM/YYYY], Vietnam time. Can you please send us the payment slip after the transfer so that our accountant can check? If you have already made the transfer, please send us the slip.
+The 50% deposit of VND [amount] is due by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7). Can you please send us the payment slip after the transfer so that our accountant can check? If you have already made the transfer, please send us the slip.
 
 The booking will be automatically released if the deposit is not received by the deadline.
 

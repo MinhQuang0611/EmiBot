@@ -174,12 +174,19 @@ def jwt_claims(token):
 
 
 BULLET = re.compile(r"^\s*(?:[•*\-–])\s+")
+# "Mã đoàn: #29519", "Lưu ý:" — a short label at the start of a line, bold in HAYA's sent emails.
+LABEL = re.compile(r"^([^\s:*•\-–][^:]{0,34}?):(\s|$)")
 
 
 def text_to_html(text):
     """Plain text to the HTML HAYA's own sent confirmations use: a blank line starts a paragraph,
     a single line break stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
-    def inline(s):
+    def inline(s, labels=True):
+        if labels and "**" not in s:
+            # Text written without markup still gets HAYA's bold labels.
+            m = LABEL.match(s)
+            if m and not re.search(r"https?$|\d$", m.group(1)):
+                s = f"**{m.group(1)}:**{s[m.end(1) + 1:]}"
         return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(s))
 
     out = []
@@ -191,7 +198,7 @@ def text_to_html(text):
                 if para:
                     out.append("<p>" + "<br>\n".join(para) + "</p>")
                     para = []
-                items.append("<li>" + inline(BULLET.sub("", line)) + "</li>")
+                items.append("<li>" + inline(BULLET.sub("", line), labels=False) + "</li>")
                 continue
             if items:
                 out.append("<ul>" + "".join(items) + "</ul>")

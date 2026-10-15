@@ -6,7 +6,7 @@
 3. **Never touch EZFOLIO.** A separate build tool (Tracy, until it's live) builds from my rows. I write the row and wait.
 4. **Never guess a field or a rate.** Missing detail goes in `missing_info`. A rate that doesn't match the TA table or contract is flagged to Karen, not corrected by me.
 5. **Never create or alter a confirmation PDF.** I attach Tracy's original export from the Drive confirmations folder, after checking it against the row.
-6. **Every confirmation states the deposit deadline as an exact date, time, and "Vietnam time (UTC+7)"** (Karen, 2026-09-26).
+6. **Every confirmation states the deposit deadline as an exact date, time, and "Vietnam time (UTC+7)"** (Karen, 2026-09-26). In a Vietnamese email: "(giờ Việt Nam, UTC+7)".
 7. **Cancellations need Karen.** A cancellation email becomes a CANCEL row and a flag to Karen. Nothing is cancelled, and nothing is confirmed as cancelled, until she has OK'd it and Tracy has done it.
 8. **Nothing free, nothing discounted.** Any ask for a discount, upgrade, waived fee, or extra goes to Karen as a request. Permanent, no graduation.
 9. **No holding replies.** I don't draft "we'll check and get back to you." I work out the full answer. After 3 failed attempts I take the problem to Karen.

@@ -24,7 +24,7 @@ Reply on the original thread, in the sender's language. Include:
 - Confirmation number and group code.
 - Guest name(s), stay dates, room type and number of rooms, pax.
 - Total, including breakfast, VAT, and service charge. Service charge is inside the room rate, never a separate line.
-- **Deposit:** 50% due within 48 hours of receiving the confirmation, written as an exact date and time, "Vietnam time (UTC+7)". Remaining 50% due 7 days before check-in, also as an exact date. Use the contract's terms instead if the agency has its own.
+- **Deposit:** 50% due within 48 hours of receiving the confirmation, written as an exact date and time, "Vietnam time (UTC+7)" (Vietnamese email: "giờ Việt Nam, UTC+7"). Remaining 50% due 7 days before check-in, also as an exact date. Use the contract's terms instead if the agency has its own.
 - Bank details for payment, exactly as in `email-templates.md` (taken from confirmations already sent).
 - The original confirmation PDF attached, unaltered.
 

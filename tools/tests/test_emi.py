@@ -357,6 +357,18 @@ class DraftCommandsTest(unittest.TestCase):
         self.assertIn("<ul><li>Đặt cọc 50% &lt;ngay&gt;</li><li>50% còn lại</li></ul>\n<p>Đặt phòng sẽ tự hủy.</p>", h)
         self.assertTrue(h.endswith("<p>Best,<br>\nHAYA Team</p>"))
 
+    def test_labels_bold_without_markup(self):
+        # 2026-10-15: Emi wrote the template without ** — labels must still come out bold.
+        from tools.graph_mail import text_to_html
+        h = text_to_html("Vui lòng xem thông tin xác nhận đặt phòng và PDF đính kèm như sau:\n\n"
+                         "Mã đoàn: #29519\nTổng tiền: 18.450.000 VND\n\nLưu ý:\n\n"
+                         "• Hạn 15:24 ngày 17/10/2026\nHạn giữ phòng 15:24 hôm nay")
+        self.assertIn("<b>Mã đoàn:</b> #29519<br>\n<b>Tổng tiền:</b> 18.450.000 VND", h)
+        self.assertIn("<p><b>Lưu ý:</b></p>", h)
+        self.assertIn("<p>Vui lòng xem", h)                 # long sentence ending in ':' is not a label
+        self.assertIn("<li>Hạn 15:24 ngày 17/10/2026</li>", h)  # no bold inside list items
+        self.assertIn("<p>Hạn giữ phòng 15:24 hôm nay</p>", h)  # a time is not a label
+
     def test_confirmation_text_must_follow_template(self):
         with self.assertRaises(emi.Refused) as e:
             emi.check_confirmation_text("Kính gửi anh Minh,\nĐây là email test.\nBest,\nHAYA Team")
