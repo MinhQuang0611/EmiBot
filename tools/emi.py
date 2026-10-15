@@ -331,6 +331,24 @@ def pdf_fetch(sheet, row, work_dir=WORK_DIR, out=print):
     return path, name, mime, data
 
 
+# What every confirmation must carry (skills/email-templates.md "Rules that apply to all of them").
+CONFIRMATION_MUST_HAVE = (
+    ("1020729617", "the bank account number"),
+    ("CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC", "the bank account name"),
+    (("giờ Việt Nam", "Vietnam time"), "the deposit deadline in Vietnam time"),
+    (("bao gồm ăn sáng, VAT và phí dịch vụ", "including breakfast, VAT and service charge"), "the total's inclusion line"),
+    ("HAYA Team", "the sign-off 'Best, / HAYA Team'"),
+)
+
+
+def check_confirmation_text(body):
+    missing = [what for needle, what in CONFIRMATION_MUST_HAVE
+               if not any(n in body for n in (needle if isinstance(needle, tuple) else (needle,)))]
+    if missing:
+        raise Refused("the confirmation text doesn't follow skills/email-templates.md (section 1 for a new booking, "
+                      f"2 for a change): missing {', '.join(missing)}. Rewrite it from the template; no draft made.")
+
+
 def draft_confirmation(mail, sheet, st, args, out=print):
     """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made."""
     r = _row(sheet, args.row)
@@ -338,6 +356,7 @@ def draft_confirmation(mail, sheet, st, args, out=print):
     if (ref, int(args.row)) in st.confirmation_drafted():
         raise Refused(f"{ref} row {args.row} already has a confirmation draft")
     body = read_text(args.body)
+    check_confirmation_text(body)
     _, name, mime, data = pdf_fetch(sheet, args.row, out=out)
     if mime != "application/pdf":
         raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "

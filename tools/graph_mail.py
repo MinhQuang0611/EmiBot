@@ -173,6 +173,36 @@ def jwt_claims(token):
         return {}
 
 
+BULLET = re.compile(r"^\s*(?:[•*\-–])\s+")
+
+
+def text_to_html(text):
+    """Plain text to the HTML HAYA's own sent confirmations use: a blank line starts a paragraph,
+    a single line break stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
+    def inline(s):
+        return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(s))
+
+    out = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        lines = block.split("\n")
+        para, items = [], []
+        for line in lines + [None]:
+            if line is not None and BULLET.match(line):
+                if para:
+                    out.append("<p>" + "<br>\n".join(para) + "</p>")
+                    para = []
+                items.append("<li>" + inline(BULLET.sub("", line)) + "</li>")
+                continue
+            if items:
+                out.append("<ul>" + "".join(items) + "</ul>")
+                items = []
+            if line is not None:
+                para.append(inline(line))
+        if para:
+            out.append("<p>" + "<br>\n".join(para) + "</p>")
+    return "\n".join(out)
+
+
 def _is_send_path(path):
     last = urllib.parse.urlparse(path).path.rstrip("/").rsplit("/", 1)[-1]
     return last.lower() in SEND_ACTIONS
@@ -296,11 +326,11 @@ class GraphMail:
         return draft
 
     def _prepend_text(self, draft_id, text):
-        """Put plain text above the quoted thread of a fresh reply/forward draft, line breaks kept."""
+        """Put the text above the quoted thread of a fresh reply/forward draft, formatted by text_to_html."""
         draft = self._call("GET", f"/messages/{draft_id}?$select=body")
         original = draft.get("body", {}).get("content", "")
         ours = ('<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'
-                + html.escape(text).replace("\n", "<br>\n") + "</div><br>\n")
+                + text_to_html(text) + "</div><br>\n")
         m = re.search(r"<body[^>]*>", original, re.I)
         content = original[:m.end()] + ours + original[m.end():] if m else ours + original
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})

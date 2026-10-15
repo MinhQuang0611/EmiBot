@@ -247,7 +247,10 @@ class ConfirmationPdfTest(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.body = os.path.join(self.dir.name, "body.txt")
         with open(self.body, "w", encoding="utf-8") as f:
-            f.write("Dear Minh,\n\nPlease find the confirmation attached.\n\nBest,\nHAYA Team")
+            f.write("Dear Mr. Minh,\n\n**Total:** VND 7,050,000, including breakfast, VAT and service charge.\n\n"
+                    "• 50% deposit by 14:00 on 17/10/2026, Vietnam time.\n\n"
+                    "**Account name:** CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC\n**Account number:** 1020729617\n\n"
+                    "Best,\nHAYA Team")
         self.row = [BOOKING.get(h, DLX.get(h, "")) for h in REAL_HEADER]
 
     def tearDown(self):
@@ -333,10 +336,27 @@ class DraftCommandsTest(unittest.TestCase):
         emi.draft_reply(mail, st, args, out=lambda *_: None)
         patch = [c for c in http.calls if c[0] == "PATCH" and "body" in (c[2] or {})][0][2]["body"]["content"]
         self.assertTrue(patch.startswith('<html><body dir="ltr"><div'))
-        self.assertIn("Dear Ms. Hương,<br>\n<br>\nCan you please confirm &lt;the dates&gt;?", patch)
+        self.assertIn("<p>Dear Ms. Hương,</p>\n<p>Can you please confirm &lt;the dates&gt;?</p>", patch)
         self.assertTrue(patch.endswith("<p>quoted</p></body></html>"))
         self.assertIn("d1", st.data["drafts"])
         self.assertFalse(any(c[1].endswith(("/send", "/reply")) for c in http.calls))
+
+    def test_text_to_html_bold_lists_paragraphs(self):
+        from tools.graph_mail import text_to_html
+        h = text_to_html("Kính gửi chị Ân,\n\n**Mã đoàn:** #29519\n**Số xác nhận:** 25694\n\n"
+                         "**Điều khoản thanh toán:**\n\n• Đặt cọc 50% <ngay>\n• 50% còn lại\nĐặt phòng sẽ tự hủy.\n\nBest,\nHAYA Team")
+        self.assertNotIn("**", h)
+        self.assertIn("<p><b>Mã đoàn:</b> #29519<br>\n<b>Số xác nhận:</b> 25694</p>", h)
+        self.assertIn("<ul><li>Đặt cọc 50% &lt;ngay&gt;</li><li>50% còn lại</li></ul>\n<p>Đặt phòng sẽ tự hủy.</p>", h)
+        self.assertTrue(h.endswith("<p>Best,<br>\nHAYA Team</p>"))
+
+    def test_confirmation_text_must_follow_template(self):
+        with self.assertRaises(emi.Refused) as e:
+            emi.check_confirmation_text("Kính gửi anh Minh,\nĐây là email test.\nBest,\nHAYA Team")
+        self.assertIn("bank account number", str(e.exception))
+        emi.check_confirmation_text("hạn giữ phòng 14:00 ngày 17/10/2026 (giờ Việt Nam)\n"
+                                    "Tổng tiền: 1 VND, bao gồm ăn sáng, VAT và phí dịch vụ.\n"
+                                    "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\nBest,\nHAYA Team")
 
     def test_confirmation_needs_ref_and_row(self):
         mail, http = mail_with()

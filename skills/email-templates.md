@@ -3,6 +3,7 @@
 Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 and 8 October 2026. Wording is taken from those emails; only the booking details are replaced with [fields]. Source email for each is named so the original can be checked.
 
 ## Rules that apply to all of them
+- **Formatting, same as HAYA's own sent confirmations:** write `**Label:**` for a bold label and start list lines with `•`. A blank line starts a new paragraph; lines without a blank between them stay together. `draft-reply` and `draft-confirmation` turn this into Outlook HTML (bold, bullet list) — the `**` never reaches the reader. Copy the templates below with their `**` and `•` exactly.
 - **Reply on the agency's own thread** (RE: their subject). No new subject line.
 - **Language (Karen, 2026-10-08):** the language of the email, not the nationality of the agency. Sender wrote in Vietnamese → reply in Vietnamese. Sender wrote in English → reply in English. A Vietnamese agency that writes in English gets English. If a thread mixes both, use the language of the sender's most recent email. Any other language (Chinese, Korean, Russian) → English.
 - **Greeting:** Vietnamese "Kính gửi chị/anh [Name]"; if no name is known, "Kính gửi Quý Đối tác". English "Dear Ms./Mr. [Name]," or "Dear [Agency] team,".
@@ -31,41 +32,35 @@ HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin chân thành cảm ơn 
 
 Vui lòng xem thông tin xác nhận đặt phòng và PDF đính kèm như sau:
 
-Mã đoàn: #[mã đoàn]
-Số xác nhận: [số xác nhận]
-Mã đặt phòng: [mã của đại lý]
+**Mã đoàn:** #[mã đoàn]
+**Số xác nhận:** [số xác nhận]
+**Mã đặt phòng:** [mã của đại lý]
+**Tên đoàn:** [tên đoàn / khách chính]
+**Đại lý du lịch:** [tên đại lý]
 
-Tên đoàn: [tên đoàn / khách chính]
+**Thời gian lưu trú:** [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm)
+**Hạng phòng:** [số phòng] [hạng phòng]
+**Số lượng khách:** [n] người lớn[, n trẻ em (tuổi)], quốc tịch [quốc tịch].
+**Đơn giá:** [giá] VND/phòng/đêm.
+**Tổng tiền:** [tổng] VND, bao gồm ăn sáng, VAT và phí dịch vụ.
 
-Đại lý du lịch: [tên đại lý]
-
-Thời gian lưu trú: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm)
-
-Hạng phòng: [số phòng] [hạng phòng]
-
-Số lượng khách: [n] người lớn[, n trẻ em (tuổi)], quốc tịch [quốc tịch].
-
-Đơn giá: [giá] VND/phòng/đêm.
-
-Tổng tiền: [tổng] VND, bao gồm ăn sáng, VAT và phí dịch vụ.
-
-Điều khoản thanh toán:
+**Điều khoản thanh toán:**
 
 • Đặt cọc 50% ([số tiền] VND); hạn giữ phòng [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam), 48 giờ sau khi khách nhận được xác nhận.
 • 50% còn lại ([số tiền] VND) vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 Đặt phòng sẽ được tự động hủy mà không cần thông báo trước nếu khách sạn không nhận được khoản đặt cọc đúng hạn.
 
-Thông tin xuất hóa đơn VAT:
+**Thông tin xuất hóa đơn VAT:**
 
 [HAYA đã ghi nhận thông tin xuất hóa đơn theo yêu cầu. / Chị vui lòng bổ sung tên pháp lý công ty, mã số thuế, địa chỉ và email nhận hóa đơn.]
 
-Thông tin tài khoản thanh toán:
+**Thông tin tài khoản thanh toán:**
 
-Tên tài khoản: CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
-Số tài khoản: 1020729617
-Ngân hàng: Vietcombank, CN Phú Quốc
+**Tên tài khoản:** CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
+**Số tài khoản:** 1020729617
+**Ngân hàng:** Vietcombank, CN Phú Quốc
 
-Lưu ý:
+**Lưu ý:**
 
 • Vui lòng ghi rõ Tên Công ty + Mã đoàn (#[mã đoàn]) trong nội dung chuyển khoản.
 • Trường hợp nội dung chuyển khoản không đầy đủ hoặc không chính xác, khách sạn có thể chưa ghi nhận thanh toán cho đến khi hoàn tất đối chiếu.
@@ -90,42 +85,36 @@ Thank you for choosing HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.
 
 Please find the booking confirmation below and the attached PDF:
 
-Group code: #[group code]
-Confirmation number: [confirmation no.]
-Agency reference: [agency ref]
+**Group code:** #[group code]
+**Confirmation number:** [confirmation no.]
+**Agency reference:** [agency ref]
+**Group name:** [group name / lead guest]
+**Travel agency:** [agency]
 
-Group name: [group name / lead guest]
+**Stay:** [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+**Room:** [number] [room type]
+**Guests:** [n] adults[ + n children aged x and y], [nationality]
+**Rate:** VND [rate] per room per night
+**Total:** VND [total], including breakfast, VAT and service charge.
 
-Travel agency: [agency]
-
-Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
-
-Room: [number] [room type]
-
-Guests: [n] adults[ + n children aged x and y], [nationality]
-
-Rate: VND [rate] per room per night
-
-Total: VND [total], including breakfast, VAT and service charge.
-
-Payment terms:
+**Payment terms:**
 
   * 50% deposit (VND [amount]) within 48 hours of receiving this confirmation: by [HH:MM] on [DD/MM/YYYY], Vietnam time.
   * The remaining 50% (VND [amount]) is payable 7 days before check-in.
 
 The booking will be automatically released without further notice if the deposit is not received by the deadline.
 
-VAT invoice details:
+**VAT invoice details:**
 
 [We have noted the invoice details provided. / Please send your company's legal name, tax code, address and invoice email address if a VAT invoice is required.]
 
-Bank details:
+**Bank details:**
 
-Account name: CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
-Account number: 1020729617
-Bank: Vietcombank, Phu Quoc Branch
+**Account name:** CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
+**Account number:** 1020729617
+**Bank:** Vietcombank, Phu Quoc Branch
 
-Notes:
+**Notes:**
 
   * Please include your company name + group code #[group code] in the transfer reference.
   * Incomplete or incorrect references may delay payment reconciliation.
@@ -156,20 +145,20 @@ Kính gửi chị [Tên],
 
 HAYA xin gửi xác nhận điều chỉnh đặt phòng theo yêu cầu của chị:
 
-Mã đoàn: #[mã đoàn]
-Số xác nhận: [số xác nhận]
-Tên đoàn: [tên đoàn]
-Đại lý du lịch: [tên đại lý]
+**Mã đoàn:** #[mã đoàn]
+**Số xác nhận:** [số xác nhận]
+**Tên đoàn:** [tên đoàn]
+**Đại lý du lịch:** [tên đại lý]
 
-Thời gian lưu trú: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm)
-Hạng phòng: [số phòng + hạng phòng]
-Số lượng khách: [n] người lớn[, n trẻ em]
-Đơn giá: [giá] VND/phòng/đêm
-Tổng tiền: [tổng] VND, bao gồm ăn sáng, VAT và phí dịch vụ.
+**Thời gian lưu trú:** [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm)
+**Hạng phòng:** [số phòng + hạng phòng]
+**Số lượng khách:** [n] người lớn[, n trẻ em]
+**Đơn giá:** [giá] VND/phòng/đêm
+**Tổng tiền:** [tổng] VND, bao gồm ăn sáng, VAT và phí dịch vụ.
 
-Nội dung điều chỉnh: [cũ → mới, một hoặc hai câu. Ví dụ: HAYA đã thay 1 Standard và 1 Superior bằng 2 Deluxe Seaview, giữ mức giá tương ứng.]
+**Nội dung điều chỉnh:** [cũ → mới, một hoặc hai câu. Ví dụ: HAYA đã thay 1 Standard và 1 Superior bằng 2 Deluxe Seaview, giữ mức giá tương ứng.]
 
-Điều khoản thanh toán:
+**Điều khoản thanh toán:**
 
 [KHỐI A — chưa nhận được tiền cọc]
 • HAYA chưa nhận được khoản đặt cọc cho booking này. Chị vui lòng chuyển khoản đặt cọc 50% ([số tiền] VND) vào tài khoản khách sạn trong vòng 48 giờ kể từ khi nhận được email này: trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam).
@@ -179,13 +168,13 @@ Nội dung điều chỉnh: [cũ → mới, một hoặc hai câu. Ví dụ: HAY
 [KHỐI B — đã nhận tiền cọc]
 HAYA đã nhận khoản đặt cọc [số tiền] VND ngày [DD/MM/YYYY]. Số tiền còn lại sau điều chỉnh: [số tiền] VND, vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 
-Thông tin xuất hóa đơn VAT: [Đã được ghi nhận theo yêu cầu. / Chị vui lòng gửi thông tin xuất hóa đơn nếu cần.]
+**Thông tin xuất hóa đơn VAT:** [Đã được ghi nhận theo yêu cầu. / Chị vui lòng gửi thông tin xuất hóa đơn nếu cần.]
 
-Thông tin tài khoản thanh toán:
+**Thông tin tài khoản thanh toán:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, CN Phú Quốc
 
-Lưu ý: Chị vui lòng xem PDF điều chỉnh đính kèm[ và gửi giúp HAYA tên khách, quốc tịch khi có]. Nội dung chuyển khoản vui lòng ghi Tên Công ty + Mã đoàn #[mã đoàn].
+**Lưu ý:** Chị vui lòng xem PDF điều chỉnh đính kèm[ và gửi giúp HAYA tên khách, quốc tịch khi có]. Nội dung chuyển khoản vui lòng ghi Tên Công ty + Mã đoàn #[mã đoàn].
 
 Best,
 HAYA Team
@@ -199,20 +188,20 @@ Dear Ms. [Name],
 
 Please find the revised booking confirmation as requested:
 
-Group code: #[group code]
-Confirmation number: [confirmation no.]
-Group name: [group name]
-Travel agency: [agency]
+**Group code:** #[group code]
+**Confirmation number:** [confirmation no.]
+**Group name:** [group name]
+**Travel agency:** [agency]
 
-Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
-Room: [number + room type]
-Guests: [n] adults[ + n children]
-Rate: VND [rate] per room per night
-Total: VND [total], including breakfast, VAT and service charge.
+**Stay:** [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+**Room:** [number + room type]
+**Guests:** [n] adults[ + n children]
+**Rate:** VND [rate] per room per night
+**Total:** VND [total], including breakfast, VAT and service charge.
 
-What changed: [old → new, one or two sentences.]
+**What changed:** [old → new, one or two sentences.]
 
-Payment terms:
+**Payment terms:**
 
 [BLOCK A — no deposit received yet]
   * We have not yet received the deposit for this booking. Please transfer the 50% deposit (VND [amount]) to the hotel's bank account within 48 hours of receiving this email: by [HH:MM] on [DD/MM/YYYY], Vietnam time.
@@ -222,9 +211,9 @@ The booking will be automatically released without further notice if the deposit
 [BLOCK B — deposit already received]
 We have received your deposit of VND [amount] on [DD/MM/YYYY]. The remaining balance after this change is VND [amount], payable 7 days before check-in.
 
-VAT invoice details: [Noted as requested. / Please send invoice details if required.]
+**VAT invoice details:** [Noted as requested. / Please send invoice details if required.]
 
-Bank details:
+**Bank details:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, Phu Quoc Branch
 
@@ -285,10 +274,10 @@ Hạn đặt cọc 50% ([số tiền] VND) là [HH:MM] ngày [DD/MM/YYYY] (giờ
 
 Đặt phòng sẽ được tự động hủy nếu khách sạn không nhận được khoản đặt cọc đúng hạn.
 
-Thông tin tài khoản thanh toán:
+**Thông tin tài khoản thanh toán:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, CN Phú Quốc
-Nội dung chuyển khoản: Tên Công ty + Mã đoàn #[mã đoàn]
+**Nội dung chuyển khoản:** Tên Công ty + Mã đoàn #[mã đoàn]
 
 Best,
 HAYA Team
@@ -304,10 +293,10 @@ The 50% deposit of VND [amount] is due by [HH:MM] on [DD/MM/YYYY], Vietnam time.
 
 The booking will be automatically released if the deposit is not received by the deadline.
 
-Bank details:
+**Bank details:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, Phu Quoc Branch
-Transfer reference: company name + group code #[group code]
+**Transfer reference:** company name + group code #[group code]
 
 Best,
 HAYA Team
@@ -323,10 +312,10 @@ HAYA chưa nhận được khoản thanh toán 50% còn lại cho booking [mã �
 
 Số tiền còn lại [số tiền] VND cần được thanh toán trước ngày [DD/MM/YYYY], 07 ngày trước ngày nhận phòng. Chị vui lòng gửi ủy nhiệm chi qua email sau khi chuyển khoản để kế toán khách sạn kiểm tra. Nếu chị đã chuyển khoản, chị gửi giúp HAYA ủy nhiệm chi nhé.
 
-Thông tin tài khoản thanh toán:
+**Thông tin tài khoản thanh toán:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, CN Phú Quốc
-Nội dung chuyển khoản: Tên Công ty + Mã đoàn #[mã đoàn]
+**Nội dung chuyển khoản:** Tên Công ty + Mã đoàn #[mã đoàn]
 
 Best,
 HAYA Team
@@ -340,10 +329,10 @@ We have not yet received the remaining 50% for booking [agency ref] (group code 
 
 The balance of VND [amount] is due by [DD/MM/YYYY], 7 days before check-in. Can you please send us the payment slip after the transfer so that our accountant can check? If you have already made the transfer, please send us the slip.
 
-Bank details:
+**Bank details:**
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, Phu Quoc Branch
-Transfer reference: company name + group code #[group code]
+**Transfer reference:** company name + group code #[group code]
 
 Best,
 HAYA Team
@@ -355,7 +344,7 @@ HAYA Team
 
 **Payment slip forward to accounting** (e.g. "Fw: AVD - 4246445", 08/10/2026): forward the agency's email to accountant@palmahotel.vn with one line on top:
 ```
-Mã đoàn: #[mã đoàn]
+**Mã đoàn:** #[mã đoàn]
 ```
 When the slip needs explaining (e.g. "FW: RHK130126", 07/10/2026): one sentence with amount, date received, group code, and anything unusual such as the transfer coming from a different company's account.
 
