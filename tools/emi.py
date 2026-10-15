@@ -26,6 +26,7 @@ Exit 0 = done, 2 = refused or failed (reason on stderr).
 import argparse
 import json
 import mimetypes
+import re
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -350,6 +351,14 @@ def check_confirmation_text(body):
     if missing:
         raise Refused("the confirmation text doesn't follow skills/email-templates.md (section 1 for a new booking, "
                       f"2 for a change): missing {', '.join(missing)}. Rewrite it from the template; no draft made.")
+    # Greeting says anh/chị (gender unknown): no lone "chị"/"anh" may be left from the template further down.
+    if re.search(r"\banh\s*/\s*chị\b", body, re.I):
+        lone = [line.strip() for line in body.splitlines()
+                if re.search(r"(?<![/\w])(chị|anh)(?!\s*/)\b", re.sub(r"\banh\s*/\s*chị\b", "", line, flags=re.I),
+                             re.I)]
+        if lone:
+            raise Refused("greeting is 'anh/chị' but these lines still say chị or anh alone — write Anh/Chị: "
+                          + " | ".join(lone))
 
 
 def draft_confirmation(mail, sheet, st, args, out=print):

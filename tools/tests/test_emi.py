@@ -383,6 +383,17 @@ class DraftCommandsTest(unittest.TestCase):
                                     "Tổng tiền: 1 VND, bao gồm ăn sáng, VAT và phí dịch vụ.\n"
                                     "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\nBest,\nHAYA Team")
 
+    def test_anh_chi_greeting_leaves_no_lone_chi(self):
+        base = ("Kính gửi anh/chị Minh,\nhạn giữ phòng 15:42 ngày 17/10/2026 (giờ Việt Nam, UTC+7)\n"
+                "Tổng tiền: 1 VND, bao gồm ăn sáng, VAT và phí dịch vụ.\n"
+                "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\n• 50% còn lại vui lòng thanh toán\n")
+        # TEST-1511, 2026-10-15: the VAT line kept the template's "Chị vui lòng"
+        with self.assertRaises(emi.Refused) as e:
+            emi.check_confirmation_text(base + "Chị vui lòng bổ sung mã số thuế.\nBest,\nHAYA Team")
+        self.assertIn("Chị vui lòng bổ sung mã số thuế.", str(e.exception))
+        emi.check_confirmation_text(base + "Anh/Chị vui lòng bổ sung mã số thuế.\nBest,\nHAYA Team")
+        emi.check_confirmation_text(base.replace("anh/chị", "chị") + "Chị vui lòng bổ sung.\nBest,\nHAYA Team")
+
     def test_confirmation_needs_ref_and_row(self):
         mail, http = mail_with()
         args = SimpleNamespace(message_id="m1", body=self.body, all=False, kind="confirmation", ref="SB-2", row="")
