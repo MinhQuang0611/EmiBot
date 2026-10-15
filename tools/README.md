@@ -4,6 +4,8 @@ Python 3.10+. Graph uses only the standard library. Google needs `pip install -r
 
 | File | What it does |
 |---|---|
+| `emi.py` | The fixed commands the scheduled jobs call (`python -m tools.emi --help`): list new inbox mail, show a thread with attachments, mark handled, move the scan clock, find / append / update sheet rows, save reply / forward drafts, attach a file. Job 1's order is in `schedule.md`. |
+| `attachments.py` | Saves attachments under `EMI_WORK_DIR` (default `emi-work/`) and extracts text: PDF (pypdf), Excel .xlsx (openpyxl), .docx, .csv/.txt. Images are saved for the agent to open. |
 | `graph_mail.py` | Outlook for sales@ via Microsoft Graph: read inbox, thread, attachments, Sent, Drafts; create reply / forward / new **drafts**, attach a PDF, tag drafts `Emi`. No send method; `_call` refuses `send`, `sendMail`, `reply`, `replyAll`, `forward`. |
 | `intake_sheet.py` | Intake sheet: read rows by header name, find by `booking_ref`, append rows, update single cells. Refuses unknown columns and refuses to write `tracy_status` / `pdf_link` (except `Pending` on a new row). Deletes only `TEST-` rows. |
 | `state.py` | JSON state between runs: last scan, Telegram questions `E-001`…, drafts, confirmations, reminders. |

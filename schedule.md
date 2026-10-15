@@ -24,6 +24,22 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 8. Flag OTA rates under 1,000,000 VND/room-night, Palma emails, money asks, and anything unclassified.
 9. **40-hour deposit reminder.** For every confirmed booking with no deposit seen, count hours since the confirmation was actually sent. 40 hours reached → re-check the inbox and the payment columns, then draft the deposit reminder. At the 22:00 run, also draft it for any booking that will reach 40 hours before 06:00. This lives here, not in job 3, because the 40-hour mark can land at any hour and job 3 only runs twice a day.
 
+### Job 1 — the commands, in order
+Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Use only these commands to reach the mailbox and the sheet; never write your own Python for it. Write your own files (row JSON, draft text) under `emi-work/out/`.
+
+1. `py -m tools.precheck inbox` → prints `quiet` (exit 1): answer `QUIET` and stop. Exit 2: report the error line to Karen and stop.
+2. `py -m tools.emi inbox-new` → note the `scan_started=` value; you need it in step 6.
+3. For each email listed, oldest first:
+   1. `py -m tools.emi show <id>` → the whole thread, with attachments saved and their text printed. Image attachments: open the saved file to read it.
+   2. Classify it (`skills/inbox-triage.md`).
+   3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`. Already there → `sheet-update <row> emi-work/out/<ref>-update.json`. Not there → `sheet-append emi-work/out/<ref>.json` (a JSON list, one object per room type, column names exactly as on the sheet). If `sheet-append` refuses, read the reason and fix the rows; never work around it.
+   4. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
+   5. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
+4. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
+5. If any `show` or sheet command failed, **don't** run step 6: the next run starts from the same point and skips what's already `done`.
+6. `py -m tools.emi mark-scanned <scan_started>`.
+7. Answer with the scan report table from `skills/inbox-triage.md` §4.
+
 ## 2. Confirmation drafts — `30 6-22 * * *`
 Skills: `confirmation-replies.md`, `email-templates.md`.
 1. Read the intake sheet for rows where the build tool has pasted a `pdf_link` (or marked a cancellation done) and no confirmation has been drafted yet.

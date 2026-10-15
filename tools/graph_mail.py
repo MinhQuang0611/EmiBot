@@ -5,8 +5,10 @@ Graph endpoint that sends, so a prompt can't talk its way into sending. The app 
 must also be granted Mail.Read + Mail.ReadWrite only, never Mail.Send (openclaw-setup-brief.md step 3).
 """
 import base64
+import html
 import json
 import os
+import re
 import time
 import urllib.parse
 
@@ -239,10 +241,26 @@ class GraphMail:
         return self._call("GET", f"/messages/{message_id}",
                           headers={"Prefer": 'outlook.body-content-type="text"'})
 
-    def get_thread(self, conversation_id):
-        q = self._query(filter=f"conversationId eq '{conversation_id}'")
-        msgs = list(self._pages(f"/messages?{q}"))
+    def get_thread(self, conversation_id, text=False):
+        """Every message in the conversation, oldest first. text=True: bodies as plain text,
+        plus uniqueBody (the part not quoted from earlier messages)."""
+        if text:
+            q = self._query(filter=f"conversationId eq '{conversation_id}'",
+                            select="id,subject,from,toRecipients,ccRecipients,receivedDateTime,isDraft,"
+                                   "hasAttachments,body,uniqueBody")
+            msgs = self._text_pages(f"/messages?{q}")
+        else:
+            q = self._query(filter=f"conversationId eq '{conversation_id}'")
+            msgs = self._pages(f"/messages?{q}")
         return sorted(msgs, key=lambda m: m.get("receivedDateTime", ""))
+
+    def _text_pages(self, path):
+        h = {"Prefer": 'outlook.body-content-type="text"'}
+        resp = self._call("GET", path, headers=h)
+        yield from resp.get("value", [])
+        while resp.get("@odata.nextLink"):
+            resp = self._call("GET", resp["@odata.nextLink"], headers=h)
+            yield from resp.get("value", [])
 
     def list_attachments(self, message_id):
         """File attachments with decoded bytes under 'data'. Inline logos come back too; caller filters."""
@@ -269,6 +287,27 @@ class GraphMail:
         draft = self._call("POST", f"/messages/{message_id}/createForward",
                            body={"toRecipients": _recipients(to), "comment": comment})
         self._tag(draft["id"])
+        return draft
+
+    def _prepend_text(self, draft_id, text):
+        """Put plain text above the quoted thread of a fresh reply/forward draft, line breaks kept."""
+        draft = self._call("GET", f"/messages/{draft_id}?$select=body")
+        original = draft.get("body", {}).get("content", "")
+        ours = ('<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'
+                + html.escape(text).replace("\n", "<br>\n") + "</div><br>\n")
+        m = re.search(r"<body[^>]*>", original, re.I)
+        content = original[:m.end()] + ours + original[m.end():] if m else ours + original
+        self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
+
+    def reply_draft_with_text(self, message_id, text, reply_all=False):
+        """Reply draft on the sender's thread with a multi-line plain-text answer on top."""
+        draft = self.create_reply_draft(message_id, "", reply_all=reply_all)
+        self._prepend_text(draft["id"], text)
+        return draft
+
+    def forward_draft_with_text(self, message_id, to, text):
+        draft = self.create_forward_draft(message_id, to, "")
+        self._prepend_text(draft["id"], text)
         return draft
 
     def create_new_draft(self, to, subject, body_text, cc=()):

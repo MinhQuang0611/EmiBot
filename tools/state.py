@@ -5,10 +5,11 @@ Not on the intake sheet: the sheet's columns belong to the EZFOLIO build tool.
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 EMPTY = {
     "last_scan": None,       # ISO UTC of the last inbox scan
+    "processed": {},         # Graph message id -> {at, outcome}; a crashed scan doesn't redo these
     "next_question": 1,      # E-001, E-002, ...
     "questions": {},         # "E-001" -> {booking_ref, ask, asked_at, answer, answered_at}
     "drafts": {},            # Graph draft id -> {booking_ref, row, kind, drafted_at}
@@ -40,7 +41,16 @@ class State:
 
     # --- scan clock ---
     def mark_scanned(self, at=None):
-        self.data["last_scan"] = at or now_iso()
+        """Move the scan clock and forget processed ids older than a week before it."""
+        self.data["last_scan"] = at = at or now_iso()
+        cutoff = (datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ") - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.data["processed"] = {k: v for k, v in self.data["processed"].items() if v["at"] >= cutoff}
+
+    def mark_processed(self, message_id, outcome):
+        self.data["processed"][message_id] = {"at": now_iso(), "outcome": outcome}
+
+    def is_processed(self, message_id):
+        return message_id in self.data["processed"]
 
     # --- questions to Karen ---
     def ask(self, booking_ref, ask):

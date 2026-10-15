@@ -20,3 +20,6 @@ secrets/
 *_ssh_key.pub
 id_ed25519*
 id_rsa*
+
+# Attachments saved by tools.emi show, and the agent's scratch files
+emi-work/
