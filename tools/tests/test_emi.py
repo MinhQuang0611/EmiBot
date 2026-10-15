@@ -59,6 +59,16 @@ class InboxNewTest(unittest.TestCase):
         self.assertIn("1 other email(s) in the window ignored", "\n".join(lines))
         self.assertFalse(st.is_processed("real"))  # left alone, not marked
 
+    def test_mail_find_lists_ids_without_drafts(self):
+        mail, http = mail_with([("GET", "/messages?", {"value": [
+            {"id": "m1", "subject": "TEST - Đặt phòng TEST-1511", "receivedDateTime": "2026-10-15T07:05:00Z",
+             "from": {"emailAddress": {"address": "dev@gmail.com"}}},
+            {"id": "d1", "subject": "RE: TEST-1511", "isDraft": True}]})])
+        lines = []
+        hits = emi.mail_find(mail, 'TEST-1511"', out=lines.append)
+        self.assertEqual([m["id"] for m in hits], ["m1"])
+        self.assertIn('$search="TEST-1511"', http.calls[0][1])
+
     def test_first_scan_looks_back_24_hours(self):
         mail, http = mail_with([("GET", "/mailFolders/inbox/messages", {"value": []})])
         lines = []

@@ -3,6 +3,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
 
     python -m tools.emi inbox-new                         # emails since the last scan, not yet handled
     python -m tools.emi show <message_id>                 # whole thread + attachments saved and read
+    python -m tools.emi mail-find <text>                  # emails matching text (ref, subject, sender): their ids
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
     python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
@@ -91,6 +92,15 @@ def inbox_new(mail, st, out=print):
         out(f"\n- id: {m['id']}\n  received: {vn(m['receivedDateTime'])}\n  from: {addr(m.get('from'))}"
             f"\n  subject: {m.get('subject', '')}{clip}")
     return msgs, started
+
+
+def mail_find(mail, text, out=print):
+    hits = mail.search(text)
+    out(f"emails found: {len(hits)} (newest first)")
+    for m in hits:
+        out(f"\n- id: {m['id']}\n  received: {vn(m.get('receivedDateTime'))}\n  from: {addr(m.get('from'))}"
+            f"\n  subject: {m.get('subject', '')}")
+    return hits
 
 
 def _sender(m):
@@ -355,6 +365,7 @@ def parser():
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("inbox-new")
     s = sub.add_parser("show"); s.add_argument("message_id")
+    s = sub.add_parser("mail-find"); s.add_argument("text")
     s = sub.add_parser("done"); s.add_argument("message_id"); s.add_argument("outcome", nargs="+")
     s = sub.add_parser("mark-scanned"); s.add_argument("scan_started")
     sub.add_parser("sheet-schema")
@@ -393,6 +404,8 @@ def main(argv=None):
             inbox_new(config.mail(), st)
         elif c == "show":
             show(config.mail(), args.message_id)
+        elif c == "mail-find":
+            mail_find(config.mail(), args.text)
         elif c == "done":
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()

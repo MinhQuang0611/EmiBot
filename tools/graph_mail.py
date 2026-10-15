@@ -226,6 +226,12 @@ class GraphMail:
     def list_sent_since(self, since_iso):
         return self.list_folder_since("sentitems", since_iso, field="sentDateTime")
 
+    def search(self, text, top=10):
+        """Messages anywhere in the mailbox matching text (subject, body, sender), newest first."""
+        q = self._query(search=f'"{text.replace(chr(34), "")}"', select="id,subject,from,receivedDateTime,isDraft",
+                        top=str(top))
+        return [m for m in self._call("GET", f"/messages?{q}").get("value", []) if not m.get("isDraft")]
+
     def has_new_inbox_mail(self, since_iso):
         q = self._query(filter=f"receivedDateTime ge {since_iso}", select="id", top="1")
         return bool(self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value"))
