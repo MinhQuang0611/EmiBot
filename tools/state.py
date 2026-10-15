@@ -88,6 +88,14 @@ class State:
             self.data["reminders"][f"{booking_ref}|{kind.split('_')[0]}"] = {"draft_id": draft_id,
                                                                             "drafted_at": now_iso()}
 
+    def forget_confirmation(self, booking_ref, row):
+        """A person deleted the confirmation draft (wrong, or a test): allow a new one for this row."""
+        key = f"{booking_ref}|{row}"
+        entry = self.data["confirmations"].pop(key, None)
+        if entry:
+            self.data["drafts"].pop(entry.get("draft_id"), None)
+        return entry is not None
+
     def confirmation_drafted(self):
         """(booking_ref, row) pairs that already have a confirmation draft."""
         out = set()

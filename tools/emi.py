@@ -15,6 +15,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-reply <message_id> <body.txt> [--all] [--kind K --ref R --row N]
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
+    python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
@@ -409,6 +410,7 @@ def parser():
         s.add_argument("--row", default="")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
     s = sub.add_parser("pdf-fetch"); s.add_argument("row", type=int)
+    s = sub.add_parser("forget-confirmation"); s.add_argument("ref"); s.add_argument("row", type=int)
     s = sub.add_parser("draft-confirmation")
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
@@ -454,6 +456,11 @@ def main(argv=None):
         elif c == "draft-forward":
             draft_forward(config.mail(), st, args)
             st.save()
+        elif c == "forget-confirmation":
+            if not st.forget_confirmation(args.ref, args.row):
+                raise Refused(f"no confirmation draft recorded for {args.ref} row {args.row}")
+            st.save()
+            print(f"forgot the confirmation draft for {args.ref} row {args.row}; delete the draft itself in Outlook")
         elif c == "pdf-fetch":
             pdf_fetch(config.sheet(), args.row)
         elif c == "draft-confirmation":

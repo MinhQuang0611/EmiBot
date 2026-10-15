@@ -322,6 +322,12 @@ class ConfirmationPdfTest(unittest.TestCase):
         self.assertEqual(st.confirmation_drafted(), {("TEST-1510", 3)})
         with mock.patch.object(emi, "WORK_DIR", self.dir.name), self.assertRaises(emi.Refused):
             emi.draft_confirmation(mail, self.sheet(chip(self.URL)), st, self.args(), out=lambda *_: None)
+        # a person deleted that draft: forgetting it allows a new one
+        self.assertTrue(st.forget_confirmation("TEST-1510", 3))
+        self.assertNotIn("d1", st.data["drafts"])
+        self.assertFalse(st.forget_confirmation("TEST-1510", 3))
+        with mock.patch.object(emi, "WORK_DIR", self.dir.name):
+            emi.draft_confirmation(mail, self.sheet(chip(self.URL)), st, self.args(), out=lambda *_: None)
 
 
 class DraftCommandsTest(unittest.TestCase):
