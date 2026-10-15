@@ -9,9 +9,15 @@ scenario's TEST- rows from the sandbox sheet; sim-check grades the sheet and the
 import glob
 import json
 import os
+import re
 import shutil
 
 SCENARIOS = os.path.join(os.path.dirname(__file__), "..", "test", "sim")
+
+
+def _digits(text):
+    """Drop thousands separators so an amount matches however it was written."""
+    return re.sub(r"(?<=\d)[.,](?=\d{3})", "", text)
 
 
 def scenario_dir(name):
@@ -72,8 +78,8 @@ def check(sheet, name, work_dir, out=print):
             verdict(got == sorted(e["room_codes"]), f"{label}: room codes {got}, want {sorted(e['room_codes'])}")
         for col in e.get("nonblank", []):
             verdict(rows and all(r.get(col, "").strip() for r in rows), f"{label}: {col} filled on every row")
-        for text in e.get("notes_contains", []):
-            verdict(any(text in r.get("notes", "") for r in rows), f"{label}: notes mention {text!r}")
+        for text in e.get("notes_contains", []):  # 2.100.000 = 2,100,000 = 2100000
+            verdict(any(_digits(text) in _digits(r.get("notes", "")) for r in rows), f"{label}: notes mention {text!r}")
         for r in rows:
             out(f"     row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != '_row'},
                                                      ensure_ascii=False))

@@ -201,6 +201,13 @@ class SheetCommandsTest(unittest.TestCase):
         emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [dict(DLX, total_vnd="7000000")]}, out=lines.append)
         self.assertTrue(any(x.startswith("WARNING") and "total_vnd" in x for x in lines))
 
+    def test_total_with_surcharge_is_no_warning(self):
+        sh, _ = real_sheet()
+        lines = []
+        line = dict(DLX, **{"Surcharge amount": "1050000", "total_vnd": "9050000"})
+        emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [line]}, out=lines.append)
+        self.assertFalse(any(x.startswith("WARNING") and "total_vnd" in x for x in lines))
+
     def test_new_with_existing_ref_refused_change_allowed(self):
         existing = [["NEW", "", "", "", "", "", "", "", "TEST-1510"]]
         sh, http = real_sheet(existing)

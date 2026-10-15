@@ -37,6 +37,11 @@ class SimMailTest(unittest.TestCase):
         self.assertEqual(meta["attachments"][0]["name"], "conf.pdf")
         self.assertFalse(hasattr(self.mail, "_call"))  # no route to Graph at all
 
+    def test_amounts_match_whatever_the_separator(self):
+        for written in ("2,100,000 VND", "2.100.000 VND", "2100000"):
+            self.assertIn(sim._digits("2.100.000"), sim._digits(written))
+        self.assertNotIn(sim._digits("2.100.000"), sim._digits("2,500,000"))
+
 
 if __name__ == "__main__":
     unittest.main()

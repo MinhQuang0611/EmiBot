@@ -122,9 +122,13 @@ def check_row(rec, room_codes=None):
     if action in ("NEW", "CHANGE") and g("notes") and not g("notes").startswith("1."):
         warnings.append("notes: NOTES RULE wants the EZFOLIO Notice numbered 1–7, one item per line")
     avg, rooms, nights, total = (g("Average rate per night after discount"), g("rooms"), g("nights"), g("total_vnd"))
-    if all(x.isdigit() for x in (avg, rooms, nights, total)) and int(avg) * int(rooms) * int(nights) != int(total):
-        warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights "
-                        f"= {int(avg) * int(rooms) * int(nights)}; fine only if the email states a different total")
+    extra = g("Surcharge amount") or "0"
+    if all(x.isdigit() for x in (avg, rooms, nights, total, extra)):
+        want = int(avg) * int(rooms) * int(nights) + int(extra)
+        if want != int(total):
+            plus = f" + surcharge {extra}" if extra != "0" else ""
+            warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights{plus} "
+                            f"= {want}; fine only if the email states a different total")
     return errors, warnings
 
 
