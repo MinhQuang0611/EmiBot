@@ -1,15 +1,18 @@
-"""Price a stay and suggest room allocations from the TA rate table, so an inquiry reply never
-rests on mental arithmetic. Data: docs/rate-knowledge/ta-rates.json (copied from ta.md).
+"""Price a stay and suggest room allocations from a rate table, so an inquiry reply never
+rests on mental arithmetic. Data: docs/rate-knowledge/ta-rates.json (TA, copied from ta.md) and
+direct-rates.json (direct guests, copied from direct.md).
 
 What this does not know, it says, in `gaps`: availability and stop-sale (the FUTURE AVAILABILITY
-file is not connected), 2027 holidays, dates outside the table, channels other than TA.
+file is not connected), 2027 holidays, dates outside the table, tour operators and OTAs.
 """
 import json
 import math
 import os
 from datetime import date, datetime, timedelta
 
-DATA = os.path.join(os.path.dirname(__file__), "..", "docs", "rate-knowledge", "ta-rates.json")
+KNOWLEDGE = os.path.join(os.path.dirname(__file__), "..", "docs", "rate-knowledge")
+TABLES = {"TA": "ta-rates.json", "Direct": "direct-rates.json"}
+DATA = os.path.join(KNOWLEDGE, TABLES["TA"])
 
 
 class QuoteError(Exception):
@@ -18,7 +21,17 @@ class QuoteError(Exception):
 
 def load(path=DATA):
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if "holidays_from" in data:  # the direct table has a holiday column but no dates of its own
+        other = load(os.path.join(os.path.dirname(path), data["holidays_from"]))
+        data["holidays"], data["holidays_known_until"] = other["holidays"], other["holidays_known_until"]
+    return data
+
+
+def load_channel(channel):
+    if channel not in TABLES:
+        raise QuoteError(f"no rate table for {channel!r}; have {sorted(TABLES)}")
+    return load(os.path.join(KNOWLEDGE, TABLES[channel]))
 
 
 def parse_date(s):
@@ -50,8 +63,13 @@ def nights(arrival, departure, data):
         gaps.append(f"holiday dates after {known_until:%d/%m/%Y} are not on the TA table: nights after that are "
                     f"priced by the month's season. If any falls on a likely holiday (Tết, 26/4, 30/4–1/5, 2/9, "
                     f"24–26/12, 31/12), Karen must confirm the holiday rate before quoting")
+    label = data.get("label", "TA table")
     if arrival < _iso(data["valid_from"]):
-        gaps.append(f"arrival is before the TA table starts ({_iso(data['valid_from']):%d/%m/%Y})")
+        gaps.append(f"arrival is before the {label} starts ({_iso(data['valid_from']):%d/%m/%Y})")
+    if out[-1][0] > _iso(data["valid_to"]) and not data.get("valid_after_end", False):
+        gaps.append(f"RATES OUT OF DATE: the {label} is valid {_iso(data['valid_from']):%d/%m/%Y}–"
+                    f"{_iso(data['valid_to']):%d/%m/%Y} and this stay is after it. Karen must confirm the rates "
+                    f"still apply: no price goes into the draft until she does")
     return out, gaps
 
 
@@ -71,14 +89,14 @@ def _assign_children(adults_eq, kid_ages, capacity, slots):
 def _price(alloc, night_list, rooms_by_code, data, adults_eq, kids_in_slots, indian):
     """Total and lines for one allocation {code: count}."""
     child = data["children"]
-    roh = sum(n for c, n in alloc.items() if rooms_by_code[c]["persons"] == 2) >= data["roh"]["min_rooms"]
+    roh = "roh" in data and sum(n for c, n in alloc.items() if rooms_by_code[c]["persons"] == 2) >= data["roh"]["min_rooms"]
     room_total = 0
     lines = []
     for code, count in alloc.items():
         room = rooms_by_code[code]
         priced = rooms_by_code[data["roh"]["rate_like"]] if roh and room["persons"] == 2 else room
         per_night = [priced["rates"][season] for _, season, _ in night_list]
-        if indian:
+        if indian and "indian_surcharge_pct" in data:
             per_night = [round(r * (100 + data["indian_surcharge_pct"]) / 100) for r in per_night]
         subtotal = sum(per_night) * count
         room_total += subtotal
@@ -88,7 +106,7 @@ def _price(alloc, night_list, rooms_by_code, data, adults_eq, kids_in_slots, ind
     surcharge_kids = [a for a in kids_in_slots if child["free_under"] <= a < child["adult_from"]]
     child_total = sum(child["surcharge_per_night"][s] for _, s, _ in night_list) * len(surcharge_kids)
     one_night = 0
-    if len(night_list) < data["min_nights"]:
+    if len(night_list) < data.get("min_nights", 0):
         guests = adults_eq + len(kids_in_slots)
         one_night = sum(data["one_night_surcharge_per_guest"][s] for _, s, _ in night_list) * guests
     child_rates = sorted({child["surcharge_per_night"][s] for _, s, _ in night_list})
@@ -104,10 +122,10 @@ def quote(arrival, departure, adults, kid_ages=(), rooms=None, room_type=None, a
         raise QuoteError("at least one adult")
     rooms_by_code = {r["code"]: r for r in data["rooms"]}
     for code in [room_type] + list((alloc or {}).keys()):
-        if code and code in data["never_for_agencies"]:
+        if code and code in data.get("never_for_agencies", ()):
             raise QuoteError(f"{code} is never offered to agencies")
         if code and code not in rooms_by_code:
-            raise QuoteError(f"{code} is not on the TA table; use one of {sorted(rooms_by_code)}")
+            raise QuoteError(f"{code} is not on the {data.get('label', 'TA table')}; use one of {sorted(rooms_by_code)}")
     night_list, gaps = nights(arrival, departure, data)
     adult_from = data["children"]["adult_from"]
     adults_eq = adults + sum(1 for a in kid_ages if a >= adult_from)
@@ -174,10 +192,16 @@ def quote(arrival, departure, adults, kid_ages=(), rooms=None, room_type=None, a
     notes = []
     if any(o["roh"] for _, o in options):
         notes.append(data["roh"]["note"])
-    if len(night_list) < data["min_nights"]:
+    if len(night_list) < data.get("min_nights", 0):
         notes.append(f"minimum {data['min_nights']} nights: a 1-night stay carries the per-guest surcharge shown")
-    if indian:
+    if indian and "indian_note" in data:
         notes.append(data["indian_note"])
+    elif indian:
+        gaps.append(f"the +20% for Indian guests is Karen's TA rule; the {data.get('label')} says nothing — "
+                    f"priced without it, ask Karen")
+    for key in ("holidays_note", "breakfast_note"):
+        if key in data:
+            notes.append(data[key])
     gaps.append("availability and stop-sale NOT checked: the FUTURE AVAILABILITY file is not connected — "
                 "a person must check before sending")
     return {"arrival": arrival, "departure": departure, "nights": night_list, "adults": adults,
@@ -189,7 +213,8 @@ def money(n):
 
 
 def render(q):
-    out = [f"STAY {q['arrival']:%d/%m/%Y} – {q['departure']:%d/%m/%Y}, {len(q['nights'])} night(s); "
+    out = [f"RATES: {q['data'].get('label', 'TA table')}",
+           f"STAY {q['arrival']:%d/%m/%Y} – {q['departure']:%d/%m/%Y}, {len(q['nights'])} night(s); "
            f"{q['adults']} adult(s)" + (f", children aged {q['kid_ages']}" if q["kid_ages"] else "")]
     for d, season, hol in q["nights"]:
         out.append(f"  night {d:%d/%m/%Y}: {season}" + (f" ({hol})" if hol else ""))
@@ -212,12 +237,16 @@ def render(q):
             out.append(f"  free (under {q['data']['children']['free_under']}): ages {free}")
         if o["one_night_surcharge"]:
             out.append(f"  1-night surcharge: {money(o['one_night_surcharge'])}")
+        pct = q["data"].get("deposit_pct")
         out.append(f"  rooms {money(o['room_total'])} + surcharges "
-                   f"{money(o['child_surcharge'] + o['one_night_surcharge'])} = {money(o['total'])} VND; "
-                   f"deposit 50% = {money(o['total'] // 2)}")
+                   f"{money(o['child_surcharge'] + o['one_night_surcharge'])} = {money(o['total'])} VND"
+                   + (f"; deposit {pct}% = {money(o['total'] * pct // 100)}" if pct else ""))
     d = q["data"]
     out.append(f"\nINCLUDED: {d['includes']}. Check-in {d['check_in']}, check-out {d['check_out']}, "
-               f"breakfast {d['breakfast']}. Payment: {d['deposit']}.")
+               f"breakfast {d['breakfast']}. Payment: {d['payment']}.")
+    if d.get("early_late_charges"):
+        out.append("EARLY CHECK-IN / LATE CHECK-OUT: " + "; ".join(
+            f"in {c['check_in']} or out {c['check_out']}: {c['charge_pct']}%" for c in d["early_late_charges"]))
     for n in q["notes"]:
         out.append(f"NOTE: {n}")
     for g in q["gaps"]:

@@ -1,8 +1,10 @@
 {
   "_source": "docs/rate-knowledge/ta.md (from 'BẢNG GIÁ CHO TA HAYA HOTEL.pdf', copied 2026-10-09). The PDF wins on any mismatch: fix both files.",
+  "label": "TA table",
   "_used_by": "tools/quote.py (python -m tools.emi quote). Change a number here and in ta.md together.",
   "valid_from": "2026-02-03",
   "valid_to": "2026-12-31",
+  "valid_after_end": true,
   "valid_note": "Karen 2026-10-03: the 2026 table also applies to 2027 dates until a new one is provided.",
   "currency": "VND",
   "includes": "breakfast, pool, gym, 8% VAT and service charge",
@@ -74,5 +76,6 @@
   "check_out": "12:00",
   "breakfast": "06:30–10:30",
   "pool": "09:00–22:00",
-  "deposit": "50% within 48 hours of receiving the confirmation; remaining 50% 7 days before check-in"
+  "payment": "50% deposit within 48 hours of receiving the confirmation; remaining 50% 7 days before check-in",
+  "deposit_pct": 50
 }

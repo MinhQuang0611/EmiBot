@@ -16,7 +16,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
-    python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian]
+    python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
@@ -320,13 +320,13 @@ OTHER_CHANNELS = {
     "Tour operator": "quote from that operator's own contract in docs/rate-knowledge/<name>.md (anex, crystalbay, "
                      "odeon, pegas, selfie); Fun and Sun has no contract — Karen",
     "OTA": "OTAs book through their own systems; an OTA inquiry by email goes to Karen",
-    "Direct": "direct-guest rates have not been provided yet — a direct guest's price question goes to Karen",
 }
 
 
 def run_quote(args, out=print):
-    if args.channel != "TA":
-        raise Refused(f"quote covers the TA rate table only. {args.channel}: {OTHER_CHANNELS.get(args.channel, 'Karen')}")
+    if args.channel not in quoting.TABLES:
+        raise Refused(f"quote covers the TA and direct-guest tables only. "
+                      f"{args.channel}: {OTHER_CHANNELS.get(args.channel, 'Karen')}")
     try:
         kids = [int(x) for x in re.split(r"[;,\s]+", args.children.strip()) if x] if args.children else []
     except ValueError:
@@ -339,7 +339,8 @@ def run_quote(args, out=print):
             raise Refused(f"--alloc looks like 'STD:3,TPL:1' — got {args.alloc!r}") from None
     try:
         q = quoting.quote(quoting.parse_date(args.arrival), quoting.parse_date(args.departure), args.adults, kids,
-                          rooms=args.rooms, room_type=args.room_type, alloc=alloc, twin=args.twin, indian=args.indian)
+                          rooms=args.rooms, room_type=args.room_type, alloc=alloc, twin=args.twin, indian=args.indian,
+                          data=quoting.load_channel(args.channel))
     except quoting.QuoteError as e:
         raise Refused(str(e)) from None
     out(quoting.render(q))
@@ -484,7 +485,7 @@ def parser():
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
-    s = sub.add_parser("quote", help="price a stay and suggest rooms from the TA table")
+    s = sub.add_parser("quote", help="price a stay and suggest rooms from the TA or direct-guest table")
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
     s.add_argument("--adults", type=int, required=True)

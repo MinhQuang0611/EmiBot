@@ -5,7 +5,7 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 ## Availability and rates — where they come from
 - The **"FUTURE AVAILABILITY"** folder on Google Drive: the daily future availability file and the price PDF. Always use the newest file. Never save a fixed file ID.
 - If the newest file looks stale or won't open: wait 2 minutes, retry, up to 3 times, then take it to Karen. Don't answer from an old file as if it were current.
-- Direct-guest and walk-in rates haven't been provided yet. A direct guest asking for a price goes to Karen.
+- **Direct guests** (an individual, no company): `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf`, transcribed in `docs/rate-knowledge/direct.md`, priced with `quote --channel Direct`. The table is printed valid **01/03/2026–31/05/2026**. For any stay after that, `quote` prints `GAP: RATES OUT OF DATE`. Until Karen confirms the table still applies, the draft answers everything except the price, and the price question goes to the top of the scan report for Karen. Walk-in rates: none.
 
 ## What to offer
 - The **cheapest room type available** for the full period, unless the client names a room type.
@@ -27,12 +27,13 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
   | Pegas | `W26 S27  Season 26 - 27 - (Haya Hotel - Pegas).pdf` |
   | Selfie | `SELFIE - HAYA 2026 - 2027.pdf` |
   | Fun and Sun | **No contract this season.** No rate to quote: flag to Karen, don't quote from the TA table. |
+  | Direct guest | `HAYA HOTEL - DIRECT BOOKINGS.pdf` — never the TA table (TA rates are agency rates) |
 
   A tour operator is quoted from its own contract, never from the TA table. A tour operator with no file here goes to Karen.
 
 - **Read the transcribed version, not the PDF:** `docs/rate-knowledge/<name>.md` (one per row above, index and offer comparison in `docs/rate-knowledge/README.md`). Three of the PDFs are scans with no text layer; these files are the readable copy. If a figure looks wrong, check the PDF page — the PDF wins.
 
-## Working out the numbers — the `quote` command (TA senders)
+## Working out the numbers — the `quote` command (TA and direct senders)
 Never price a stay by hand. Run, from `/data/emi`:
 ```
 .venv/bin/python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N --children "13;5;2"
@@ -42,7 +43,8 @@ Never price a stay by hand. Run, from `/data/emi`:
 - Nothing said about rooms → the command lists options (cheapest, fewest rooms, only doubles, sea-view upgrade). Offer **one** allocation — the cheapest unless the guests' make-up says otherwise (4 adult friends ≠ one Quadruple; a family of 4 = Quadruple) — and at most one alternative line.
 - Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
 - `GAP:` lines are things the data can't answer. Availability is always one (not connected yet): the draft is still written, and the scan report lists it as "check availability before sending". A 2027-holiday gap → the night's rate goes to Karen, not into the reply.
-- Not a TA sender → the command says where to look (tour operator contract file, or Karen for OTA/direct).
+- Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
+- Tour operator or OTA → the command refuses and says where to look (tour operator contract file, or Karen for OTA).
 
 ## Reply to an inquiry — template (draft wording, not yet approved by Karen)
 Same rules as `email-templates.md` (anh/chị unless the thread shows it, `**Label:**`, `•` lists, "Best, / HAYA Team", sender's language). Drop any line that doesn't apply.

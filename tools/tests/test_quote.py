@@ -76,6 +76,39 @@ class QuoteTest(unittest.TestCase):
         text = q.render(q.quote(date(2026, 11, 20), date(2026, 11, 22), 2, [7]))
         self.assertIn("deposit 50%", text)
         self.assertIn("GAP: availability", text)
+        self.assertNotIn("OUT OF DATE", text)  # Karen: the 2026 TA table runs on into 2027
+
+
+class DirectTest(unittest.TestCase):
+    def setUp(self):
+        self.data = q.load_channel("Direct")
+
+    def test_rates_child_and_holiday_from_the_direct_pdf(self):
+        o = opts(q.quote(date(2026, 4, 29), date(2026, 5, 1), 2, [5], alloc={"STD": 1}, data=self.data))["as asked"]
+        self.assertEqual(o["room_total"], 2150000 + 2800000)  # 29/4 normal, 30/4 holiday (TA holiday list)
+        self.assertEqual(o["child_surcharge"], 350000 + 500000)
+        self.assertEqual(o["one_night_surcharge"], 0)
+
+    def test_no_ta_rules(self):
+        o = opts(q.quote(date(2026, 4, 10), date(2026, 4, 11), 32, alloc={"DLX-SV": 16},
+                         indian=True, data=self.data))["as asked"]
+        self.assertFalse(o["roh"])
+        self.assertEqual(o["room_total"], 3000000 * 16)  # no ROH, no +20%, no 1-night surcharge
+        self.assertEqual(o["one_night_surcharge"], 0)
+
+    def test_out_of_date_and_full_payment_in_render(self):
+        text = q.render(q.quote(date(2026, 11, 20), date(2026, 11, 22), 2, data=self.data))
+        self.assertIn("RATES OUT OF DATE", text)
+        self.assertIn("100% before check-in", text)
+        self.assertNotIn("deposit 50%", text)
+        inside = q.render(q.quote(date(2026, 4, 10), date(2026, 4, 12), 2, data=self.data))
+        self.assertNotIn("OUT OF DATE", inside)
+
+    def test_rooms_not_on_the_direct_table(self):
+        with self.assertRaises(q.QuoteError):
+            q.quote(date(2026, 4, 10), date(2026, 4, 12), 2, alloc={"TW-DLX": 1}, data=self.data)
+        with self.assertRaises(q.QuoteError):
+            q.load_channel("OTA")
 
 
 if __name__ == "__main__":

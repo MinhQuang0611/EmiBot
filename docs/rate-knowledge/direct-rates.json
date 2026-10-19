@@ -1,0 +1,47 @@
+{
+  "_source": "docs/rate-knowledge/direct.md (from 'HAYA HOTEL - DIRECT BOOKINGS.pdf', copied 2026-10-19). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/quote.py (python -m tools.emi quote --channel Direct). Change a number here and in direct.md together.",
+  "label": "direct-guest table",
+  "valid_from": "2026-03-01",
+  "valid_to": "2026-05-31",
+  "valid_after_end": false,
+  "currency": "VND",
+  "includes": "8% VAT and card fee; in-room water, tea and coffee; wifi, pool and gym",
+  "seasons_by_month": {"normal": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]},
+  "holidays_from": "ta-rates.json",
+  "holidays_note": "The direct table has a 'Ngày Lễ, Tết' column but no dates: quote uses the TA table's holiday list. Karen to confirm.",
+  "rooms": [
+    {"code": "STD", "name_vi": "Standard Garden", "name_en": "Standard Garden", "beds": "1×1m6", "persons": 2,
+     "rates": {"normal": 2150000, "holiday": 2800000}},
+    {"code": "SUP-TWN", "name_vi": "Superior Twin", "name_en": "Superior Twin", "beds": "2×1m2", "persons": 2, "twin": true,
+     "rates": {"normal": 2400000, "holiday": 3150000}},
+    {"code": "SUP-DBL", "name_vi": "Superior Double", "name_en": "Superior Double", "beds": "1×1m8", "persons": 2,
+     "rates": {"normal": 2400000, "holiday": 3150000}},
+    {"code": "DLX-SV", "name_vi": "Deluxe Sea View", "name_en": "Deluxe Sea View", "beds": "1×1m8", "persons": 2,
+     "rates": {"normal": 3000000, "holiday": 3900000}},
+    {"code": "SUITE-SV", "name_vi": "Suite Sea View", "name_en": "Suite Sea View", "beds": "1×2m", "persons": 2,
+     "rates": {"normal": 3600000, "holiday": 4700000}},
+    {"code": "TPL", "name_vi": "Triple", "name_en": "Triple", "beds": "1×1m2 + 1×1m6", "persons": 3,
+     "rates": {"normal": 3600000, "holiday": 4700000}},
+    {"code": "QPL", "name_vi": "Quadruple Family", "name_en": "Quadruple Family", "beds": "2×1m8", "persons": 4,
+     "rates": {"normal": 4450000, "holiday": 5800000}}
+  ],
+  "child_slot_per_room": 1,
+  "children": {
+    "free_under": 3,
+    "adult_from": 12,
+    "surcharge_per_night": {"normal": 350000, "holiday": 500000}
+  },
+  "adult_breakfast_per_night": {"normal": 500000, "holiday": 600000},
+  "breakfast_note": "The PDF lists a breakfast surcharge but never says the room rate includes breakfast. quote assumes breakfast is included for the room's persons and a child sharing a bed pays the child breakfast surcharge. Karen to confirm.",
+  "check_in": "14:00",
+  "check_out": "12:00",
+  "early_late_charges": [
+    {"check_in": "before 06:00", "check_out": "after 18:00", "charge_pct": 100},
+    {"check_in": "06:00–12:00", "check_out": "15:00–18:00", "charge_pct": 50},
+    {"check_in": "12:00–14:00", "check_out": "12:00–15:00", "charge_pct": 25}
+  ],
+  "breakfast": "06:30–10:30",
+  "payment": "100% before check-in",
+  "deposit_pct": null
+}
