@@ -16,6 +16,7 @@ from . import httpjson
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 EMI_CATEGORY = "Emi"
+APPROVED_CATEGORY = "Emi approved"  # a person pressed Accept on Telegram; still a draft until someone sends it
 
 # Graph actions that send mail immediately. The create* versions only make drafts.
 SEND_ACTIONS = {"send", "sendmail", "reply", "replyall", "forward"}
@@ -314,6 +315,8 @@ class GraphMail:
             out.append(a)
         return out
 
+    list_draft_attachments = list_attachments
+
     # --- drafting (never sending) ---
 
     def _tag(self, draft_id):
@@ -369,6 +372,36 @@ class GraphMail:
         if not draft.get("isDraft") or EMI_CATEGORY not in draft.get("categories", []):
             raise PermissionError(f"{draft_id} is not an unsent Emi draft; leaving it alone")
         return self._call("PATCH", f"/messages/{draft_id}", body=fields)
+
+    def get_draft(self, draft_id):
+        """The draft, or None when it is gone from Drafts (a person sent or deleted it in Outlook)."""
+        try:
+            d = self._call("GET", f"/messages/{draft_id}?$select=id,subject,toRecipients,isDraft,categories,"
+                                  "hasAttachments,parentFolderId")
+        except httpjson.HttpError as e:
+            if e.status == 404:
+                return None
+            raise
+        return d if d.get("isDraft") else None
+
+    def _own_draft(self, draft_id):
+        d = self.get_draft(draft_id)
+        if d is None:
+            raise PermissionError(f"{draft_id} is no longer in Drafts: a person sent or deleted it")
+        if EMI_CATEGORY not in d.get("categories", []):
+            raise PermissionError(f"{draft_id} is not an Emi draft; leaving it alone")
+        return d
+
+    def approve_draft(self, draft_id):
+        """Tag the draft 'Emi approved' so whoever opens Drafts sees it was reviewed. It is not sent."""
+        d = self._own_draft(draft_id)
+        cats = [c for c in d.get("categories", []) if c != APPROVED_CATEGORY] + [APPROVED_CATEGORY]
+        self._call("PATCH", f"/messages/{draft_id}", body={"categories": cats})
+
+    def delete_draft(self, draft_id):
+        """Remove an Emi draft from Drafts. Outlook keeps it in Deleted Items, so a person can get it back."""
+        self._own_draft(draft_id)
+        self._call("DELETE", f"/messages/{draft_id}")
 
     def add_attachment(self, draft_id, name, data, content_type="application/pdf"):
         if len(data) > MAX_INLINE_ATTACHMENT:

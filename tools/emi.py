@@ -21,6 +21,12 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
+    python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
+    python -m tools.emi review-info <n>                   # one draft: source email, full text, history
+    python -m tools.emi review-accept <n> [--by NAME]     # tag 'Emi approved' — NOT sent; a person presses Send
+    python -m tools.emi review-deny <n> [--reason R]      # draft to Deleted Items
+    python -m tools.emi review-rewrite <n> <body.txt> --feedback "reviewer's words"  # new draft replaces old
+    python -m tools.emi review-notify <n>                 # send the Telegram notice again
     python -m tools.emi sim-reset <scenario>              # test/sim/<scenario>: fresh test inbox, old TEST rows removed
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
@@ -38,7 +44,7 @@ from datetime import datetime, timedelta, timezone
 from . import attachments, config, drive
 from . import quote as quoting
 from . import cancel_fee as cancelling
-from . import sim
+from . import review, sim
 from . import intake_schema as schema
 from .state import now_iso
 
@@ -289,29 +295,43 @@ def _record(st, draft, args):
     st.record_draft(draft["id"], args.ref or "", int(args.row or 0), args.kind)
 
 
-def draft_reply(mail, st, args, out=print):
+def draft_reply(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
-    d = mail.reply_draft_with_text(args.message_id, read_text(args.body), reply_all=args.all)
+    text = read_text(args.body)
+    d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all)
     _record(st, d, args)
-    out(f"draft saved in Drafts: {d['id']}")
+    n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
+                      row=int(args.row or 0), text=text, reply_all=args.all)
+    out(f"draft #{n} saved in Drafts: {d['id']}")
     return d
 
 
-def draft_forward(mail, st, args, out=print):
+def draft_forward(mail, st, args, tg=None, out=print):
     to = [a.strip() for a in args.to.split(",") if a.strip()]
-    d = mail.forward_draft_with_text(args.message_id, to, read_text(args.body))
+    text = read_text(args.body)
+    d = mail.forward_draft_with_text(args.message_id, to, text)
     _record(st, d, args)
-    out(f"forward draft saved in Drafts: {d['id']} (to {', '.join(to)})")
+    n = review.opened(mail, st, tg, d["id"], how="forward", source=args.message_id, kind=args.kind, ref=args.ref,
+                      row=int(args.row or 0), text=text, to=to)
+    out(f"forward draft #{n} saved in Drafts: {d['id']} (to {', '.join(to)})")
     return d
 
 
-def draft_attach(mail, draft_id, path, out=print):
+def draft_attach(mail, st, draft_id, path, out=print):
     with open(path, "rb") as f:
         data = f.read()
     ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
     mail.add_attachment(draft_id, os.path.basename(path), data, content_type=ctype)
+    review.attached(st, draft_id, os.path.basename(path))
     out(f"attached {os.path.basename(path)} to {draft_id}")
+
+
+def _review_n(text):
+    m = re.fullmatch(r"#?(\d+)", text.strip())
+    if not m:
+        raise Refused(f"a draft number looks like 12 or #12 — got {text!r}")
+    return m.group(1)
 
 
 # --- inquiries (no booking yet) ---
@@ -428,7 +448,7 @@ def check_confirmation_text(body):
                           + " | ".join(lone))
 
 
-def draft_confirmation(mail, sheet, st, args, out=print):
+def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made."""
     r = _row(sheet, args.row)
     ref = r.get("booking_ref", "")
@@ -443,8 +463,39 @@ def draft_confirmation(mail, sheet, st, args, out=print):
     d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all)
     mail.add_attachment(d["id"], name, data, content_type="application/pdf")
     st.record_draft(d["id"], ref, int(args.row), "confirmation")
-    out(f"confirmation draft saved in Drafts with the PDF attached: {d['id']}")
+    n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind="confirmation", ref=ref,
+                      row=int(args.row), text=body, reply_all=args.all, attachments=[name])
+    out(f"confirmation draft #{n} saved in Drafts with the PDF attached: {d['id']}")
     return d
+
+
+def run_review(mail, st, tg, args, out=print):
+    """review-list / -info / -accept / -deny / -rewrite / -notify. State is saved even when one refuses,
+    so a draft found gone from Outlook stays marked gone."""
+    try:
+        if args.cmd == "review-list":
+            review.listing(mail, st, everything=args.all, out=out)
+            return
+        n = _review_n(args.n)
+        if args.cmd == "review-info":
+            review.info(mail, st, n, out=out)
+        elif args.cmd == "review-accept":
+            review.accept(mail, st, tg, n, by=args.by, out=out)
+        elif args.cmd == "review-deny":
+            review.deny(mail, st, tg, n, reason=args.reason, by=args.by, out=out)
+        elif args.cmd == "review-rewrite":
+            _, r = st.review(n)
+            check = check_confirmation_text if r["kind"] == "confirmation" else None
+            review.rewrite(mail, st, tg, n, read_text(args.body), feedback=args.feedback, check=check, out=out)
+        elif args.cmd == "review-notify":  # send the notice again (e.g. Telegram was down)
+            n, r = st.review(n)
+            if tg is None:
+                raise Refused("Telegram is not set up: EMI_TELEGRAM_CHAT_ID and the bot token")
+            out(f"notice for #{n} sent" if review.notify(tg, n, r) else f"not sent: {r.get('tg_error', '?')}")
+    except (review.ReviewError, KeyError, PermissionError) as e:
+        raise Refused(str(e).strip("'\"")) from None
+    finally:
+        st.save()
 
 
 def status(st, out=print):
@@ -455,6 +506,9 @@ def status(st, out=print):
         out(f"TEST MODE: inbox-new only reads mail from {os.environ['EMI_TEST_ONLY_FROM']}")
     out(f"drafts recorded: {len(d['drafts'])}, confirmations: {len(d['confirmations'])}, reminders: {len(d['reminders'])}")
     out(f"open questions to Karen: {len(st.open_questions())}")
+    waiting = [n for n, r in d["reviews"].items() if r["status"] == "pending"]
+    out(f"drafts waiting for review: {len(waiting)}" + (f" (#{', #'.join(waiting)})" if waiting else ""))
+    out("telegram notices: " + ("on" if os.environ.get("EMI_TELEGRAM_CHAT_ID") else "off (EMI_TELEGRAM_CHAT_ID not set)"))
 
 
 def parser():
@@ -506,6 +560,17 @@ def parser():
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
     sub.add_parser("status")
+    s = sub.add_parser("review-list", help="drafts waiting for a person's accept / deny / rewrite")
+    s.add_argument("--all", action="store_true", help="also the ones already decided")
+    for name in ("review-info", "review-accept", "review-deny", "review-rewrite", "review-notify"):
+        s = sub.add_parser(name); s.add_argument("n", help="draft number, e.g. 12 or #12")
+        if name == "review-deny":
+            s.add_argument("--reason", default="")
+        if name == "review-rewrite":
+            s.add_argument("body", help="UTF-8 text file with the whole new text")
+            s.add_argument("--feedback", default="", help="the reviewer's words, as given")
+        if name in ("review-accept", "review-deny"):
+            s.add_argument("--by", default="", help="who decided, e.g. the Telegram name")
     s = sub.add_parser("sim-reset", help="fresh copy of a test scenario + remove its old TEST rows")
     s.add_argument("scenario")
     s = sub.add_parser("sim-check", help="grade the sheet and drafts after a simulated run")
@@ -546,11 +611,13 @@ def main(argv=None):
         elif c == "sheet-update":
             sheet_update(config.sheet(), args.row, read_json(args.file))
         elif c == "draft-reply":
-            draft_reply(config.mail(), st, args)
+            draft_reply(config.mail(), st, args, tg=config.telegram())
             st.save()
         elif c == "draft-forward":
-            draft_forward(config.mail(), st, args)
+            draft_forward(config.mail(), st, args, tg=config.telegram())
             st.save()
+        elif c.startswith("review-"):
+            run_review(config.mail(), st, config.telegram(), args)
         elif c == "forget-confirmation":
             if not st.forget_confirmation(args.ref, args.row):
                 raise Refused(f"no confirmation draft recorded for {args.ref} row {args.row}")
@@ -563,10 +630,11 @@ def main(argv=None):
         elif c == "pdf-fetch":
             pdf_fetch(config.sheet(), args.row)
         elif c == "draft-confirmation":
-            draft_confirmation(config.mail(), config.sheet(), st, args)
+            draft_confirmation(config.mail(), config.sheet(), st, args, tg=config.telegram())
             st.save()
         elif c == "draft-attach":
-            draft_attach(config.mail(), args.draft_id, args.file)
+            draft_attach(config.mail(), st, args.draft_id, args.file)
+            st.save()
         elif c == "sim-reset":
             sim.reset(config.sheet(), args.scenario, WORK_DIR)
         elif c == "sim-check":

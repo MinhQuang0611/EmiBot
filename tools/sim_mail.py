@@ -118,10 +118,53 @@ class SimMail:
     def forward_draft_with_text(self, message_id, to, text):
         return self._write_draft("forward", message_id, list(to), text)
 
-    def add_attachment(self, draft_id, name, data, content_type="application/pdf"):
+    def _meta(self, draft_id):
         path = os.path.join(self.drafts, draft_id + ".json")
+        if not os.path.exists(path):
+            return None
         with open(path, encoding="utf-8") as f:
-            meta = json.load(f)
-        meta["attachments"].append({"name": name, "contentType": content_type, "bytes": len(data)})
-        with open(path, "w", encoding="utf-8") as f:
+            return json.load(f)
+
+    def _save(self, meta):
+        with open(os.path.join(self.drafts, meta["id"] + ".json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    def add_attachment(self, draft_id, name, data, content_type="application/pdf"):
+        meta = self._meta(draft_id)
+        with open(os.path.join(self.drafts, f"{draft_id}--{name}"), "wb") as f:
+            f.write(data)
+        meta["attachments"].append({"name": name, "contentType": content_type, "bytes": len(data)})
+        self._save(meta)
+
+    # --- review (tools.emi review-*) ---
+
+    def get_draft(self, draft_id):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted"):
+            return None
+        return {"id": draft_id, "subject": meta["subject"], "isDraft": True,
+                "toRecipients": [{"emailAddress": {"address": a}} for a in meta["to"]],
+                "categories": meta.get("categories", ["Emi"]), "hasAttachments": bool(meta["attachments"])}
+
+    def approve_draft(self, draft_id):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted"):
+            raise PermissionError(f"{draft_id} is no longer in Drafts")
+        meta["categories"] = ["Emi", "Emi approved"]
+        self._save(meta)
+
+    def delete_draft(self, draft_id):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted"):
+            raise PermissionError(f"{draft_id} is no longer in Drafts")
+        meta["deleted"] = True  # kept on disk, like Outlook's Deleted Items
+        self._save(meta)
+
+    def list_draft_attachments(self, draft_id):
+        meta = self._meta(draft_id) or {"attachments": []}
+        out = []
+        for a in meta["attachments"]:
+            with open(os.path.join(self.drafts, f"{draft_id}--{a['name']}"), "rb") as f:
+                out.append({"@odata.type": "#microsoft.graph.fileAttachment", "name": a["name"],
+                            "contentType": a["contentType"], "isInline": False, "data": f.read()})
+        return out

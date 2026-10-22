@@ -46,7 +46,7 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
 5. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet; list them in the report as not done.
 6. If any `show` or sheet command failed, **don't** run step 7: the next run starts from the same point and skips what's already `done`.
 7. `py -m tools.emi mark-scanned <scan_started>`.
-8. Answer with the scan report table from `skills/inbox-triage.md` §4.
+8. Answer with the scan report table from `skills/inbox-triage.md` §4. Name every draft by its number (`#12`), as printed by the `draft-*` command. Each one already has its Telegram notice, so I don't send another.
 
 ## 2. Confirmation drafts — `30 6-22 * * *`
 Skills: `confirmation-replies.md`, `email-templates.md`.
@@ -77,7 +77,7 @@ Skill: `confirmation-replies.md` → Payment reminders. Templates: `email-templa
 ## 4. Daily report to Karen — `30 21 * * *`
 One short table:
 - New bookings, changes, cancellations logged today
-- Drafts still unsent, and how long each has waited (any confirmation draft over 24 hours old gets its deadline updated first)
+- Drafts still unsent, and how long each has waited (any confirmation draft over 24 hours old gets its deadline updated first). `py -m tools.emi review-list` gives the ones nobody has answered on Telegram.
 - Rows with `missing_info`
 - Rows waiting on the build tool, and rows it failed
 - Payment reminders drafted today, deadlines due tomorrow, and anything overdue

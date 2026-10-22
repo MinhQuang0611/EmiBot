@@ -88,7 +88,9 @@ def check(sheet, name, work_dir, out=print):
     drafts = []
     for p in sorted(glob.glob(os.path.join(target, "drafts", "*.json"))):
         with open(p, encoding="utf-8") as f:
-            drafts.append(json.load(f))
+            d = json.load(f)
+        if not d.get("deleted"):
+            drafts.append(d)
     rules = sc.get("drafts", {})
     state_path = os.path.join(target, "state.json")
     confirmations = 0

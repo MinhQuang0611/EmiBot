@@ -15,7 +15,11 @@ EMPTY = {
     "drafts": {},            # Graph draft id -> {booking_ref, row, kind, drafted_at}
     "confirmations": {},     # "booking_ref|row" -> {draft_id, sent_at, cod_deadline, balance_deadline}
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
+    "next_review": 1,        # draft #1, #2, ... as shown on Telegram
+    "reviews": {},           # "12" -> {draft_id, status, how, source, to, kind, ref, row, text, version, ...}
 }
+
+REVIEW_OPEN = "pending"
 
 
 def now_iso():
@@ -87,6 +91,28 @@ class State:
         elif kind in ("deposit_reminder", "balance_reminder"):
             self.data["reminders"][f"{booking_ref}|{kind.split('_')[0]}"] = {"draft_id": draft_id,
                                                                             "drafted_at": now_iso()}
+
+    # --- person's review of each draft (Telegram: accept / deny / rewrite / info) ---
+    def open_review(self, draft_id, **fields):
+        n = str(self.data["next_review"])
+        self.data["next_review"] += 1
+        self.data["reviews"][n] = {"draft_id": draft_id, "status": REVIEW_OPEN, "version": 1,
+                                   "opened_at": now_iso(), "history": [], **fields}
+        return n
+
+    def review(self, n):
+        n = str(n).lstrip("#")
+        if n not in self.data["reviews"]:
+            raise KeyError(f"no draft #{n}")
+        return n, self.data["reviews"][n]
+
+    def review_by_draft(self, draft_id):
+        return next((n for n, r in self.data["reviews"].items() if r["draft_id"] == draft_id), None)
+
+    def close_review(self, n, status, note=""):
+        r = self.data["reviews"][n]
+        r["history"].append({"at": now_iso(), "status": status, "note": note})
+        r["status"] = status
 
     def forget_confirmation(self, booking_ref, row):
         """A person deleted the confirmation draft (wrong, or a test): allow a new one for this row."""

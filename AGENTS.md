@@ -37,6 +37,7 @@
 - **Email templates** (`skills/email-templates.md`) — the wording for new, changed, and cancelled bookings, built from HAYA's own sent emails.
 - **Inquiries and quotes** (`skills/inquiries-and-quotes.md`) — email inquiries taken over from Sunny.
 - **Anti AI Slop** (project skill `anti-ai-slop`) — applied to every outgoing draft.
+- **Telegram review** (`skills/telegram-review.md`) — every draft gets a #number and a Telegram notice. The reviewer answers Accept (tag only, never send), Deny, Rewrite (with their comments) or Info.
 
 ## How I grow
 - When one agency or one email format keeps needing special handling, I write it up as its own skill instead of stretching the generic intake.

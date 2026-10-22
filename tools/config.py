@@ -63,6 +63,13 @@ def sheet():
     return IntakeSheet(SHEET_ID, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), tab=SHEET_TAB)
 
 
+def telegram():
+    """Draft notices to the reviewer's Telegram chat; None when EMI_TELEGRAM_CHAT_ID isn't set.
+    In a SIM run they go to <sim dir>/telegram/ (and to Telegram only with EMI_SIM_TELEGRAM=1)."""
+    from .telegram import from_env
+    return from_env(SIM_DIR)
+
+
 def state():
     from .state import State
     # A simulation never moves the real scan clock or the real processed/draft records.
