@@ -31,6 +31,9 @@ class FakeHttp:
 
 class ReviewTest(unittest.TestCase):
     def setUp(self):
+        # Outlook mode unless a test says otherwise: the host's .env sets EMI_DRAFT_MODE=telegram.
+        self._mode = os.environ.pop("EMI_DRAFT_MODE", None)
+        self.addCleanup(lambda: os.environ.__setitem__("EMI_DRAFT_MODE", self._mode) if self._mode else None)
         self.dir = tempfile.mkdtemp()
         shutil.copytree(os.path.join(sim.scenario_dir("new-change-cancel"), "inbox"), os.path.join(self.dir, "inbox"))
         self.mail = SimMail(self.dir)
