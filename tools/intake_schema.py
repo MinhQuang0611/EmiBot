@@ -42,6 +42,7 @@ INTEGERS = ("nights", "rooms", "adults", "children")
 AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "Surcharge amount", "total_vnd",
            "Payment 1", "Payment 2", "Remaining amount")
 AGENCY_CHANNELS = ("TA", "Tour operator")
+RATE_FLOOR = 1_000_000  # VND per room-night; an OTA rate under it is flagged (MEMORY, inbox-triage.md §3)
 NEVER_FOR_AGENCIES = ("TW-DLX",)  # MEMORY: never TW-DLX or APT to agencies
 # Where the detail goes instead, added to an enum error ("Tour operator (Anex)", "OTA net (Expedia remittance)").
 ENUM_HINTS = {"channel_type": "; the operator's or OTA's name goes in company",
@@ -278,6 +279,20 @@ def check_row(rec, room_codes=None):
     if canon == "SynXis":
         warnings.append("company: SynXis is the channel manager; write the OTA the notice names "
                         "(Booking.com, Expedia, Agoda…) and SynXis only if it names none")
+    # 2026-10-22, row 63: "new company" on a Booking.com row. The named channels are already in EZFOLIO.
+    if canon and re.search(r"\bnew company\b", note, re.I):
+        errors.append(f"missing_info: no 'new company' — {canon} is a known channel already in EZFOLIO")
+
+    # MEMORY rate floor: an OTA rate under 1,000,000 VND/room-night is likely a promotion mistake
+    # (2026-10-22, rows 58 and 76: MG at 935,000 and 841,500, not flagged).
+    if g("channel_type") == "OTA" and action in ("NEW", "CHANGE"):
+        low = sorted({int(g(k)) for k in ("rate_per_night_vnd", "Average rate per night after discount")
+                      if g(k).isdigit() and int(g(k)) < RATE_FLOOR})
+        if low and "rate floor" not in note.lower():
+            msg = (f"missing_info: OTA rate {' / '.join(f'{x:,}' for x in low)} VND/night is under the "
+                   f"{RATE_FLOOR:,} floor; add 'rate floor: <rate> VND/night under 1,000,000 – likely "
+                   f"promotion mistake' to missing_info so it reaches Karen")
+            (warnings if built else errors).append(msg)
     for part in re.split(r"\s*[;,/]\s*", g("nationality")):
         if re.fullmatch(r"[A-Za-z]{2,3}", part):
             name = COUNTRY_CODES.get(part.upper())

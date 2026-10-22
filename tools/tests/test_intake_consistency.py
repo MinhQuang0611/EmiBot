@@ -78,6 +78,35 @@ class CompanyTest(unittest.TestCase):
     def test_synxis_as_company_warned(self):
         self.assertTrue(has(check(company="SynXis", notes="")[1], "company: SynXis is the channel manager"))
 
+    def test_new_company_refused_on_a_known_channel(self):
+        # row 63: Booking.com with "new company" in missing_info
+        self.assertTrue(has(check(missing_info="new company")[0], "missing_info: no 'new company' — Booking.com"))
+        self.assertTrue(has(check(company="Anex", channel_type="Tour operator", rate_source="Anex contract",
+                                  notes="", missing_info="new company")[0], "missing_info: no 'new company'"))
+        self.assertFalse(has(check(company="Viet Ban Mai Travel", channel_type="TA", notes="",
+                                   missing_info="new company")[0], "missing_info"))
+
+
+class RateFloorTest(unittest.TestCase):
+    LOW = {"rate_per_night_vnd": "841500", "Average rate per night after discount": "981750",
+           "total_vnd": "1963500"}
+
+    def test_ota_rate_under_floor_must_be_flagged(self):
+        # rows 58 / 76: MG at 935,000 and 841,500 with nothing in missing_info
+        e = next(x for x in check(**self.LOW)[0] if x.startswith("missing_info: OTA rate"))
+        self.assertIn("841,500 / 981,750", e)
+        flagged = "meal plan not stated; rate floor: 841,500 VND/night under 1,000,000 – likely promotion mistake"
+        self.assertEqual(check(missing_info=flagged, **self.LOW)[0], [])
+
+    def test_only_ota_and_only_unbuilt_rows_blocked(self):
+        self.assertFalse(has(check(channel_type="TA", company="X Travel", rate_source="TA card", notes="",
+                                   **self.LOW)[0], "missing_info: OTA rate"))
+        built = dict(tracy_status="Entered", pdf_link="B.pdf", ezfolio_group_code="G1", **self.LOW)
+        errors, warnings = check(**built)
+        self.assertFalse(has(errors, "missing_info: OTA rate"))
+        self.assertTrue(has(warnings, "missing_info: OTA rate"))
+        self.assertEqual(check()[0], [])  # 1,408,000 is above the floor
+
 
 class NationalityTest(unittest.TestCase):
     def test_codes_refused_with_the_name(self):
