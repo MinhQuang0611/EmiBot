@@ -23,6 +23,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
     python -m tools.emi review-info <n>                   # one draft: source email, full text, history
+    python -m tools.emi review-ask <n>                    # Rewrite pressed: prints the question to send, remembers #n
+    python -m tools.emi review-awaiting                   # which draft the next message is feedback for
     python -m tools.emi review-accept <n> [--by NAME]     # tag 'Emi approved' — NOT sent; a person presses Send
     python -m tools.emi review-deny <n> [--reason R]      # draft to Deleted Items
     python -m tools.emi review-rewrite <n> <body.txt> --feedback "reviewer's words"  # new draft replaces old
@@ -476,9 +478,14 @@ def run_review(mail, st, tg, args, out=print):
         if args.cmd == "review-list":
             review.listing(mail, st, everything=args.all, out=out)
             return
+        if args.cmd == "review-awaiting":
+            review.awaiting(st, out=out)
+            return
         n = _review_n(args.n)
         if args.cmd == "review-info":
             review.info(mail, st, n, out=out)
+        elif args.cmd == "review-ask":
+            review.ask(mail, st, tg, n, out=out)
         elif args.cmd == "review-accept":
             review.accept(mail, st, tg, n, by=args.by, out=out)
         elif args.cmd == "review-deny":
@@ -565,7 +572,8 @@ def parser():
     sub.add_parser("status")
     s = sub.add_parser("review-list", help="drafts waiting for a person's accept / deny / rewrite")
     s.add_argument("--all", action="store_true", help="also the ones already decided")
-    for name in ("review-info", "review-accept", "review-deny", "review-rewrite", "review-notify"):
+    sub.add_parser("review-awaiting", help="which draft the reviewer's next message is feedback for")
+    for name in ("review-info", "review-ask", "review-accept", "review-deny", "review-rewrite", "review-notify"):
         s = sub.add_parser(name); s.add_argument("n", help="draft number, e.g. 12 or #12")
         if name == "review-deny":
             s.add_argument("--reason", default="")

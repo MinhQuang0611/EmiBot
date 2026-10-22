@@ -105,6 +105,16 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(len(edit["reply_markup"]["inline_keyboard"]), 2)  # buttons still on
         self.assertEqual(self.http.sent("editMessageReplyMarkup"), [])
 
+    def test_rewrite_button_asks_and_remembers_until_saved(self):
+        self.reply()
+        review.ask(self.mail, self.st, self.tg, "1", out=self.lines.append)
+        self.assertIn("muốn chỉnh sửa nội dung nào trong email này (draft #1)", self.lines[-1])
+        self.assertEqual(review.awaiting(self.st, out=self.lines.append), "1")
+        self.assertEqual(len(self.http.sent("editMessageText")), 1)  # buttons put back on the notice
+        review.rewrite(self.mail, self.st, self.tg, "1", "Kính gửi anh/chị Minh,\n\nMới.\n\nBest,\nHAYA Team",
+                       feedback="ngắn hơn", out=self.lines.append)
+        self.assertIsNone(review.awaiting(self.st, out=self.lines.append))
+
     def test_rewrite_of_confirmation_still_checked(self):
         self.reply(CONFIRMATION, kind="confirmation")
         with self.assertRaises(emi.Refused):

@@ -118,10 +118,38 @@ def _pending(mail, st, n):
     return n, r
 
 
+ASK = ("Dạ, anh/chị muốn chỉnh sửa nội dung nào trong email này (draft #{n}) ạ? Anh/chị cứ nhắn ý kiến, "
+       "Emi sẽ viết lại và cập nhật ngay trên tin nhắn draft.")
+
+
+def ask(mail, st, tg, n, out=print):
+    """Rewrite pressed: remember that the reviewer's next message is the feedback for #n, put the buttons back,
+    and print the question Emi sends as its reply."""
+    n, r = _pending(mail, st, n)
+    st.data["awaiting_feedback"] = n
+    notify(tg, n, r, in_place=True)
+    out(ASK.format(n=n))
+
+
+def awaiting(st, out=print):
+    n = st.data.get("awaiting_feedback")
+    if n and st.data["reviews"].get(n, {}).get("status") == REVIEW_OPEN:
+        out(f"#{n} is waiting for the reviewer's feedback: their message is what to change in draft #{n}")
+        return n
+    out("no draft is waiting for feedback")
+    return None
+
+
+def _done_waiting(st, n):
+    if st.data.get("awaiting_feedback") == n:
+        st.data["awaiting_feedback"] = None
+
+
 def accept(mail, st, tg, n, by="", out=print):
     n, r = _pending(mail, st, n)
     mail.approve_draft(r["draft_id"])
     st.close_review(n, "approved", by)
+    _done_waiting(st, n)
     msg = f"✅ #{n} đã duyệt. Draft nằm trong Outlook › Drafts (nhãn 'Emi approved'): mở và bấm Send."
     _mark(tg, r, msg)
     out(msg)
@@ -131,6 +159,7 @@ def deny(mail, st, tg, n, reason="", by="", out=print):
     n, r = _pending(mail, st, n)
     mail.delete_draft(r["draft_id"])
     st.close_review(n, "denied", " — ".join(x for x in (reason, by) if x))
+    _done_waiting(st, n)
     st.data["drafts"].pop(r["draft_id"], None)
     if r["kind"] == "confirmation" and r.get("ref"):
         st.forget_confirmation(r["ref"], r["row"])  # a corrected confirmation may be drafted again
@@ -166,6 +195,7 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
                          "status": "rewritten", "note": feedback, "old_text": r["text"]})
     r.update(draft_id=d["id"], text=text, version=r["version"] + 1, attachments=[a["name"] for a in files])
     notify(tg, n, r, note=feedback, in_place=True)  # same message, new text, buttons kept
+    _done_waiting(st, n)
     out(f"#{n} rewritten as v{r['version']}: new draft {d['id']} (old one moved to Deleted Items), "
         f"{len(files)} attachment(s) carried over")
     return d

@@ -17,6 +17,7 @@ EMPTY = {
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
     "next_review": 1,        # draft #1, #2, ... as shown on Telegram
     "reviews": {},           # "12" -> {draft_id, status, how, source, to, kind, ref, row, text, version, ...}
+    "awaiting_feedback": None,  # "12" after Rewrite is pressed, until the rewrite is saved
 }
 
 REVIEW_OPEN = "pending"
