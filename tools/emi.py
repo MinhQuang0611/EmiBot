@@ -585,7 +585,7 @@ def parser():
         if name == "draft-reply":
             s.add_argument("--all", action="store_true", help="reply all")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
-                       help="reply, forward, confirmation, deposit_reminder, balance_reminder, inquiry")
+                       help="reply, forward, confirmation, deposit_reminder, balance_reminder, inquiry, request")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")

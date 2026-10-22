@@ -26,7 +26,8 @@ PENDING = "pending-"  # draft id of a draft that exists only on Telegram so far
 
 KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
-    "inquiry": "Báo giá / tư vấn", "deposit_reminder": "Nhắc đặt cọc", "balance_reminder": "Nhắc thanh toán",
+    "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
+    "balance_reminder": "Nhắc thanh toán",
 }
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 

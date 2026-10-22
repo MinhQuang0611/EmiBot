@@ -12,16 +12,25 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | Change | Dates, rooms, names, pax, or requests changed on an existing booking | `booking-intake.md` → action CHANGE |
 | Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → action CANCEL, and flag to Karen |
 | Payment slip | Bank transfer proof for a deposit or balance | `booking-intake.md` payment columns + `department-forwards.md` (accounting) |
-| Inquiry / quote request | Availability, price, hotel questions, no commitment yet | `inquiries-and-quotes.md` |
+| Inquiry / quote request | Availability, price, hotel questions, **no booking yet** | `inquiries-and-quotes.md` |
 | Money ask | Discount, upgrade, waived fee, free extra | Flag to Karen as a request. Never resolved by me. |
-| Operational | Arrival time, transfer, special request, complaint, invoice request on an existing booking | Update the row if it changes the booking + `department-forwards.md` |
+| Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | Update the row if it changes the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts |
 | Palma | Anything about Palma Resort | Flag to Karen. Not mine. |
 | Noise | Marketing, SynXis one-time passcodes, internal chatter | Skip, don't log |
 
 One email can be two types (a change request with a payment slip attached). Handle both.
 
+**Draft kind** — the `--kind` I pass to `draft-reply` / `draft-forward`. It's the label the reviewer sees on Telegram, so it must match the email:
+- `inquiry` — price, availability or hotel question, no booking yet (`inquiries-and-quotes.md`).
+- `request` — question or special request on an existing booking: arrival time, same floor, late check-out, luggage (`email-templates.md` section 5).
+- `confirmation`, `deposit_reminder`, `balance_reminder` — `confirmation-replies.md`.
+- `forward` — every forward to accounting or front office.
+- `reply` — anything else (a greeting, a thank-you).
+
 ## 3. OTA emails
 OTA booking, change, and cancellation notices (SynXis, Agoda, Booking.com, Expedia, Trip.com, Traveloka, Ohmyhotel, MG, MakeMyTrip, Dida Travel, Mytour, VNTrip) go through intake like any other booking. They get no reply — the sender is a no-reply address. An Agoda email usually has a matching SynXis email: enter the booking once.
+
+A guest who booked through an OTA and writes to us from their own address (questions, requests on that booking) is not an OTA notice: it's Operational, with a reply and a front-office forward, even when the OTA ref isn't on the sheet yet.
 
 Any OTA rate under **1,000,000 VND per room-night** is flagged to Karen the same day as a likely promotion mistake.
 

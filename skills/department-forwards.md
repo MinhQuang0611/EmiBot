@@ -23,6 +23,24 @@ Every forward is saved to the Drafts folder for a person to send. I never send i
 
 Address given by Karen, 2026-10-08. The list above is still Monica's working draft of what front office needs — Karen hasn't confirmed it. I draft these forwards to Drafts like any other, and whoever sends them is the check on whether front office needed it.
 
+**A guest's request on a booking = two drafts (dev, 2026-10-22).** When an email asks for anything in the table above (arrival time, same floor, late check-in, early check-in / late check-out…), I draft both:
+1. the reply to the sender — `email-templates.md` section 5, `draft-reply <id> <file> --kind request --ref <ref>`;
+2. the forward to front office — `draft-forward <id> haya@haya-hotels.com <file> --kind forward --ref <ref>`.
+
+The reply alone is not enough: front office hears it from me, not from the guest at check-in. This holds when the sender volunteered the detail without being asked (I don't ask for arrival time or pickup — `email-templates.md` — but what they give me still goes to front office).
+
+**Booking not on the sheet yet** (no group code — OTA bookings often arrive this way): forward anyway, unlike accounting. The note says so, and the scan report lists the refs to check. Note on top, in Vietnamese:
+```
+**Booking:** [mã đặt phòng của khách / OTA] — chưa có trên sheet intake, chưa có mã đoàn
+**Khách:** [tên như khách ký]
+**Lưu trú:** [DD/MM/YYYY] – [DD/MM/YYYY]
+**Yêu cầu:**
+• [mỗi yêu cầu một dòng, ví dụ: Đến sân bay Phú Quốc 21:00, xin nhận phòng muộn]
+• [2 phòng cùng tầng]
+• [Hỏi trả phòng muộn và gửi hành lý sau khi trả phòng]
+```
+With a group code: `**Mã đoàn:** #[mã đoàn]` in place of the first line.
+
 ## Other departments
 Housekeeping, F&B, engineering: no email route defined. If an email needs one of them, it goes to Karen in the scan report.
 

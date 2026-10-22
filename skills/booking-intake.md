@@ -7,13 +7,20 @@ Turns a booking email into rows Tracy can build in EZFOLIO without re-reading th
 - **Row 2 holds the instruction for each column. Read it before filling** — it wins over this file if they differ.
 - Tab **Rules** holds the notes rule. Tab **Room codes** feeds the `room_code` dropdown.
 
+## Read the attachments first
+The voucher, rooming list or booking form is usually an attachment, and it is where room type, room count, pax, rate, total and meal plan come from. `show` saves every attachment and prints its text.
+- **Scanned PDF.** `show` prints `PDF has no text layer (scan). Page images saved — open each one to read it:` and one PNG path per page. Open and read every page image before writing the row. Same for `PDF page(s) N have no text layer`: the text pages are printed, the listed pages are images.
+- **Image** (payment slip, screenshot): open the saved file.
+- `Page images not made` → open the PDF itself. If I still can't read it, the row's `missing_info` says "voucher not readable: <file name>" and it goes to Karen in the report.
+- A field left blank because I didn't open an attachment I could have read is a mistake, not a missing field. "Voucher text unavailable" is never a reason when the page images are there.
+
 ## Steps
 1. **Classify** the email as NEW, CHANGE, or CANCEL (see `inbox-triage.md`).
 2. **Check for an existing row.** Search the sheet by `booking_ref` and by guest name. If the booking is already there (from an earlier email, or written by Sunny from Zalo), update that row — don't add a second one.
 3. **CHANGE / CANCEL:** find the original row and carry over its `ezfolio_group_code` and `confirmation_no`. If the booking was never in the sheet, say so in `missing_info` — Tracy has to find it in EZFOLIO.
 4. **Fill one row per room type**, same `booking_ref` on every row of one booking:
-   - `action`, `received_at` (DD/MM/YYYY HH:MM), `source_email` (subject only, no links or IDs), `property` (HAYA), `channel_type` (TA / OTA / Direct / Tour operator — see "Channel type" below).
-   - `company` exactly as named in EZFOLIO (not in EZFOLIO yet: write the name and put "new company" in `missing_info`), `contact_person`, `company_email`, `booking_ref`.
+   - `action`, `received_at` (DD/MM/YYYY HH:MM, when the email carrying the booking or the change arrived — see "Follow-ups" below), `source_email` (that email's subject only, no links or IDs), `property` (HAYA), `channel_type` (TA / OTA / Direct / Tour operator — see "Channel type" below).
+   - `company` exactly as named in EZFOLIO (not in EZFOLIO yet: write the name and put "new company" in `missing_info`), `contact_person`, `company_email`, `booking_ref`. **Direct:** never the guest's own name in `company` (the column is for an agency/OTA as named in EZFOLIO), and never "new company". Leave `company` blank and write `REQUIRED blank: company – direct guest, EZFOLIO account for direct bookings not known` in `missing_info` (Karen hasn't said which EZFOLIO account direct guests go under). The guest's name goes in `contact_person`, their email in `company_email`, and `booking_ref` stays blank unless the guest gave one.
    - `ezfolio_group_code`, `confirmation_no`: carried over for CHANGE / CANCEL, blank for NEW. `what_changed`: CHANGE only, e.g. "Dates 12–15 Nov → 13–16 Nov"; for CANCEL, the reason.
    - `guest_names` separated by ";", lead guest first, TBA if not given. `nationality` as a country name ("India"), from the email, else inferred from the names; if there is no name and no nationality, Vietnam. Never blank.
    - `arrival`, `departure` (DD/MM/YYYY), `nights`, `room_code` (dropdown), `rooms`, `adults`, `children` (0 if none), `child_ages` ("9; 2"), `meal_plan` (BB / RO / other).
@@ -25,16 +32,22 @@ Turns a booking email into rows Tracy can build in EZFOLIO without re-reading th
    - `COD` (deposit deadline): 48 hours from when the client receives the confirmation, unless the email or contract states another deadline.
    - `Payment 1`, `Payment 1 date + time`, `Payment 2`, `Payment 2 date + time` from slips in the thread. `Remaining amount` = total − Payment 1 − Payment 2 (equal to the total until a payment arrives).
    - Column names above are the sheet's exact headers (`test/fixtures/intake-columns.csv`). Filled examples: `test/fixtures/intake-examples.csv`.
-5. **Required, never blank:** `company`, `arrival`, `departure`, rate, `room_code`, `rooms`. If I can't fill one, the row is not ready and the gap goes in `missing_info` and to Karen.
+5. **Required, never blank:** `company` (Direct: blank + named in `missing_info`, see above), `arrival`, `departure`, rate, `room_code`, `rooms`. If I can't fill one, the row is not ready and the gap goes in `missing_info` and to Karen.
 
 ## Channel type
 Decided by who the booking comes from, checked in this order (2026-10-09):
 1. **Tour operator** — Odeon, Crystal Bay, Pegas, Anex, Selfie, Fun and Sun.
 2. **OTA** — online travel sites: SynXis, Agoda, Expedia, Trip.com, Ohmyhotel, MG, MakeMyTrip, Traveloka, Dida Travel, Mytour, VNTrip, Booking.com.
 3. **TA** — any other travel company (công ty du lịch).
-4. **Direct** — an individual booking for themselves, not through any company.
+4. **Direct** — an individual booking for themselves, not through any company. No company name on the row (`sheet-check` refuses a Direct row with `company` filled or "new company" in `missing_info`); the blank is named in `missing_info`.
 
 If the email doesn't make clear whether the sender is a travel company or a private person, leave `channel_type` blank and put it in `missing_info`.
+
+## Follow-ups
+The new email is sometimes a follow-up on a booking, not the booking itself — e.g. an OTA writing "Could you please reconfirm and share the hotel confirmation number for this booking?" under its voucher.
+- Booking already on the sheet → nothing to write; the follow-up goes in the report.
+- Booking not on the sheet yet → write the NEW row from the original voucher in the thread. `received_at` and `source_email` are the voucher email's, not the follow-up's.
+- The ask itself is not drafted: there is no confirmation number until EZFOLIO has the booking. Report line: "OTA asks for the hotel confirmation number, waiting on EZFOLIO". The answer goes with the confirmation once the row has its `pdf_link` (`confirmation-replies.md`).
 
 ## Rates
 - Travel agencies: HAYA TA rate table 2026 (rates include 8% VAT and breakfast). Per Karen (2026-10-03) the 2026 table also applies to 2027 dates until she provides a new one.

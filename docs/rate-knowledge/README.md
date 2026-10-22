@@ -1,6 +1,6 @@
 # Rate knowledge — giá và điều khoản theo từng bên
 
-Bản chép tay (text + OCR đọc từ ảnh) của 6 file trong `docs/RATE TABLES/`, làm 2026-10-09. Đây là tri thức Emi dùng để trả lời câu hỏi về giá, ưu đãi, trẻ em, hủy phòng, thanh toán.
+Bản chép tay (text + OCR đọc từ ảnh) của 7 file trong `docs/RATE TABLES/`, làm 2026-10-09 (Direct thêm 2026-10-19; `hotel-info.md` gom thông tin khách sạn từ các file đó, 2026-10-22). Đây là tri thức Emi dùng để trả lời câu hỏi về giá, ưu đãi, trẻ em, hủy phòng, thanh toán.
 **PDF gốc là chuẩn.** Nếu file ở đây và PDF lệch nhau, PDF đúng — sửa file ở đây. Khi Karen đưa bảng giá / hợp đồng mới, chép lại file tương ứng.
 
 ## Chọn file theo người gửi
@@ -15,6 +15,7 @@ Bản chép tay (text + OCR đọc từ ảnh) của 6 file trong `docs/RATE TAB
 | Fun and Sun | — **không có hợp đồng mùa này.** Không báo giá; chuyển Karen. | |
 | Direct — khách lẻ | [direct.md](direct.md) | 01/03/2026–31/05/2026 ⚠ đã hết hạn; chờ Karen xác nhận còn dùng |
 | Tour operator khác, OTA | — không có file. Chuyển Karen. | |
+| Mọi bên — câu hỏi về khách sạn (giờ nhận/trả phòng, tiện ích, liên hệ, gửi hành lý…) | [hotel-info.md](hotel-info.md) — kèm danh sách "Chưa biết — hỏi Karen" | lấy từ file TA và Direct |
 
 ## Luật dùng
 1. **Mỗi bên chỉ được nghe giá và điều khoản của chính mình.** Mọi hợp đồng tour operator đều có điều khoản bảo mật. Không đưa giá Anex cho Pegas, không đưa giá hợp đồng cho TA, không nói "bên khác được giảm nhiều hơn".

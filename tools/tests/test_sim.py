@@ -4,9 +4,12 @@ import os
 import shutil
 import tempfile
 import unittest
+from types import SimpleNamespace
 
-from tools import sim
+from tools import emi, review, sim
 from tools.sim_mail import SimMail
+from tools.state import State
+from tools.telegram import Telegram
 
 
 class SimMailTest(unittest.TestCase):
@@ -41,6 +44,95 @@ class SimMailTest(unittest.TestCase):
         for written in ("2,100,000 VND", "2.100.000 VND", "2100000"):
             self.assertIn(sim._digits("2.100.000"), sim._digits(written))
         self.assertNotIn(sim._digits("2.100.000"), sim._digits("2,500,000"))
+
+
+class NoRows:
+    def find_by_ref(self, ref):
+        return []
+
+
+GOOD_REPLY = ("Dear Guest,\n\nThank you for your email about your stay from 14/11/2026 to 17/11/2026.\n\n"
+              "We have noted your arrival at around 21:00 on 14/11/2026 and will pass it to our front office.\n\n"
+              "[luggage storage after check-out: hotel to confirm]\n\nBest,\nHAYA Team")
+BAD_REPLY = ("Dear 유정아,\n\nThe luggage-storage policy is not shown in the reservation record currently "
+             "available to us.\n\nBest,\nHAYA Team")
+FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có trên sheet intake\n"
+           "**Yêu cầu:**\n• 2 phòng cùng tầng")
+
+
+class OperationalRequestScenarioTest(unittest.TestCase):
+    """test/sim/operational-request: sim-check grades kinds and forwards, in Outlook and Telegram draft mode."""
+
+    def setUp(self):
+        self._mode = os.environ.pop("EMI_DRAFT_MODE", None)
+        self.addCleanup(lambda: os.environ.__setitem__("EMI_DRAFT_MODE", self._mode) if self._mode else None)
+        self.work = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.work, True)
+        self.dir = sim.run_dir(self.work, "operational-request")
+        shutil.copytree(os.path.join(sim.scenario_dir("operational-request"), "inbox"), os.path.join(self.dir, "inbox"))
+        self.mail = SimMail(self.dir)
+        self.st = State(os.path.join(self.dir, "state.json"))
+        self._work_dir = emi.WORK_DIR
+        emi.WORK_DIR = self.dir
+        self.addCleanup(setattr, emi, "WORK_DIR", self._work_dir)
+        self.tg = None
+
+    def body(self, name, text):
+        path = os.path.join(self.work, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+
+    def draft(self, text, kind, forward_to=None):
+        args = SimpleNamespace(message_id="sim-01-request", body=self.body(kind + ".txt", text), all=False,
+                               kind=kind, ref="TEST-26090313011477ES1", row="", to=forward_to or "")
+        fn = emi.draft_forward if forward_to else emi.draft_reply
+        return fn(self.mail, self.st, args, tg=self.tg, out=lambda *_: None)
+
+    def grade(self):
+        self.st.save()
+        lines = []
+        ok = sim.check(NoRows(), "operational-request", self.work, out=lines.append)
+        return ok, "\n".join(lines)
+
+    def test_email_reads_with_the_korean_name_and_both_refs(self):
+        m = self.mail.get_message_text("sim-01-request")
+        self.assertEqual(m["from"]["emailAddress"]["name"], "유정아")
+        self.assertEqual(m["subject"], "Hello")
+        self.assertIn("TEST-2609031300E485ES1", m["body"]["content"])
+
+    def test_reply_and_forward_pass(self):
+        self.draft(GOOD_REPLY, "request")
+        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        ok, report = self.grade()
+        self.assertTrue(ok, report)
+        self.assertIn("PASS a forward to haya@haya-hotels.com", report)
+        self.assertIn("PASS drafts of kind 'request': 1", report)
+
+    def test_first_live_run_fails(self):
+        self.draft(BAD_REPLY, "inquiry")  # draft #2 as it was: wrong kind, blind-spot sentences, no forward
+        ok, report = self.grade()
+        self.assertFalse(ok)
+        for line in ("FAIL no draft says 'available to us'", "FAIL no draft says 'not shown in'",
+                     "FAIL a forward to haya@haya-hotels.com: none", "FAIL drafts of kind 'request': 0",
+                     "FAIL drafts of kind 'inquiry': 1", "FAIL no draft says 'Dear 유정아'"):
+            self.assertIn(line, report)
+
+    def test_telegram_mode_drafts_are_graded_from_the_reviews(self):
+        os.environ["EMI_DRAFT_MODE"] = "telegram"
+        self.addCleanup(os.environ.pop, "EMI_DRAFT_MODE", None)
+        self.tg = Telegram("42", "TOKEN", http=lambda *a, **k: {"ok": True, "result": {"message_id": 1}})
+        self.assertEqual(self.draft(BAD_REPLY, "request")["id"], "pending-1")
+        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        self.assertFalse(os.path.isdir(os.path.join(self.dir, "drafts")))  # nothing in Outlook yet
+        ok, report = self.grade()
+        self.assertFalse(ok)
+        self.assertIn("FAIL no draft says 'available to us' (found in ['#1'])", report)
+        self.assertIn("PASS a forward to haya@haya-hotels.com (['#2'])", report)
+        review.deny(self.mail, self.st, self.tg, "1", out=lambda *_: None)  # a denied draft no longer counts
+        self.draft(GOOD_REPLY, "request")
+        ok, report = self.grade()
+        self.assertTrue(ok, report)
 
 
 if __name__ == "__main__":

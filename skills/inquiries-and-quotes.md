@@ -2,6 +2,10 @@
 
 Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo and WhatsApp, and the rules below are the same ones Karen set for her (config review, 2026-10-03), so an agency gets the same answer on either channel.
 
+**Which emails this covers:** price, availability or hotel questions from someone with **no booking yet** — saved with `--kind inquiry`. A question or special request on a booking the sender **already has** (arrival time, same floor, late check-out, luggage) is not an inquiry: it's a guest request, `email-templates.md` section 5, `--kind request`, plus a forward to front office.
+
+**Hotel facts** (check-in/out times, breakfast, pool, wifi, in-room water/tea/coffee, early check-in / late check-out charges, contact, transfer) come from `docs/rate-knowledge/hotel-info.md`. Its "Chưa biết" list is what I don't know: those go in the draft as a `[…: hotel to confirm]` gap.
+
 ## Availability and rates — where they come from
 - The **"FUTURE AVAILABILITY"** folder on Google Drive: the daily future availability file and the price PDF. Always use the newest file. Never save a fixed file ID.
 - If the newest file looks stale or won't open: wait 2 minutes, retry, up to 3 times, then take it to Karen. Don't answer from an old file as if it were current.
@@ -71,7 +75,7 @@ Với yêu cầu [n người lớn, n trẻ em (tuổi)] từ [DD/MM/YYYY] đế
 • Đặt cọc 50% trong vòng 48 giờ sau khi nhận được xác nhận đặt phòng.
 • 50% còn lại vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 
-[Trả lời từng câu hỏi khác trong email: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em…]
+[Trả lời từng câu hỏi khác trong email, từ hotel-info.md: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em… Điều không có trong hotel-info.md: [… : khách sạn xác nhận]]
 
 Để giữ phòng, anh/chị vui lòng gửi giúp HAYA: tên khách, ngày ở, hạng phòng, số người lớn và trẻ em, quốc tịch và yêu cầu đặc biệt (nếu có).
 
@@ -101,5 +105,6 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 ## Replies
 - Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.
 - No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen.
+- **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have is a visible `[…: hotel to confirm]` gap in the draft and a line in the scan report.
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
-- Breakfast: 6:30–10:30.
+- Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.

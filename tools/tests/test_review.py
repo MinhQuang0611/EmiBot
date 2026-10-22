@@ -77,6 +77,10 @@ class ReviewTest(unittest.TestCase):
         self.assertNotIn("**", text)
         self.assertNotIn("expandable", text)  # whole email visible, not folded away
 
+    def test_guest_request_has_its_own_label(self):
+        self.reply("Dear Guest,\n\nNoted.\n\nBest,\nHAYA Team", kind="request")
+        self.assertIn("Draft #1 — Yêu cầu của khách", self.http.sent()[0]["text"])
+
     def test_accept_tags_but_never_sends(self):
         d = self.reply()
         review.accept(self.mail, self.st, self.tg, "1", out=self.lines.append)

@@ -65,8 +65,17 @@ def check_row(rec, room_codes=None):
             continue  # a direct guest has no agency code
         if _blank(rec.get(k)):
             errors.append(f"{k}: never blank" + (" (TBA if names not given)" if k == "guest_names" else ""))
+    direct = g("channel_type") == "Direct"
+    if direct and g("company"):
+        # 2026-10-22: row 57 had the guest's own name as company and "new company" in missing_info
+        errors.append("company: blank for a Direct booking (an individual, no company); "
+                      "the sender's name goes in contact_person")
+    if direct and "new company" in note.lower():
+        errors.append("missing_info: no 'new company' on a Direct booking — there is no company")
     if action in ("NEW", "CHANGE"):
         for k in REQUIRED_BOOKING_ROW:
+            # Direct: company stays blank but is still named in missing_info — the sheet says never blank,
+            # and which EZFOLIO account direct guests go under is Karen's to say.
             if _blank(rec.get(k)) and k not in note:
                 errors.append(f"{k}: required on a {action} row. Fill it, or write "
                               f"'REQUIRED blank: {k} – <reason>' in missing_info")

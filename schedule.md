@@ -31,7 +31,7 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
 2. `py -m tools.emi sheet-schema` → every sheet column with its level, required rule, allowed values and the sheet's own instruction, plus the room codes and the Rules tab. Read it once per run; it is the only reference for column names and values. Never guess a column name or a value format.
 3. `py -m tools.emi inbox-new` → note the `scan_started=` value; you need it in step 7.
 4. For each email listed, oldest first:
-   1. `py -m tools.emi show <id>` → the whole thread, with attachments saved and their text printed. Image attachments: open the saved file to read it.
+   1. `py -m tools.emi show <id>` → the whole thread, with attachments saved and their text printed. Image attachments: open the saved file to read it. A scanned PDF (`PDF has no text layer (scan)`) prints the paths of its page images: open and read every one before writing the row. If it says `Page images not made`, open the PDF itself; if that fails too, the voucher goes to Karen in the report as unread.
    2. Classify it (`skills/inbox-triage.md`).
    3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`.
       - Not there (new booking) → `py -m tools.emi sheet-template NEW emi-work/out/<ref>.json`. Fill the values: shared columns in `booking`, one `room_lines` entry per room type (copy the entry for each extra type). Don't add or rename keys. Unknown → leave blank; a blank REQUIRED column goes in `missing_info` as `REQUIRED blank: <column> – <reason>`.
@@ -41,7 +41,7 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
       - A wrong cell on an existing row → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row.
       - If a command refuses, read the reason and fix the JSON. Never write to the sheet any other way.
    4. Inquiry or quote request (no booking yet) → `py -m tools.emi quote …` as in `skills/inquiries-and-quotes.md`, write the reply from its template with the command's numbers, `py -m tools.emi draft-reply <id> emi-work/out/<sender>-inquiry.txt --kind inquiry`. List every `GAP:` line in the report.
-   5. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind inquiry`.
+   5. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind <kind>`. Kind (`skills/inbox-triage.md` "Draft kind"): `request` for a question or special request on an existing booking (then also the front-office forward), `inquiry` only for a price or availability question with no booking yet, `reply` for anything else.
    6. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
 5. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet. Skip them, and leave them out of the scan report.
 6. If any `show` or sheet command failed, **don't** run step 7: the next run starts from the same point and skips what's already `done`.

@@ -1,4 +1,4 @@
-# Email templates — new, changed, cancelled
+# Email templates — new, changed, cancelled, guest requests
 
 Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 and 8 October 2026. Wording is taken from those emails; only the booking details are replaced with [fields]. Source email for each is named so the original can be checked.
 
@@ -7,14 +7,16 @@ Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 
 - **Reply on the agency's own thread** (RE: their subject). No new subject line.
 - **Language (Karen, 2026-10-08):** the language of the email, not the nationality of the agency. Sender wrote in Vietnamese → reply in Vietnamese. Sender wrote in English → reply in English. A Vietnamese agency that writes in English gets English. If a thread mixes both, use the language of the sender's most recent email. Any other language (Chinese, Korean, Russian) → English.
 - **Greeting:** Vietnamese "Kính gửi chị/anh [Name]"; if no name is known, "Kính gửi Quý Đối tác". English "Dear Ms./Mr. [Name]," or "Dear [Agency] team,".
+- **Greeting a guest (not an agency):** the name as the guest signs the email, else the guest name on the intake row or voucher. Write it exactly as given — never transliterate, translate, shorten, or guess which part is the family name. A From display name alone doesn't count when it isn't in Latin script (e.g. "유정아"). No usable name → "Dear Guest," / "Kính gửi Quý khách,".
 - **Never guess anh/chị or Mr./Ms.** Use "chị"/"anh" (Ms./Mr.) only when the thread shows it: a title in the signature ("Ms. Hương"), how the sender writes about themselves, or an earlier HAYA email to the same person. Otherwise "Kính gửi anh/chị [Name]," and "Anh/Chị vui lòng…" for every "Chị vui lòng…" in the template; English "Dear [Name]," with no title.
 - **Nationality and words in the email's language:** the sheet stores "Vietnam", "India"; a Vietnamese email writes "Việt Nam", "Ấn Độ".
 - **Surcharges in the total:** if any row has a surcharge (child, Indian +20%, 1-night), the Total line names it, as in HAYA's sent confirmation for An0109: "Tổng tiền: 22.040.000 VND, gồm phòng 20.640.000 VND và phụ thu trẻ 4 tuổi 1.400.000 VND; bao gồm ăn sáng, VAT và phí dịch vụ." English: "Total: VND 22,040,000 (rooms VND 20,640,000 + child surcharge VND 1,400,000), including breakfast, VAT and service charge."
 - **Bracketed lines are optional:** keep one only when it is true for this booking. The "gửi giúp HAYA danh sách đầy đủ tên khách / tên khách, quốc tịch" ask goes in only when `guest_names` on the row contains TBA or is short of the guest count; with every name given, leave it out.
 - **Deadline wording:** Vietnamese "[HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)"; English "by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)". Never mix the two.
-- **No operational questions (dev, 2026-10-22, parked in `docs/archive/arrival-and-transfer-asks.md`):** don't ask for arrival time, flight details, or whether the group needs an airport or port pickup, in any draft. If the sender gives these themselves, record them (`arrival_time`, `transfer`) and forward them to front office as before; just don't ask.
+- **No operational questions (dev, 2026-10-22, parked in `docs/archive/arrival-and-transfer-asks.md`):** don't ask for arrival time, flight details, or whether the group needs an airport or port pickup, in any draft. If the sender gives these themselves, record them (`arrival_time`, `transfer`) and forward them to front office (`department-forwards.md`) — that forward is still required; only the asking is parked.
 - **Dates** DD/MM/YYYY. **Money in Vietnamese** 7.200.000 VND; **in English** VND 7,200,000.
-- **Fields come from the intake row and the PDF.** A field I don't have is left as a visible [gap] for the person sending — never filled by guess.
+- **Fields come from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** This covers every draft — confirmations, replies, inquiries, requests. A field or fact I don't have is left as a visible bracketed gap for the reviewer to fill, e.g. `[luggage storage after check-out: hotel to confirm]`, and the same gap is listed in the scan report. Never filled by guess.
+- **Never write about what I can or can't see.** The reader is a guest or an agency, not my reviewer. Never: "The luggage-storage policy is not shown in the reservation record currently available to us." Never: "the exact amount cannot be confirmed from the reservation information currently available to us." Nor "we will check and revert", "our records don't show", or any sentence explaining a gap. Write the gap as `[…: hotel to confirm]` and say why in the scan report, not in the email.
 - **Attach the confirmation PDF** on new and changed bookings.
 - **Sign-off (Karen, 2026-10-08):** "Best," then "HAYA Team" on the next line — in English and in Vietnamese emails alike.
 - **Total (Karen, 2026-10-08):** always "including breakfast, VAT and service charge" / "bao gồm ăn sáng, VAT và phí dịch vụ". Service charge is already inside every room rate — it is not a separate line item. Never show it as its own line or amount, and never add it on top of a rate.
@@ -339,6 +341,64 @@ The balance of VND [amount] is due by [DD/MM/YYYY], 7 days before check-in. Can 
 CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
 1020729617 – Vietcombank, Phu Quoc Branch
 **Transfer reference:** company name + group code #[group code]
+
+Best,
+HAYA Team
+```
+
+---
+
+## 5. Guest request on an existing booking — `--kind request` (dev, 2026-10-22)
+**Status: draft wording from the first live run, not yet approved by Karen.** For a guest or agency asking a question or making a request about a booking they already have: arrival time, same floor, connecting rooms, early check-in / late check-out, luggage, transfer. Not for price or availability with no booking yet (that's `inquiries-and-quotes.md`, `--kind inquiry`).
+
+- **Two drafts, always:** this reply (`draft-reply <id> <file> --kind request --ref <ref>`) and the forward to front office (`department-forwards.md`, `draft-forward <id> haya@haya-hotels.com <file> --kind forward --ref <ref>`). Also when the booking ref isn't on the intake sheet (OTA bookings often aren't yet) — the forward says so, the guest reply doesn't.
+- **Answer every question, in the guest's order,** from `docs/rate-knowledge/hotel-info.md`. A fact that isn't there is a `[…: hotel to confirm]` gap, listed in the scan report.
+- **Arrival time ≠ late check-out.** Arriving at 21:00 is a normal check-in (check-in is from 14:00): "noted, we will pass it to front office", never "subject to availability", no charge. Early check-in (before 14:00) and late check-out (after 12:00) are the charged ones.
+- **Room requests** (same floor, connecting, bed type): "noted, we will pass it to front office, subject to availability". Never promised.
+- **Free late check-out, upgrade, waived charge** → money ask, Karen (AGENTS.md rule 8). The reply gives the charges as they are.
+- Drop every bracketed line that doesn't apply.
+
+English:
+```
+Dear [Name / Guest],
+
+Thank you for your email about your stay from [DD/MM/YYYY] to [DD/MM/YYYY].
+
+[We have noted your arrival at around [HH:MM] on [DD/MM/YYYY] and will pass it to our front office. Check-in is from 14:00, so an evening arrival is a normal check-in with no extra charge.]
+
+[We have noted your request for [rooms on the same floor / connecting rooms / …] and will pass it to our front office. This is subject to availability.]
+
+[Check-out is at 12:00. Late check-out is subject to availability and is charged as a percentage of [one night's room rate: hotel to confirm]:
+• Check-out 12:00 – 15:00: 25%
+• Check-out 15:00 – 18:00: 50%
+• Check-out after 18:00: 100%]
+
+[Answer to each other question from hotel-info.md, or the gap: [luggage storage after check-out: hotel to confirm]]
+
+We look forward to welcoming you.
+
+Best,
+HAYA Team
+```
+
+Vietnamese:
+```
+Kính gửi anh/chị [Tên] / Quý khách,
+
+Cảm ơn anh/chị đã gửi email về kỳ lưu trú từ [DD/MM/YYYY] đến [DD/MM/YYYY].
+
+[HAYA đã ghi nhận anh/chị đến khoảng [HH:MM] ngày [DD/MM/YYYY] và sẽ báo bộ phận lễ tân. Giờ nhận phòng từ 14:00, nên đến buổi tối là nhận phòng bình thường, không phụ thu.]
+
+[HAYA đã ghi nhận yêu cầu [xếp phòng cùng tầng / phòng thông nhau / …] và sẽ chuyển bộ phận lễ tân. Yêu cầu này tùy tình trạng phòng.]
+
+[Giờ trả phòng là 12:00. Trả phòng muộn tùy tình trạng phòng, phụ thu theo % của [giá phòng 1 đêm: khách sạn xác nhận]:
+• Trả phòng 12:00 – 15:00: 25%
+• Trả phòng 15:00 – 18:00: 50%
+• Trả phòng sau 18:00: 100%]
+
+[Trả lời từng câu hỏi khác từ hotel-info.md, hoặc khoảng trống: [gửi hành lý sau khi trả phòng: khách sạn xác nhận]]
+
+Hân hạnh được đón tiếp anh/chị tại HAYA Hotel Phu Quoc.
 
 Best,
 HAYA Team

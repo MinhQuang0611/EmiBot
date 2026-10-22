@@ -5,6 +5,10 @@ test/sim/<scenario>/scenario.json what to clean before, what the sheet and draft
 
 sim-reset copies the inbox to <work dir>/sim/<scenario>/ (fresh state, no drafts) and deletes the
 scenario's TEST- rows from the sandbox sheet; sim-check grades the sheet and the drafts.
+
+scenario.json "drafts" rules: max_confirmations, must_not_contain [text], must_include_forward_to [address],
+kinds {kind: n} (n >= 1 = at least n drafts of that --kind, 0 = none). Drafts are read from drafts/ and from
+the reviews in state.json, so Telegram-mode drafts (not in Outlook until Accept) are graded too.
 """
 import glob
 import json
@@ -54,6 +58,43 @@ def reset(sheet, name, work_dir, out=print):
     return target
 
 
+def collect_drafts(target):
+    """Every draft the run wrote, in either draft mode. Telegram mode: a draft waiting for review exists only
+    in state.json's reviews (draft id 'pending-<n>'), not in drafts/. Outlook mode (and after Accept): a file
+    in drafts/ plus its review. Denied reviews and deleted files don't count.
+    Returns ([{id, kind, how, status, to, subject, text, attachments}], state dict)."""
+    st = {}
+    state_path = os.path.join(target, "state.json")
+    if os.path.exists(state_path):
+        with open(state_path, encoding="utf-8") as f:
+            st = json.load(f)
+    files = {}
+    for p in sorted(glob.glob(os.path.join(target, "drafts", "*.json"))):
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+        if not d.get("deleted"):
+            files[d["id"]] = d
+    drafts, seen = [], set()
+    for n, r in sorted(st.get("reviews", {}).items(), key=lambda kv: int(kv[0])):
+        if r.get("status") == "denied":
+            continue
+        did = r.get("draft_id") or ""
+        if not did.startswith("pending-") and did not in files:
+            continue  # sent or deleted in Outlook
+        seen.add(did)
+        drafts.append({"id": f"#{n}", "kind": r.get("kind", ""), "how": r.get("how", ""),
+                       "status": r.get("status", ""), "to": list(r.get("to", [])),
+                       "subject": r.get("subject", ""), "text": r.get("text", ""),
+                       "attachments": list(r.get("attachments", []))})
+    for did, d in files.items():  # a draft written without a review record
+        if did in seen:
+            continue
+        drafts.append({"id": did, "kind": st.get("drafts", {}).get(did, {}).get("kind", d["kind"]),
+                       "how": d["kind"], "status": "outlook", "to": d["to"], "subject": d["subject"],
+                       "text": d["text"], "attachments": [a["name"] for a in d["attachments"]]})
+    return drafts, st
+
+
 def check(sheet, name, work_dir, out=print):
     sc = load(name)
     fails = []
@@ -85,28 +126,26 @@ def check(sheet, name, work_dir, out=print):
                                                      ensure_ascii=False))
 
     target = run_dir(work_dir, name)
-    drafts = []
-    for p in sorted(glob.glob(os.path.join(target, "drafts", "*.json"))):
-        with open(p, encoding="utf-8") as f:
-            d = json.load(f)
-        if not d.get("deleted"):
-            drafts.append(d)
+    drafts, st = collect_drafts(target)
     rules = sc.get("drafts", {})
-    state_path = os.path.join(target, "state.json")
-    confirmations = 0
-    if os.path.exists(state_path):
-        with open(state_path, encoding="utf-8") as f:
-            confirmations = len(json.load(f).get("confirmations", {}))
+    confirmations = len(st.get("confirmations", {}))
     if "max_confirmations" in rules:
         verdict(confirmations <= rules["max_confirmations"],
                 f"confirmation drafts: {confirmations}, at most {rules['max_confirmations']}")
     for text in rules.get("must_not_contain", []):
         bad = [d["id"] for d in drafts if text.lower() in d["text"].lower()]
         verdict(not bad, f"no draft says {text!r}" + (f" (found in {bad})" if bad else ""))
+    for address in rules.get("must_include_forward_to", []):
+        hits = [d["id"] for d in drafts if d["how"] == "forward" and address.lower() in [a.lower() for a in d["to"]]]
+        verdict(bool(hits), f"a forward to {address}" + (f" ({hits})" if hits else ": none"))
+    for kind, want in rules.get("kinds", {}).items():  # {"request": 1} = at least one; {"inquiry": 0} = none
+        got = sum(1 for d in drafts if d["kind"] == kind)
+        verdict(got == 0 if want == 0 else got >= want,
+                f"drafts of kind {kind!r}: {got}, want " + ("none" if want == 0 else f"at least {want}"))
     out(f"drafts written: {len(drafts)}")
     for d in drafts:
-        out(f"--- {d['id']} {d['kind']} to {', '.join(d['to'])} | {d['subject']}"
-            + (f" | attachments {[a['name'] for a in d['attachments']]}" if d["attachments"] else ""))
+        out(f"--- {d['id']} {d['kind']} ({d['how']}, {d['status']}) to {', '.join(d['to'])} | {d['subject']}"
+            + (f" | attachments {d['attachments']}" if d["attachments"] else ""))
         out(d["text"])
     out(f"\nRESULT: {'PASS' if not fails else 'FAIL'} ({len(fails)} failed check(s))")
     return not fails
