@@ -15,6 +15,7 @@ Two modes (EMI_DRAFT_MODE):
 An Outlook draft a person sends or deletes straight in Outlook shows up as 'gone' in review-list.
 """
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from .state import REVIEW_OPEN
@@ -63,6 +64,12 @@ def _buttons(n):
             [("Rewrite", f"emi review rewrite {n}")]]
 
 
+def as_email(text):
+    """The draft as the reader will see it in Outlook: **Label:** in bold (graph_mail.text_to_html does the
+    same), '•' lists and blank lines kept. Telegram HTML."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc(text))
+
+
 def notify(tg, n, r, note="", in_place=False):
     """Send the notice for #n, or with in_place=True rewrite the existing one (text and buttons) so one
     draft keeps one message. Falls back to a new message if the old one can't be edited."""
@@ -78,7 +85,7 @@ def notify(tg, n, r, note="", in_place=False):
         lines.append(f"<b>Đã sửa theo:</b> {esc(note)}")
     where = ("Đã nằm trong Outlook Drafts. Accept = duyệt (vẫn phải bấm Send trong Outlook)." if in_outlook(r) else
              "Chưa có trong Outlook. Accept = lưu vào Outlook Drafts (vẫn phải bấm Send).")
-    lines += ["", f"<blockquote expandable>{esc(text)}</blockquote>",
+    lines += ["", "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
               f"{where} Rewrite = nhắn ý kiến sửa, hoặc <code>rewrite {n} ý kiến</code>"]
     if in_place and r.get("tg"):
         try:

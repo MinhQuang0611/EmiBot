@@ -70,6 +70,13 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(labels, ["Accept", "Deny", "Rewrite"])
         self.assertEqual(self.st.data["reviews"]["1"]["draft_id"], d["id"])
 
+    def test_notice_shows_the_email_as_outlook_will(self):
+        self.reply(CONFIRMATION, kind="confirmation")
+        text = self.http.sent()[0]["text"]
+        self.assertIn("<b>Mã đặt phòng:</b> TEST-1512", text)
+        self.assertNotIn("**", text)
+        self.assertNotIn("expandable", text)  # whole email visible, not folded away
+
     def test_accept_tags_but_never_sends(self):
         d = self.reply()
         review.accept(self.mail, self.st, self.tg, "1", out=self.lines.append)
