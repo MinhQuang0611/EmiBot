@@ -1,6 +1,6 @@
 # Emi — scheduled jobs
 
-Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Switched on (dev, 2026-10-22): job 1 only, every 30 minutes, 24/7, on real mail** (OpenClaw automation "Emi job 1 - inbox", isolated session, report to the dev's Telegram). Drafts go to Telegram for review and reach Outlook only on Accept (`skills/telegram-review.md`). The sheet is still the SANDBOX sheet. Jobs 2–4 are not switched on. All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
+Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Switched on (dev, 2026-10-22): job 1 only, 24/7, on real mail.** A watcher (OpenClaw command automation "Emi mail watcher", every minute, no model) runs `tools.watch`, and new mail in sales@ starts job 1 (automation "Emi job 1 - inbox", isolated session, report to the dev's Telegram) within a minute or two. Job 1 also runs every 3 hours as a safety net. Drafts go to Telegram for review and reach Outlook only on Accept (`skills/telegram-review.md`). The sheet is still the SANDBOX sheet. Jobs 2–4 are not switched on. All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
 
 Runs every day including weekends — agencies email on Saturdays and Sundays.
 

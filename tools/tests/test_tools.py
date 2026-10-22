@@ -318,6 +318,6 @@ class TwoStepSignInTest(unittest.TestCase):
             self.assertFalse(tok.finish())
             self.assertTrue(tok.finish())
             with open(cache) as f:
-                self.assertEqual(json.load(f), {"refresh_token": "RT"})
+                self.assertEqual(json.load(f)["refresh_token"], "RT")
             with self.assertRaises(RuntimeError):
                 tok.finish()

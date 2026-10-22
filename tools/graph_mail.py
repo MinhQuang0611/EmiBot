@@ -73,13 +73,30 @@ class DeviceCodeToken:
         self._token = None
         self._expires = 0
 
+    def _read_cache(self):
+        try:
+            with open(self.cache_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
     def _save(self, resp):
         self._token = resp["access_token"]
         self._expires = time.time() + int(resp.get("expires_in", 3600))
-        if resp.get("refresh_token"):
+        # The access token is cached too (same 600 file), so a check every minute (tools.watch) reuses it for
+        # its hour instead of redeeming the refresh token on every run.
+        rt = resp.get("refresh_token") or self._read_cache().get("refresh_token")
+        if rt:
             fd = os.open(self.cache_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"refresh_token": resp["refresh_token"]}, f)
+                json.dump({"refresh_token": rt, "access_token": self._token, "expires_at": self._expires}, f)
+
+    def _cached_access(self):
+        c = self._read_cache()
+        if c.get("access_token") and time.time() < float(c.get("expires_at", 0)) - 300:
+            self._token, self._expires = c["access_token"], float(c["expires_at"])
+            return True
+        return False
 
     def signed_in_as(self):
         """The account the token belongs to (upn / preferred_username claim), lower-cased."""
@@ -160,7 +177,7 @@ class DeviceCodeToken:
 
     def __call__(self):
         if not self._token or time.time() > self._expires - 300:
-            if not self._refresh():
+            if not self._cached_access() and not self._refresh():
                 self._device_login()
         return self._token
 
