@@ -10,6 +10,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
     python -m tools.emi sheet-find <text>                 # rows whose booking_ref or guest_names contain text
+    python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
     python -m tools.emi draft-reply <message_id> <body.txt> [--all] [--kind K --ref R --row N]
@@ -215,6 +216,24 @@ def sheet_check(sheet, data, out=print):
         raise Refused("fix these, then run sheet-check again:\n  " + "\n  ".join(errors))
     out(f"OK: {len(records)} row(s) pass the checks")
     return records
+
+
+def sheet_audit(sheet, first_row=3, out=print):
+    """Check rows already on the sheet (from first_row on) with the same rules as sheet-check, one line each.
+    For finding rows written before a rule existed, or by hand."""
+    codes = schema.room_codes(sheet)
+    bad = 0
+    rows = [r for r in sheet.rows() if r["_row"] >= first_row]
+    for r in rows:
+        e, w = schema.check_row(r, codes)
+        if not (e or w):
+            continue
+        bad += bool(e)
+        out(f"row {r['_row']} {r.get('action', '')} {r.get('booking_ref') or '(no ref)'} "
+            f"{r.get('room_code') or ''}".rstrip()
+            + "".join(f"\n  ERROR {x}" for x in e) + "".join(f"\n  warning {x}" for x in w))
+    out(f"\n{len(rows)} row(s) checked from row {first_row}: {bad} with errors")
+    return bad
 
 
 def sheet_append(sheet, data, out=print):
@@ -574,6 +593,8 @@ def parser():
     s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
     s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
+    s = sub.add_parser("sheet-audit", help="check rows already on the sheet with the sheet-check rules")
+    s.add_argument("--from-row", type=int, default=3)
     s = sub.add_parser("sheet-append"); s.add_argument("file")
     s = sub.add_parser("sheet-update"); s.add_argument("row", type=int); s.add_argument("file")
     for name in ("draft-reply", "draft-forward"):
@@ -657,6 +678,8 @@ def main(argv=None):
             sheet_check(config.sheet(), read_json(args.file))
         elif c == "sheet-find":
             sheet_find(config.sheet(), args.text)
+        elif c == "sheet-audit":
+            sheet_audit(config.sheet(), args.from_row)
         elif c == "sheet-append":
             sheet_append(config.sheet(), read_json(args.file))
         elif c == "sheet-update":
