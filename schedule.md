@@ -1,6 +1,6 @@
 # Emi — scheduled jobs
 
-Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Nothing here is switched on.** All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
+Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Switched on (dev, 2026-10-22): job 1 only, every 30 minutes, 24/7, on real mail** (OpenClaw automation "Emi job 1 - inbox", isolated session, report to the dev's Telegram). Drafts go to Telegram for review and reach Outlook only on Accept (`skills/telegram-review.md`). The sheet is still the SANDBOX sheet. Jobs 2–4 are not switched on. All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
 
 Runs every day including weekends — agencies email on Saturdays and Sundays.
 
@@ -27,7 +27,7 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 ### Job 1 — the commands, in order
 Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Use only these commands to reach the mailbox and the sheet; never write your own Python for it. Write your own files (row JSON, draft text) under `emi-work/out/`.
 
-1. `py -m tools.precheck inbox` → prints `quiet` (exit 1): answer `QUIET` and stop. Exit 2: report the error line to Karen and stop.
+1. `py -m tools.precheck inbox` → prints `quiet` (exit 1): answer exactly `NO_REPLY` (the scheduler then posts nothing) and stop. Exit 2: report the error line and stop.
 2. `py -m tools.emi sheet-schema` → every sheet column with its level, required rule, allowed values and the sheet's own instruction, plus the room codes and the Rules tab. Read it once per run; it is the only reference for column names and values. Never guess a column name or a value format.
 3. `py -m tools.emi inbox-new` → note the `scan_started=` value; you need it in step 7.
 4. For each email listed, oldest first:
