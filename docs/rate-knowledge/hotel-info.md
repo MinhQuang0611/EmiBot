@@ -25,7 +25,7 @@ Tờ thông tin ngắn Emi dùng khi khách hoặc đại lý hỏi về khách 
   | 6:00 – 12:00 | 15:00 – 18:00 | 50% |
   | 12:00 – 14:00 | 12:00 – 15:00 | 25% |
 
-  Nguồn: bảng giá khách lẻ (`direct.md`); file TA in cùng bảng (`ta.md`). ⚠ Cả hai file **không ghi** 100% / 50% / 25% là của giá gì. Hiểu thông thường: giá phòng 1 đêm. Cho tới khi Karen xác nhận, thư ghi các mức % kèm khoảng trống `[% của giá phòng 1 đêm: khách sạn xác nhận]` và "tùy tình trạng phòng"; số tiền cụ thể không tự tính (khách OTA: Emi không có giá phòng của họ).
+  Nguồn: bảng giá khách lẻ (`direct.md`); file TA in cùng bảng (`ta.md`). ⚠ Cả hai file **không ghi** 100% / 50% / 25% là của giá gì. Hiểu thông thường: giá phòng 1 đêm. Cho tới khi Karen xác nhận, khách hỏi phụ thu thì chưa soạn thư: hỏi Karen bằng `ask-karen`; số tiền cụ thể không tự tính (khách OTA: Emi không có giá phòng của họ).
 - **Đặt cọc khi nhận phòng:** 2.000.000 VND/phòng hoặc để lại CMND/CCCD/hộ chiếu/bằng lái; trả lại khi trả phòng sau khi thanh toán hết phí phát sinh. Nguồn: file TA trang 5 (mục VIII). Viết cho đại lý; chưa rõ có áp cho khách lẻ / khách OTA không — hỏi Karen trước khi nói với khách lẻ.
 
 ## Ăn sáng và tiện ích
@@ -43,7 +43,7 @@ Tờ thông tin ngắn Emi dùng khi khách hoặc đại lý hỏi về khách 
 
 ## Đưa đón sân bay / bến tàu
 Giá 1 chiều cho **đại lý (TA)**, từ `ta.md`: sân bay–Haya ngày thường 200.000 (4 chỗ) / 250.000 (7 chỗ) / 400.000 (16 chỗ); ngày lễ 300.000 / 400.000 / 650.000. Bến tàu: xem `ta.md` (cột ngày lễ in sai, ⚠ hỏi Karen).
-- Không miễn phí. Không có giá cho khách lẻ / khách OTA (`direct.md`, "Không có trên file") → `[giá đưa đón: khách sạn xác nhận]`.
+- Không miễn phí. Không có giá cho khách lẻ / khách OTA (`direct.md`, "Không có trên file") → hỏi Karen (`ask-karen`), chưa soạn thư.
 - Không **hỏi** khách có cần đưa đón không (`skills/email-templates.md`, luật đã tạm dừng). Khách tự hỏi → trả lời theo trên.
 
 ## Giường theo hạng phòng
@@ -65,7 +65,7 @@ Tên hạng phòng trên OTA/SynXis khác tên trên bảng TA (ví dụ "Standa
 Không có quy định trong file nào. Cách trả lời đã dùng: **"đã ghi nhận và chuyển lễ tân, tùy tình trạng phòng"** — không hứa. Luôn chuyển cho lễ tân (`skills/department-forwards.md`). Không phải là yêu cầu miễn phí/nâng hạng; nếu khách xin nâng hạng phòng → Karen (AGENTS.md luật 8).
 
 ## Chưa biết — hỏi Karen
-Emi không có thông tin này. Trong thư, để khoảng trống có ngoặc vuông cho người duyệt điền, ví dụ `[gửi hành lý sau khi trả phòng: khách sạn xác nhận]`, và ghi vào báo cáo scan. Không bao giờ viết câu kiểu "thông tin này không có trong hồ sơ của chúng tôi".
+Emi không có thông tin này. Khách hỏi tới thì **không soạn thư**: hỏi Karen bằng `ask-karen`, soạn sau khi Karen trả lời (`karen-answer`), và ghi câu hỏi vào báo cáo scan (dev, 2026-10-22). Không để ô `[…: khách sạn xác nhận]` trong thư — lệnh draft sẽ từ chối. Không bao giờ viết câu kiểu "thông tin này không có trong hồ sơ của chúng tôi".
 - **Gửi hành lý** trước khi nhận phòng / sau khi trả phòng: có không, có tính phí không.
 - **Lễ tân trực 24 giờ?** Khách đến sau nửa đêm được nhận phòng thế nào.
 - **% phụ thu nhận sớm / trả muộn là của giá gì** (xem trên), và áp cho khách OTA theo giá nào.
@@ -73,4 +73,5 @@ Emi không có thông tin này. Trong thư, để khoảng trống có ngoặc v
 - **Ăn sáng có trong giá khách lẻ không**; ngày Lễ, Tết của bảng Direct; bảng Direct sau 31/05/2026 (`direct.md`).
 - **Đặt cọc 2.000.000 VND/phòng khi nhận phòng** có áp cho khách lẻ / khách OTA không.
 - **Số phòng**: 85 (file TA) hay 83 (`MEMORY.md`).
+- **Hồ bơi**: mấy hồ, trong nhà hay ngoài trời, ở tầng nào, có tên không (chỉ biết giờ mở và miễn phí).
 - Bãi đỗ xe, thú cưng, hút thuốc, giặt ủi, nhà hàng ngoài bữa sáng, phòng cho người khuyết tật, giờ yên tĩnh: không có trong file nào.

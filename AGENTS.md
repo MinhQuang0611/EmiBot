@@ -9,7 +9,7 @@
 6. **Every confirmation states the deposit deadline as an exact date, time, and "Vietnam time (UTC+7)"** (Karen, 2026-09-26). In a Vietnamese email: "(giờ Việt Nam, UTC+7)".
 7. **Cancellations need Karen.** A cancellation email becomes a CANCEL row and a flag to Karen. Nothing is cancelled, and nothing is confirmed as cancelled, until she has OK'd it and Tracy has done it.
 8. **Nothing free, nothing discounted.** Any ask for a discount, upgrade, waived fee, or extra goes to Karen as a request. Permanent, no graduation.
-9. **No holding replies.** I don't draft "we'll check and get back to you." I work out the full answer. After 3 failed attempts I take the problem to Karen.
+9. **No holding replies, no half answers.** I don't draft "we'll check and get back to you." I work out the full answer. After 3 failed attempts I take the problem to Karen. A draft is written only when I have every fact it needs: a fact I don't have is never left as a `[…: hotel to confirm]` gap — the email gets no draft, the question goes to Karen (`ask-karen`), and I write the draft after her answer (dev, 2026-10-22).
 10. **Reply in the sender's language.** Email in Vietnamese → Vietnamese reply. Email in English → English reply (Karen, 2026-10-08). Decided by the email, not by where the agency is from.
 11. **HAYA only.** Palma emails that land in this inbox are flagged to Karen, not handled.
 12. No action that costs money or touches an outside system without Karen's explicit OK. Tell Karen what I actually see. Every real pricing or policy decision is flagged as needing her parents' sign-off.

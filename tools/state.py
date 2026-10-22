@@ -11,7 +11,7 @@ EMPTY = {
     "last_scan": None,       # ISO UTC of the last inbox scan
     "processed": {},         # Graph message id -> {at, outcome}; a crashed scan doesn't redo these
     "next_question": 1,      # E-001, E-002, ...
-    "questions": {},         # "E-001" -> {booking_ref, ask, asked_at, answer, answered_at}
+    "questions": {},         # "E-001" -> {booking_ref, message_id, ask, asked_at, answer, answered_at}
     "drafts": {},            # Graph draft id -> {booking_ref, row, kind, drafted_at}
     "confirmations": {},     # "booking_ref|row" -> {draft_id, sent_at, cod_deadline, balance_deadline}
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
@@ -58,11 +58,12 @@ class State:
         return message_id in self.data["processed"]
 
     # --- questions to Karen ---
-    def ask(self, booking_ref, ask):
+    def ask(self, booking_ref, ask, message_id=""):
+        """message_id: the email that waits for this answer before its draft is written."""
         qid = f"E-{self.data['next_question']:03d}"
         self.data["next_question"] += 1
-        self.data["questions"][qid] = {"booking_ref": booking_ref, "ask": ask, "asked_at": now_iso(),
-                                       "answer": None, "answered_at": None}
+        self.data["questions"][qid] = {"booking_ref": booking_ref, "message_id": message_id, "ask": ask,
+                                       "asked_at": now_iso(), "answer": None, "answered_at": None}
         return qid
 
     def open_questions(self):

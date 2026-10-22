@@ -4,12 +4,12 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 
 **Which emails this covers:** price, availability or hotel questions from someone with **no booking yet** — saved with `--kind inquiry`. A question or special request on a booking the sender **already has** (arrival time, same floor, late check-out, luggage) is not an inquiry: it's a guest request, `email-templates.md` section 5, `--kind request`, plus a forward to front office.
 
-**Hotel facts** (check-in/out times, breakfast, pool, wifi, in-room water/tea/coffee, early check-in / late check-out charges, contact, transfer) come from `docs/rate-knowledge/hotel-info.md`. Its "Chưa biết" list is what I don't know: those go in the draft as a `[…: hotel to confirm]` gap.
+**Hotel facts** (check-in/out times, breakfast, pool, wifi, in-room water/tea/coffee, early check-in / late check-out charges, contact, transfer) come from `docs/rate-knowledge/hotel-info.md`. Its "Chưa biết" list is what I don't know: the email gets no draft yet. I ask Karen with `ask-karen <message_id> "<question>" --ref <ref>`, then `done <message_id> "waiting on Karen E-…"`, and write the reply once `karen-answer` has every answer (dev, 2026-10-22).
 
 ## Availability and rates — where they come from
 - The **"FUTURE AVAILABILITY"** folder on Google Drive: the daily future availability file and the price PDF. Always use the newest file. Never save a fixed file ID.
 - If the newest file looks stale or won't open: wait 2 minutes, retry, up to 3 times, then take it to Karen. Don't answer from an old file as if it were current.
-- **Direct guests** (an individual, no company): `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf`, transcribed in `docs/rate-knowledge/direct.md`, priced with `quote --channel Direct`. The table is printed valid **01/03/2026–31/05/2026**. For any stay after that, `quote` prints `GAP: RATES OUT OF DATE`. Until Karen confirms the table still applies, the draft answers everything except the price, and the price question goes to the top of the scan report for Karen. Walk-in rates: none.
+- **Direct guests** (an individual, no company): `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf`, transcribed in `docs/rate-knowledge/direct.md`, priced with `quote --channel Direct`. The table is printed valid **01/03/2026–31/05/2026**. For any stay after that, `quote` prints `GAP: RATES OUT OF DATE`. Until Karen confirms the table still applies, there is no draft: the price question goes to Karen with `ask-karen`, and the reply is written after her answer. Walk-in rates: none.
 
 ## What to offer
 - The **cheapest room type available** for the full period, unless the client names a room type.
@@ -46,7 +46,7 @@ Never price a stay by hand. Run, from `/data/emi`:
 - The sender said how to split the rooms ("3 rooms for 2 adults, 1 room 2 adults + extra bed") → price exactly that: `--alloc "STD:3,TPL:1"` (extra bed = Triple). They gave a room count only → `--rooms N`. They named a type → `--room-type DLX-SV`. Two separate beds → `--twin`. Indian guests → `--indian`.
 - Nothing said about rooms → the command lists options (cheapest, fewest rooms, only doubles, sea-view upgrade). Offer **one** allocation — the cheapest unless the guests' make-up says otherwise (4 adult friends ≠ one Quadruple; a family of 4 = Quadruple) — and at most one alternative line.
 - Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
-- `GAP:` lines are things the data can't answer. Availability is always one (not connected yet): the draft is still written, and the scan report lists it as "check availability before sending". A 2027-holiday gap → the night's rate goes to Karen, not into the reply.
+- `GAP:` lines are things the data can't answer. Availability is always one (not connected yet): the draft is still written, and the scan report lists it as "check availability before sending". A 2027-holiday gap → the night's rate goes to Karen with `ask-karen`; the reply waits for her answer.
 - Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
 - Tour operator or OTA → the command refuses and says where to look (tour operator contract file, or Karen for OTA).
 
@@ -56,7 +56,7 @@ Never price a stay by hand. Run, from `/data/emi`:
 1. **Pick a stay inside the period they named** and say it is an example: "end of January 2027, 3 nights" → 27/01/2027 – 30/01/2027. Stay within one season and before any holiday (see 4).
 2. **Rooms from the pax count:** 2 guests per room (double or twin). An odd number → one room for a single guest, at the same room rate. Write the assumption in the reply. Adults travelling as a group are not put four to a Quadruple even when `quote`'s "cheapest" option suggests it: run `quote --rooms N` with the room count you worked out.
 3. **More than 15 double/twin rooms = ROH** (`quote` prints the NOTE): every room at the Standard Double rate of that season, the hotel assigns the room types. That is the TA table's only group offer, so say it plainly; there is no other group discount to promise. Don't add a "sea-view upgrade" line under ROH (`quote` lists Deluxe Seaview at the ROH price only because of ROH; it is not an upgrade on offer). Groups of 15 rooms or fewer: normal rates by room type.
-4. **Season and holidays:** the reply says which period the rate covers. The TA table has no 2027 holiday dates. **Tết 2027 falls on 06/02/2027**, and the 2026 holiday block ran from 3 days before Tết to 5 days after it, so nights in early-to-mid February 2027 must not be quoted at the winter rate: their rate goes to Karen, and the reply says those nights are priced separately. Other 2027 holidays: the `quote` GAP list.
+4. **Season and holidays:** the reply says which period the rate covers. The TA table has no 2027 holiday dates. **Tết 2027 falls on 06/02/2027**, and the 2026 holiday block ran from 3 days before Tết to 5 days after it, so nights in early-to-mid February 2027 must not be quoted at the winter rate: their rate goes to Karen with `ask-karen`, and the reply is written after her answer. Other 2027 holidays: the `quote` GAP list.
 5. **Give per room per night, and a total for the example stay:** per group and for everyone, if they gave two groups. Numbers copied from `quote`.
 6. **Nationality not given:** quote the standard TA rate and ask for nationality in the "to hold" line. If anything in the email suggests Indian guests (Indian agency, Indian names, an Indian phone number), the scan report puts the Indian +20% figure next to it for the reviewer to decide before sending. The rule is Karen's and is never explained in the email: HAYA's own confirmation for Indian guests just shows the higher rate.
 7. **GAP lines go in the scan report, not the email:** availability for that many rooms (always), holiday rates, nationality. The email is written as a full answer.
@@ -121,7 +121,7 @@ Với yêu cầu [n người lớn, n trẻ em (tuổi)] từ [DD/MM/YYYY] đế
 • Đặt cọc 50% trong vòng 48 giờ sau khi nhận được xác nhận đặt phòng.
 • 50% còn lại vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
 
-[Trả lời từng câu hỏi khác trong email, từ hotel-info.md: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em… Điều không có trong hotel-info.md: [… : khách sạn xác nhận]]
+[Trả lời từng câu hỏi khác trong email, từ hotel-info.md: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em… Điều không có trong hotel-info.md: chưa soạn thư, hỏi Karen bằng `ask-karen` trước]
 
 Để giữ phòng, anh/chị vui lòng gửi giúp HAYA: tên khách, ngày ở, hạng phòng, số người lớn và trẻ em, quốc tịch và yêu cầu đặc biệt (nếu có).
 
@@ -152,6 +152,6 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 - Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.
 - No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen. A vague date or a big group is not a reason to ask first: quote the period they named (above).
 - Write it the way HAYA's own sent mail reads (`email-templates.md`, "How HAYA writes a reply"): one line of thanks, then the numbers.
-- **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have is a visible `[…: hotel to confirm]` gap in the draft and a line in the scan report.
+- **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have means no draft yet: `ask-karen`, and the scan report names the question.
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.

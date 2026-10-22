@@ -66,9 +66,13 @@ Emi: 2 mail mới (12:13–12:40)
 - Draft: #2, xem tin draft ở trên
 - Cần kiểm tra: tình trạng phòng (chưa nối file FUTURE AVAILABILITY)
 
+3. Hỏi về hồ bơi (Zion)
+- Loại: hỏi thông tin khách sạn
+- Draft: không có, chờ Karen trả lời E-003 (hồ bơi trong nhà hay ngoài trời, mấy hồ)
+
 Chờ Karen: …
 ```
 
-- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram) or "không có" plus the reason in a few words.
+- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram) or "không có" plus the reason in a few words. Waiting on a question: "không có, chờ Karen trả lời E-0nn" and the question.
 - No line about the steps that have no command yet (Sent folder, flags, 40-hour reminders). They go in the daily report, not in every scan report.
 - Under 25 lines. Several emails of the same kind (OTA notices, noise): one line with the count.

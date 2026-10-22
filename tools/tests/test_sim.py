@@ -106,13 +106,28 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.assertEqual(m["subject"], "Hello")
         self.assertIn("TEST-2609031300E485ES1", m["body"]["content"])
 
-    def test_reply_and_forward_pass(self):
-        self.draft(GOOD_REPLY, "request")
+    def ask(self):
+        emi.ask_karen(self.st, self.tg, "sim-01-request", "Late check-out 25/50/100%: of what rate? Luggage storage "
+                      "after check-out: offered, and is it free?", ref="TEST-26090313011477ES1", out=lambda *_: None)
+
+    def test_reply_with_gaps_refused_and_karen_asked_instead(self):
+        with self.assertRaises(emi.Refused) as e:
+            self.draft(GOOD_REPLY, "request")
+        self.assertIn("2 gap(s)", str(e.exception))
+        self.assertIn("ask-karen sim-01-request", str(e.exception))
+        self.ask()
         self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
         ok, report = self.grade()
         self.assertTrue(ok, report)
         self.assertIn("PASS a forward to haya@haya-hotels.com", report)
-        self.assertIn("PASS drafts of kind 'request': 1", report)
+        self.assertIn("PASS drafts of kind 'request': 0", report)
+        self.assertIn("PASS questions to Karen: 1", report)
+
+    def test_no_question_fails(self):
+        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        ok, report = self.grade()
+        self.assertFalse(ok)
+        self.assertIn("FAIL questions to Karen: 0", report)
 
     def test_robotic_reply_fails(self):
         self.draft(OLD_STYLE, "request")  # draft #3 of the live run, 2026-10-22
@@ -128,7 +143,7 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         ok, report = self.grade()
         self.assertFalse(ok)
         for line in ("FAIL no draft says 'available to us'", "FAIL no draft says 'not shown in'",
-                     "FAIL a forward to haya@haya-hotels.com: none", "FAIL drafts of kind 'request': 0",
+                     "FAIL a forward to haya@haya-hotels.com: none", "FAIL questions to Karen: 0",
                      "FAIL drafts of kind 'inquiry': 1", "FAIL no draft says 'Dear 유정아'"):
             self.assertIn(line, report)
 
@@ -144,7 +159,7 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.assertIn("FAIL no draft says 'available to us' (found in ['#1'])", report)
         self.assertIn("PASS a forward to haya@haya-hotels.com (['#2'])", report)
         review.deny(self.mail, self.st, self.tg, "1", out=lambda *_: None)  # a denied draft no longer counts
-        self.draft(GOOD_REPLY, "request")
+        self.ask()
         ok, report = self.grade()
         self.assertTrue(ok, report)
 

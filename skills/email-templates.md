@@ -15,8 +15,8 @@ Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 
 - **Deadline wording:** Vietnamese "[HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)"; English "by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)". Never mix the two.
 - **No operational questions (dev, 2026-10-22, parked in `docs/archive/arrival-and-transfer-asks.md`):** don't ask for arrival time, flight details, or whether the group needs an airport or port pickup, in any draft. If the sender gives these themselves, record them (`arrival_time`, `transfer`) and forward them to front office (`department-forwards.md`) — that forward is still required; only the asking is parked.
 - **Dates** DD/MM/YYYY. **Money in Vietnamese** 7.200.000 VND; **in English** VND 7,200,000.
-- **Fields come from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** This covers every draft — confirmations, replies, inquiries, requests. A field or fact I don't have is left as a visible bracketed gap for the reviewer to fill, e.g. `[luggage storage after check-out: hotel to confirm]`, and the same gap is listed in the scan report. Never filled by guess.
-- **Never write about what I can or can't see.** The reader is a guest or an agency, not my reviewer. Never: "The luggage-storage policy is not shown in the reservation record currently available to us." Never: "the exact amount cannot be confirmed from the reservation information currently available to us." Nor "we will check and revert", "our records don't show", or any sentence explaining a gap. Write the gap as `[…: hotel to confirm]` and say why in the scan report, not in the email.
+- **Fields come from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** This covers every draft — confirmations, replies, inquiries, requests. **A draft is written only when I have every fact it needs (dev, 2026-10-22).** A field or fact I don't have is never guessed and never left as a `[…: hotel to confirm]` gap for the reviewer: I write no draft for that email, ask Karen with `ask-karen <message_id> "<question>" --ref <ref>`, then `done <message_id> "waiting on Karen E-…"`, and write the draft once `karen-answer` has every answer. The draft commands refuse a text that still has a gap. The intake row is still written; only the reply waits.
+- **Never write about what I can or can't see.** The reader is a guest or an agency, not my reviewer. Never: "The luggage-storage policy is not shown in the reservation record currently available to us." Never: "the exact amount cannot be confirmed from the reservation information currently available to us." Nor "we will check and revert", "our records don't show", or any sentence explaining a gap. A missing fact means no draft yet: the question goes to Karen (above).
 - **Attach the confirmation PDF** on new and changed bookings.
 - **Sign-off (Karen, 2026-10-08):** "Best," then "HAYA Team" on the next line — in English and in Vietnamese emails alike.
 - **Total (Karen, 2026-10-08):** always "including breakfast, VAT and service charge" / "bao gồm ăn sáng, VAT và phí dịch vụ". Service charge is already inside every room rate — it is not a separate line item. Never show it as its own line or amount, and never add it on top of a rate.
@@ -77,7 +77,7 @@ Sections 1–4 are fixed forms. Every other reply (a guest's request, an update,
 - "Please send the exact check-in and check-out dates… so HAYA can prepare the suitable room proposal and applicable rates." → give the rates for the period now, then ask for the dates to hold (`inquiries-and-quotes.md`, group and vague-date enquiries).
 - "We look forward to welcoming you." to a reservation desk or reconfirmation team → "…welcoming your guests."
 - "Please be informed that", "We would like to inform you", "Kindly note", "Greetings from HAYA" → not in HAYA's mail. Just say the thing.
-- Every blind-spot sentence ("not shown in the information available to us", "cannot be confirmed from the reservation record", "we will check and revert") → a `[…: hotel to confirm]` gap.
+- Every blind-spot sentence ("not shown in the information available to us", "cannot be confirmed from the reservation record", "we will check and revert") → no draft; the missing fact goes to Karen with `ask-karen`.
 
 ## Who the reply goes to (dev, 2026-10-22)
 A reply goes to the person who wrote the email, not to whoever put it in our inbox.
@@ -417,14 +417,14 @@ HAYA Team
 ## 5. Guest request or update on an existing booking — `--kind request` (dev, 2026-10-22)
 **Status: rewritten 2026-10-22 from HAYA's sent emails after the first live run. Not yet approved by Karen.** For a guest or agency who tells us or asks us something about a booking they already have: arrival time, bed type, same floor, connecting rooms, early check-in / late check-out, luggage, transfer. Not price or availability with no booking yet (that's `inquiries-and-quotes.md`, `--kind inquiry`). Write it the way "How HAYA writes a reply" above says.
 
-- **Two drafts:** this reply (`draft-reply <id> <file> --kind request --ref <ref>`) and the forward to front office (`department-forwards.md`), also when the ref isn't on the intake sheet yet. **Exception:** front office forwarded the email to us. Then it's one draft, the reply, to the original writer with front office in cc (see "Who the reply goes to"), and no forward back.
+- **Two drafts:** this reply (`draft-reply <id> <file> --kind request --ref <ref>`) and the forward to front office (`department-forwards.md`), also when the ref isn't on the intake sheet yet. If the reply needs a fact I don't have, the forward is still drafted now and the reply waits for Karen's answer (rules for all, above). **Exception:** front office forwarded the email to us. Then it's one draft, the reply, to the original writer with front office in cc (see "Who the reply goes to"), and no forward back.
 - **Shape:** greeting, one line of thanks, one short paragraph answering their points in their order, one closing line, "Best, / HAYA Team".
 - **Arrival time, any hour:** "We have noted your arrival at around [HH:MM] on [DD/MM/YYYY], and our front office will be expecting you." That's all. No check-in rules, no "no extra charge", no "normal check-in". Check-in times come up only if they ask to check in before 14:00. (Whether the desk is staffed 24 hours is still unknown: `hotel-info.md`. Don't claim it, and don't raise it.)
 - **Room requests** (bed type, same floor, connecting, high floor, quiet room): one clause, "noted, subject to availability" / "HAYA ghi nhận … tùy tình trạng phòng". When the booked room already has what they ask for, say so with the bed size from `hotel-info.md`, for example "the Deluxe Double Seaview has one 1.8 m bed" for a king-size bed request.
-- **Early check-in / late check-out, when asked:** the bands from `hotel-info.md` with the gap for what the % is of. Never a free one.
+- **Early check-in / late check-out, when asked:** the bands from `hotel-info.md`. What the % is of is not known yet (`hotel-info.md`, "Chưa biết"): ask Karen before the reply. Never a free one.
 - **Free late check-out, upgrade, waived charge** → money ask, Karen (AGENTS.md rule 8). The reply gives the charges as they are.
-- **Pickup:** they said they'll take a taxi, or they don't need one → nothing to answer. They ask → the price from `hotel-info.md` or the gap.
-- A fact not in `hotel-info.md` → `[…: hotel to confirm]`, listed in the scan report.
+- **Pickup:** they said they'll take a taxi, or they don't need one → nothing to answer. They ask → the price from `hotel-info.md`; not there (direct and OTA guests) → ask Karen.
+- A fact not in `hotel-info.md` → no reply yet: `ask-karen`, and the scan report names the question.
 
 English:
 ```
@@ -436,8 +436,8 @@ Thank you for [your email / letting us know].
 We have noted your arrival at around [HH:MM] on [DD/MM/YYYY], and our front office will be expecting you.
 We have noted your request for [two rooms on the same floor], subject to availability.
 The [room type] has one [1.8 m] bed[, so the king-size bed is already in place].
-Check-out is at 12:00. Late check-out is subject to availability and charged at [% of one night's room rate: hotel to confirm] — 25% until 15:00, 50% until 18:00, 100% after 18:00.
-[luggage storage after check-out: hotel to confirm]]
+Check-out is at 12:00. Late check-out is subject to availability and charged at [25% / 50% / 100% of <the basis Karen gave>] — 25% until 15:00, 50% until 18:00, 100% after 18:00.
+[Luggage storage, as Karen answered.]]
 
 [Have a safe trip, and we look forward to welcoming you. / We look forward to welcoming your guests.]
 
@@ -455,8 +455,8 @@ Cảm ơn anh/chị đã báo cho HAYA.
 HAYA đã ghi nhận anh/chị đến khoảng [HH:MM] ngày [DD/MM/YYYY], lễ tân sẽ chờ đón anh/chị.
 HAYA ghi nhận yêu cầu [xếp 2 phòng cùng tầng] tùy tình trạng phòng.
 Phòng [hạng phòng] có 1 giường [1m8].
-Giờ trả phòng là 12:00. Trả phòng muộn tùy tình trạng phòng, phụ thu [% của giá phòng 1 đêm: khách sạn xác nhận]: 25% đến 15:00, 50% đến 18:00, 100% sau 18:00.
-[gửi hành lý sau khi trả phòng: khách sạn xác nhận]]
+Giờ trả phòng là 12:00. Trả phòng muộn tùy tình trạng phòng, phụ thu [25% / 50% / 100% của <mức Karen đã trả lời>]: 25% đến 15:00, 50% đến 18:00, 100% sau 18:00.
+[Gửi hành lý, theo câu trả lời của Karen.]]
 
 [Chúc anh/chị chuyến đi thuận lợi, hẹn gặp anh/chị tại HAYA. / Hân hạnh được đón tiếp khách của anh/chị.]
 

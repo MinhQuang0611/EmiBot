@@ -22,6 +22,9 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]]  # reply + EZFOLIO PDF
+    python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # a fact is missing: ask, no draft yet
+    python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
+    python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
     python -m tools.emi review-info <n>                   # one draft: source email, full text, history
@@ -35,6 +38,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
 Every draft stays in Drafts with the Emi category. Nothing here can send (graph_mail refuses).
+A draft is written only with every fact in it: a text with a '[...: hotel to confirm]' gap is refused, and the
+missing fact goes to Karen with ask-karen instead (dev, 2026-10-22).
 
 A reply goes to whoever sent the email. When that is our own staff (haya@haya-hotels.com forwarding a guest's or
 agency's mail into sales@), draft-reply refuses: reply to the real sender, the From: in the quoted header, with
@@ -397,10 +402,26 @@ def _to_line(to, cc):
     return f" (to {', '.join(to)}" + (f", cc {', '.join(cc)}" if cc else "") + ")"
 
 
+# '[Indoor or outdoor: hotel to confirm]', '[giá đưa đón: khách sạn xác nhận]': a fact Emi doesn't have.
+GAP = re.compile(r"\[[^\]\n]*(?:to confirm|xác nhận)[^\]\n]*\]", re.I)
+
+
+def check_no_gaps(text, message_id="<message_id>"):
+    """Only a complete email becomes a draft (dev, 2026-10-22: a draft with '[Indoor or outdoor: hotel to
+    confirm]' reached Telegram). A fact Emi doesn't have goes to Karen as a question; the draft waits."""
+    gaps = list(dict.fromkeys(GAP.findall(text)))
+    if gaps:
+        raise Refused(f"the text still has {len(gaps)} gap(s): {' | '.join(gaps)}. No draft is written with a "
+                      f"missing fact. Ask Karen: ask-karen {message_id} \"<the missing fact, as a question>\" "
+                      f"--ref <ref>, then done {message_id} \"waiting on Karen E-...\". Write the draft after "
+                      f"karen-answer.")
+
+
 def draft_reply(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     text = read_text(args.body)
+    check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
@@ -421,6 +442,7 @@ def draft_reply(mail, st, args, tg=None, out=print):
 def draft_forward(mail, st, args, tg=None, out=print):
     to = _addresses(args.to)
     text = read_text(args.body)
+    check_no_gaps(text, args.message_id)
     sender = _sender_of(mail, args.message_id)
     if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
         raise Refused(f"{sender} forwarded this email to us: it already has it. Don't forward it back. Answer the "
@@ -583,6 +605,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     if (ref, int(args.row)) in st.confirmation_drafted():
         raise Refused(f"{ref} row {args.row} already has a confirmation draft")
     body = read_text(args.body)
+    check_no_gaps(body, args.message_id)
     check_confirmation_text(body)
     _, name, mime, data = pdf_fetch(sheet, args.row, out=out)
     if mime != "application/pdf":
@@ -628,8 +651,10 @@ def run_review(mail, st, tg, args, out=print):
             review.deny(mail, st, tg, n, reason=args.reason, by=args.by, out=out)
         elif args.cmd == "review-rewrite":
             _, r = st.review(n)
+            text = read_text(args.body)
+            check_no_gaps(text, r.get("source") or "<message_id>")
             check = check_confirmation_text if r["kind"] == "confirmation" else None
-            review.rewrite(mail, st, tg, n, read_text(args.body), feedback=args.feedback, check=check, out=out)
+            review.rewrite(mail, st, tg, n, text, feedback=args.feedback, check=check, out=out)
         elif args.cmd == "review-notify":  # put the notice and its buttons back (Telegram down, buttons gone)
             n, r = st.review(n)
             if tg is None:
@@ -642,6 +667,61 @@ def run_review(mail, st, tg, args, out=print):
         raise Refused(str(e).strip("'\"")) from None
     finally:
         st.save()
+
+
+# --- questions to Karen: a fact Emi doesn't have, so the email waits instead of getting a draft with a gap ---
+
+def ask_karen(st, tg, message_id, question, ref="", out=print):
+    question = " ".join(question.split())
+    if not question:
+        raise Refused("the question is empty")
+    if GAP.search(question):
+        raise Refused("write the question in words, not as a '[...: hotel to confirm]' gap")
+    for qid, q in st.open_questions().items():
+        if q.get("message_id") == message_id and q["ask"] == question:
+            out(f"{qid} already asked for this email, still open: {question}")
+            return qid
+    qid = st.ask(ref, question, message_id)
+    text = (f"❓ <b>{qid} — câu hỏi cho Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
+            + f"\n{review.esc(question)}\n\nTrả lời: <code>{qid} &lt;câu trả lời&gt;</code>. "
+            f"Emi soạn thư sau khi có câu trả lời.")
+    sent = tg.send(text) if tg is not None else None
+    out(f"{qid} asked" + (" on Telegram" if sent else " (Telegram off: put it in the scan report)")
+        + f"; no draft for this email until karen-answer {qid}")
+    return qid
+
+
+def karen_answer(st, qid, answer, out=print):
+    qid = qid.strip().upper()
+    if not answer.strip():
+        raise Refused("the answer is empty")
+    if qid not in st.data["questions"]:
+        raise Refused(f"no question {qid}; open ones: {', '.join(st.open_questions()) or 'none'}")
+    st.answer(f"{qid} {answer.strip()}")
+    q = st.data["questions"][qid]
+    waiting = [k for k, v in st.open_questions().items() if q.get("message_id") and v.get("message_id") == q["message_id"]]
+    out(f"{qid} answered: {answer.strip()}")
+    out(f"question was: {q['ask']}")
+    if waiting:
+        out(f"the same email still waits on {', '.join(waiting)}: no draft yet")
+    elif q.get("message_id"):
+        out(f"every question for email {q['message_id']} is answered: write its draft now (show it, then "
+            f"draft-reply / draft-forward). A lasting hotel fact also goes to MEMORY.md and the scan report.")
+    return qid
+
+
+def questions(st, everything=False, out=print):
+    qs = st.data["questions"] if everything else st.open_questions()
+    if not qs:
+        out("no questions to Karen" + ("" if everything else " open"))
+    for qid, q in qs.items():
+        line = f"{qid} [{'answered' if q['answer'] is not None else 'open'}] {vn(q['asked_at'])}"
+        line += f" · {q['booking_ref']}" if q.get("booking_ref") else ""
+        line += f" · email {q['message_id']}" if q.get("message_id") else ""
+        out(line)
+        out(f"  Q: {q['ask']}")
+        if q["answer"] is not None:
+            out(f"  A: {q['answer']} ({vn(q['answered_at'])})")
 
 
 def status(st, out=print):
@@ -721,6 +801,12 @@ def parser():
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
     _recipient_args(s)
+    s = sub.add_parser("ask-karen", help="a fact for the reply is missing: ask Karen, write no draft yet")
+    s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
+    s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
+    s.add_argument("qid"); s.add_argument("answer", nargs="+")
+    s = sub.add_parser("questions", help="questions to Karen still open")
+    s.add_argument("--all", action="store_true", help="also the answered ones")
     sub.add_parser("status")
     s = sub.add_parser("review-list", help="drafts waiting for a person's accept / deny / rewrite")
     s.add_argument("--all", action="store_true", help="also the ones already decided")
@@ -807,6 +893,14 @@ def main(argv=None):
         elif c == "sim-check":
             if not sim.check(config.sheet(), args.scenario, WORK_DIR):
                 return 2
+        elif c == "ask-karen":
+            ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref)
+            st.save()
+        elif c == "karen-answer":
+            karen_answer(st, args.qid, " ".join(args.answer))
+            st.save()
+        elif c == "questions":
+            questions(st, everything=args.all)
         elif c == "status":
             status(st)
     except Exception as e:

@@ -156,6 +156,10 @@ def check(sheet, name, work_dir, out=print):
         got = sum(1 for d in drafts if d["kind"] == kind)
         verdict(got == 0 if want == 0 else got >= want,
                 f"drafts of kind {kind!r}: {got}, want " + ("none" if want == 0 else f"at least {want}"))
+    if "min_questions" in rules:  # a missing fact goes to Karen as a question, not into a draft as a gap
+        asked = st.get("questions", {})
+        verdict(len(asked) >= rules["min_questions"], f"questions to Karen: {len(asked)}, want at least "
+                f"{rules['min_questions']}" + "".join(f"\n       {k}: {q['ask']}" for k, q in asked.items()))
     out(f"drafts written: {len(drafts)}")
     for d in drafts:
         out(f"--- {d['id']} {d['kind']} ({d['how']}, {d['status']}) to {', '.join(d['to'])}"

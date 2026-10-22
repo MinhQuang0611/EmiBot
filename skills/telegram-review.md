@@ -25,6 +25,8 @@ the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`,
 | Rewrite | `review-ask <n>`, then see below | The question `review-ask` prints; after the rewrite `Draft #<n> đã cập nhật (v<k>)…` |
 | `xem <n>` (typed, no button) | `review-info <n>` | Its output, nothing added |
 | `còn gì` / `list` | `review-list` | Its output |
+| `E-003 <answer>` (Karen answers a question) | `karen-answer E-003 "<answer>"`, then the waiting email: `show <id>`, write the draft, `draft-reply` / `draft-forward` | The new draft's number, or which question the email still waits on |
+| `câu hỏi` / `questions` | `questions` | Its output |
 
 Only Accept and Deny take the buttons off a notice. Rewrite and `xem` leave them on.
 
