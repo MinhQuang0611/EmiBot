@@ -1,22 +1,27 @@
-"""A person's review of each draft Emi saves: #n numbers, a Telegram notice per draft, and the four answers.
+"""A person's review of each draft Emi writes: #n numbers, a Telegram notice per draft, and the answers.
 
-    accept  -> the draft gets the 'Emi approved' category in Outlook. It is NOT sent: a person still opens
-               Drafts and presses Send (AGENTS.md rule 1; the mail token has no Mail.Send).
-    deny    -> the draft goes to Outlook's Deleted Items (recoverable); a denied confirmation or reminder can
-               be drafted again.
-    rewrite -> Emi writes a new text from the reviewer's comments; a new draft on the same thread replaces the
-               old one, attachments carried over, same #n, version + 1, new notice.
-    info    -> everything about #n: status, source email, the full text, history (a typed command, not a
-               button: the notice already shows the draft).
+Two modes (EMI_DRAFT_MODE):
+    telegram -> the draft lives only on Telegram (text and attachments kept on the host) until someone presses
+                Accept; only then is it saved in Outlook Drafts. Nothing reaches Outlook for a denied draft.
+    outlook  -> the draft is saved in Outlook Drafts at once and the notice points at it.
 
-Drafts a person sends or deletes straight in Outlook show up as 'gone' in review-list.
+    accept  -> the draft is in Outlook Drafts with the 'Emi approved' category. It is NOT sent: a person still
+               opens Drafts and presses Send (AGENTS.md rule 1; the mail token has no Mail.Send).
+    deny    -> the draft is dropped (an Outlook draft goes to Deleted Items, recoverable). A denied confirmation
+               or reminder is not proposed again by the next run; Rewrite is the way to correct one.
+    rewrite -> the reviewer's comments, written in by Emi; same #n, version + 1, same Telegram message.
+    info    -> everything about #n (typed `xem n`, not a button: the notice already shows the draft).
+
+An Outlook draft a person sends or deletes straight in Outlook shows up as 'gone' in review-list.
 """
+import os
 from datetime import datetime, timedelta, timezone
 
 from .state import REVIEW_OPEN
 from .telegram import esc
 
 VN = timezone(timedelta(hours=7))
+PENDING = "pending-"  # draft id of a draft that exists only on Telegram so far
 
 KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
@@ -29,13 +34,21 @@ class ReviewError(Exception):
     pass
 
 
+def now_iso():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _vn(iso):
     return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(VN).strftime(
         "%d/%m %H:%M")
 
 
-def _addresses(draft):
-    return [r["emailAddress"]["address"] for r in (draft or {}).get("toRecipients", [])]
+def _addresses(recipients):
+    return [x["emailAddress"]["address"] for x in recipients or [] if x.get("emailAddress", {}).get("address")]
+
+
+def in_outlook(r):
+    return bool(r.get("draft_id")) and not r["draft_id"].startswith(PENDING)
 
 
 def _headline(n, r):
@@ -63,9 +76,10 @@ def notify(tg, n, r, note="", in_place=False):
         lines.append(f"<b>Đính kèm:</b> {esc(', '.join(r['attachments']))}")
     if note:
         lines.append(f"<b>Đã sửa theo:</b> {esc(note)}")
+    where = ("Đã nằm trong Outlook Drafts. Accept = duyệt (vẫn phải bấm Send trong Outlook)." if in_outlook(r) else
+             "Chưa có trong Outlook. Accept = lưu vào Outlook Drafts (vẫn phải bấm Send).")
     lines += ["", f"<blockquote expandable>{esc(text)}</blockquote>",
-              f"Accept = duyệt (vẫn phải bấm Send trong Outlook). Rewrite = nhắn ý kiến sửa, "
-              f"hoặc <code>rewrite {n} ý kiến</code>"]
+              f"{where} Rewrite = nhắn ý kiến sửa, hoặc <code>rewrite {n} ý kiến</code>"]
     if in_place and r.get("tg"):
         try:
             tg.edit(r["tg"], "\n".join(lines), _buttons(n))
@@ -76,7 +90,7 @@ def notify(tg, n, r, note="", in_place=False):
     try:
         r["tg"] = tg.send("\n".join(lines), _buttons(n))
         r.pop("tg_error", None)
-    except Exception as e:  # the draft is saved either way; review-list still shows it
+    except Exception as e:  # the draft is kept either way; review-list still shows it
         r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
     return r.get("tg")
 
@@ -90,29 +104,99 @@ def _mark(tg, r, note):
         pass
 
 
+# --- a new draft ---
+
 def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
            attachments=()):
-    """Called right after a draft is saved. Returns the review number."""
+    """Outlook mode: called right after the draft is saved in Outlook. Returns the review number."""
     d = mail.get_draft(draft_id) or {}
     n = st.open_review(draft_id, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
-                       to=_addresses(d) or list(to or []), subject=d.get("subject", ""), text=text,
-                       attachments=list(attachments))
+                       to=_addresses(d.get("toRecipients")) or list(to or []), subject=d.get("subject", ""),
+                       text=text, attachments=list(attachments), files=[])
     notify(tg, n, st.data["reviews"][n])
     return n
 
 
-def attached(st, draft_id, name):
-    n = st.review_by_draft(draft_id)
-    if n:
-        st.data["reviews"][n].setdefault("attachments", []).append(name)
+def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
+            files=(), mailbox=""):
+    """Telegram mode: nothing goes to Outlook. The draft (text + files under store/<n>/) waits for Accept.
+    files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'."""
+    src = mail.get_message_text(source)
+    subject = src.get("subject", "")
+    prefix = "FW: " if how == "forward" else "RE: "
+    if not subject.upper().startswith(prefix.strip()):
+        subject = prefix + subject
+    if how == "forward":
+        recipients = list(to or [])
+    else:
+        recipients = _addresses([src.get("from")])
+        if reply_all:
+            others = _addresses(src.get("toRecipients")) + _addresses(src.get("ccRecipients"))
+            recipients += [a for a in others if a.lower() != mailbox.lower() and a not in recipients]
+    n = st.open_review(None, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
+                       to=recipients, subject=subject, text=text, attachments=[], files=[])
+    r = st.data["reviews"][n]
+    r["draft_id"] = PENDING + n
+    for name, data, ctype in files:
+        _keep_file(r, store, n, name, data, ctype)
+    notify(tg, n, r)
     return n
 
+
+def _keep_file(r, store, n, name, data, ctype):
+    folder = os.path.join(store, n)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name)
+    with open(path, "wb") as f:
+        f.write(data)
+    r["files"].append({"name": name, "path": os.path.abspath(path), "contentType": ctype})
+    r["attachments"].append(name)
+
+
+def attached(st, draft_id, name, data=None, ctype=None, store=None):
+    """A file added to draft #n after it was written (draft-attach)."""
+    n = st.review_by_draft(draft_id)
+    if n is None:
+        return None
+    r = st.data["reviews"][n]
+    if draft_id.startswith(PENDING):
+        _keep_file(r, store, n, name, data, ctype)
+    else:
+        r.setdefault("attachments", []).append(name)
+    return n
+
+
+def _repoint(st, old, new):
+    """Every record that pointed at draft `old` now points at `new`."""
+    if old in st.data["drafts"]:
+        st.data["drafts"][new] = st.data["drafts"].pop(old)
+    for bucket in ("confirmations", "reminders"):
+        for v in st.data[bucket].values():
+            if v.get("draft_id") == old:
+                v["draft_id"] = new
+
+
+def _to_outlook(mail, st, r):
+    """Accept in Telegram mode: write the draft into Outlook Drafts now, files attached."""
+    if r["how"] == "forward":
+        d = mail.forward_draft_with_text(r["source"], r["to"], r["text"])
+    else:
+        d = mail.reply_draft_with_text(r["source"], r["text"], reply_all=r.get("reply_all", False))
+    for f in r.get("files", []):
+        with open(f["path"], "rb") as fh:
+            mail.add_attachment(d["id"], f["name"], fh.read(), content_type=f["contentType"])
+    _repoint(st, r["draft_id"], d["id"])
+    r["draft_id"] = d["id"]
+    return d
+
+
+# --- the reviewer's answers ---
 
 def _pending(mail, st, n):
     n, r = st.review(n)
     if r["status"] != REVIEW_OPEN:
         raise ReviewError(f"#{n} is already {r['status']}")
-    if mail.get_draft(r["draft_id"]) is None:
+    if in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
         st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
         raise ReviewError(f"#{n} is no longer in Drafts: a person sent or deleted it in Outlook")
     return n, r
@@ -147,25 +231,28 @@ def _done_waiting(st, n):
 
 def accept(mail, st, tg, n, by="", out=print):
     n, r = _pending(mail, st, n)
+    new = not in_outlook(r)
+    if new:
+        _to_outlook(mail, st, r)
     mail.approve_draft(r["draft_id"])
     st.close_review(n, "approved", by)
     _done_waiting(st, n)
-    msg = f"✅ #{n} đã duyệt. Draft nằm trong Outlook › Drafts (nhãn 'Emi approved'): mở và bấm Send."
-    _mark(tg, r, msg)
+    msg = (f"#{n} đã duyệt" + (" và lưu vào Outlook › Drafts" if new else ", draft trong Outlook › Drafts")
+           + " (nhãn 'Emi approved'). Mở Outlook và bấm Send.")
+    _mark(tg, r, esc(msg))
     out(msg)
 
 
 def deny(mail, st, tg, n, reason="", by="", out=print):
     n, r = _pending(mail, st, n)
-    mail.delete_draft(r["draft_id"])
+    was_in_outlook = in_outlook(r)
+    if was_in_outlook:
+        mail.delete_draft(r["draft_id"])
     st.close_review(n, "denied", " — ".join(x for x in (reason, by) if x))
     _done_waiting(st, n)
-    st.data["drafts"].pop(r["draft_id"], None)
-    if r["kind"] == "confirmation" and r.get("ref"):
-        st.forget_confirmation(r["ref"], r["row"])  # a corrected confirmation may be drafted again
-    elif r["kind"] in ("deposit_reminder", "balance_reminder"):
-        st.data["reminders"].pop(f"{r['ref']}|{r['kind'].split('_')[0]}", None)
-    msg = f"❌ #{n} đã bỏ: draft chuyển vào Deleted Items của Outlook." + (f" Lý do: {reason}" if reason else "")
+    # The confirmation / reminder record stays, so the next hourly run doesn't propose the same draft again.
+    msg = f"#{n} đã bỏ" + (": draft chuyển vào Deleted Items của Outlook." if was_in_outlook else
+                           ", không lưu gì vào Outlook.") + (f" Lý do: {reason}" if reason else "")
     _mark(tg, r, esc(msg))
     out(msg)
 
@@ -174,6 +261,13 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     n, r = _pending(mail, st, n)
     if check:
         check(text)
+    r["history"].append({"at": now_iso(), "status": "rewritten", "note": feedback, "old_text": r["text"]})
+    if not in_outlook(r):  # Telegram only: just the text changes
+        r.update(text=text, version=r["version"] + 1)
+        notify(tg, n, r, note=feedback, in_place=True)
+        _done_waiting(st, n)
+        out(f"#{n} rewritten as v{r['version']} (Telegram only; saved in Outlook on Accept)")
+        return None
     old = r["draft_id"]
     files = [a for a in mail.list_draft_attachments(old)
              if a.get("@odata.type") == "#microsoft.graph.fileAttachment" and not a.get("isInline") and a.get("data")]
@@ -184,15 +278,7 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     for a in files:
         mail.add_attachment(d["id"], a["name"], a["data"], content_type=a.get("contentType") or "application/pdf")
     mail.delete_draft(old)
-    # every record that pointed at the old draft now points at the new one
-    if old in st.data["drafts"]:
-        st.data["drafts"][d["id"]] = st.data["drafts"].pop(old)
-    for bucket in ("confirmations", "reminders"):
-        for v in st.data[bucket].values():
-            if v.get("draft_id") == old:
-                v["draft_id"] = d["id"]
-    r["history"].append({"at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                         "status": "rewritten", "note": feedback, "old_text": r["text"]})
+    _repoint(st, old, d["id"])
     r.update(draft_id=d["id"], text=text, version=r["version"] + 1, attachments=[a["name"] for a in files])
     notify(tg, n, r, note=feedback, in_place=True)  # same message, new text, buttons kept
     _done_waiting(st, n)
@@ -201,13 +287,17 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     return d
 
 
+def _check_gone(mail, st, n, r):
+    if r["status"] == REVIEW_OPEN and in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
+        st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+
+
 def info(mail, st, n, out=print):
     n, r = st.review(n)
-    live = mail.get_draft(r["draft_id"]) if r["status"] == REVIEW_OPEN else None
-    if r["status"] == REVIEW_OPEN and live is None:
-        st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+    _check_gone(mail, st, n, r)
     out(_headline(n, r))
-    out(f"status: {r['status']}" + (" (still in Drafts)" if live else ""))
+    where = "in Outlook Drafts" if in_outlook(r) else "Telegram only, not in Outlook until Accept"
+    out(f"status: {r['status']}" + (f" ({where})" if r["status"] == REVIEW_OPEN else ""))
     out(f"to: {', '.join(r['to'])}")
     out(f"subject: {r['subject']}")
     if r.get("attachments"):
@@ -232,13 +322,13 @@ def info(mail, st, n, out=print):
 def listing(mail, st, everything=False, out=print):
     shown = 0
     for n, r in sorted(st.data["reviews"].items(), key=lambda kv: int(kv[0])):
-        if r["status"] == REVIEW_OPEN and mail.get_draft(r["draft_id"]) is None:
-            st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+        _check_gone(mail, st, n, r)
         if r["status"] != REVIEW_OPEN and not everything:
             continue
         shown += 1
         out(f"#{n} [{r['status']}] {KIND_LABEL.get(r['kind'], r['kind'])}"
             + (f" {r['ref']}" if r.get("ref") else "") + f" → {', '.join(r['to'])} | {r['subject']} | "
-            f"{_vn(r['opened_at'])}" + (f" | v{r['version']}" if r["version"] > 1 else ""))
+            f"{_vn(r['opened_at'])}" + (f" | v{r['version']}" if r["version"] > 1 else "")
+            + ("" if in_outlook(r) or r["status"] != REVIEW_OPEN else " | Telegram only"))
     if not shown:
         out("no drafts waiting for review" if not everything else "no reviews yet")

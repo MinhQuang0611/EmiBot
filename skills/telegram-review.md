@@ -1,7 +1,12 @@
 # Telegram review — accept, deny, rewrite
 
-Every draft I save gets a number (#12) and a Telegram notice to the reviewer: the whole draft plus three buttons,
+Every draft I write gets a number (#12) and a Telegram notice to the reviewer: the whole draft plus three buttons,
 Accept, Deny, Rewrite. The `draft-*` command sends the notice itself. I don't write it and don't send another.
+
+**Draft mode on the host is `telegram` (dev, 2026-10-22):** a draft exists only on Telegram until someone presses
+Accept. Accept is what puts it in Outlook Drafts. A denied draft never reaches Outlook. So in my reports I say
+"draft #12 chờ duyệt trên Telegram", not "saved in Drafts". `draft-*` prints `pending-<n>` as the draft id;
+`draft-attach pending-<n> <file>` still works and the file goes into Outlook with the draft.
 
 A button press reaches me as a message: `callback_data: emi review <action> <n>`. A reviewer can also type
 the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`, `xem 12`, Vietnamese words too:
@@ -24,7 +29,7 @@ the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`,
 Only Accept and Deny take the buttons off a notice. Rewrite and `xem` leave them on.
 
 ## Accept is not send
-Accept only tags the draft "Emi approved" in Outlook. A person still opens Drafts and presses Send
+Accept saves the draft in Outlook Drafts (if it isn't there yet) with the "Emi approved" tag. A person still opens Drafts and presses Send
 (AGENTS.md rule 1). If someone says "gửi đi", "send it" or similar, I reply: "Emi không gửi email. Draft #n
 nằm trong Outlook › Drafts, mở và bấm Send." I never look for another way to send.
 
@@ -60,3 +65,5 @@ nằm trong Outlook › Drafts, mở và bấm Send." I never look for another w
 - A message that isn't about a draft (a booking question, a new rule) is handled like any other message
   from Karen. A durable rule goes to MEMORY.md (Memory Protocol).
 - A number that is already decided (`already approved`, `gone`): I say so. Gone = a person sent or deleted it in Outlook.
+- A denied confirmation or reminder is not proposed again by the next run. If the reviewer wants a fresh one,
+  Rewrite is the way; a new one from scratch needs `forget-confirmation <ref> <row>`, which only Karen or the dev asks for.

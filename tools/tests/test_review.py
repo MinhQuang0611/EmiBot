@@ -77,12 +77,12 @@ class ReviewTest(unittest.TestCase):
         with self.assertRaises(review.ReviewError):  # decided once
             review.deny(self.mail, self.st, self.tg, "1")
 
-    def test_deny_removes_draft_and_frees_the_confirmation(self):
+    def test_deny_removes_draft_and_keeps_the_confirmation_blocked(self):
         d = self.reply(CONFIRMATION, kind="confirmation")
         self.assertIn(("TEST-1512", 52), self.st.confirmation_drafted())
         review.deny(self.mail, self.st, self.tg, "#1", reason="sai giá", out=self.lines.append)
         self.assertIsNone(self.mail.get_draft(d["id"]))
-        self.assertNotIn(("TEST-1512", 52), self.st.confirmation_drafted())
+        self.assertIn(("TEST-1512", 52), self.st.confirmation_drafted())  # the hourly run won't propose it again
         self.assertIn("sai giá", self.st.data["reviews"]["1"]["history"][-1]["note"])
 
     def test_rewrite_replaces_draft_keeps_number_and_attachment(self):
@@ -150,6 +150,57 @@ class ReviewTest(unittest.TestCase):
         self.tg = None
         self.reply()
         self.assertEqual(self.st.data["reviews"]["1"]["status"], "pending")
+
+
+class TelegramFirstTest(unittest.TestCase):
+    """EMI_DRAFT_MODE=telegram: nothing reaches Outlook until Accept."""
+    write = ReviewTest.write
+    def setUp(self):
+        ReviewTest.setUp(self)
+        os.environ["EMI_DRAFT_MODE"] = "telegram"
+        self._work = emi.WORK_DIR
+        emi.WORK_DIR = self.dir
+
+    def tearDown(self):
+        os.environ.pop("EMI_DRAFT_MODE", None)
+        emi.WORK_DIR = self._work
+        ReviewTest.tearDown(self)
+
+    def outlook_drafts(self):
+        return [p for p in os.listdir(os.path.join(self.dir, "drafts"))] if os.path.isdir(
+            os.path.join(self.dir, "drafts")) else []
+
+    def test_draft_only_on_telegram_until_accept(self):
+        d = ReviewTest.reply(self, CONFIRMATION, kind="confirmation")
+        self.assertEqual(d["id"], "pending-1")
+        self.assertEqual(self.outlook_drafts(), [])
+        r = self.st.data["reviews"]["1"]
+        self.assertEqual((r["to"], r["subject"]), (["nguyenminhquang061105@gmail.com"], "RE: TEST - Đặt phòng TEST-1512"))
+        self.assertIn("Chưa có trong Outlook", self.http.sent()[0]["text"])
+        emi.draft_attach(self.mail, self.st, "pending-1", self.write("PDF bytes"), out=self.lines.append)
+        review.rewrite(self.mail, self.st, self.tg, "1", CONFIRMATION + " ", feedback="x",
+                       check=emi.check_confirmation_text, out=self.lines.append)
+        self.assertEqual(self.outlook_drafts(), [])  # a rewrite stays on Telegram too
+        review.accept(self.mail, self.st, self.tg, "1", out=self.lines.append)
+        r = self.st.data["reviews"]["1"]
+        self.assertFalse(r["draft_id"].startswith("pending-"))
+        live = self.mail.get_draft(r["draft_id"])
+        self.assertIn("Emi approved", live["categories"])
+        self.assertEqual([a["name"] for a in self.mail.list_draft_attachments(r["draft_id"])], ["body.txt"])
+        self.assertEqual(self.st.data["confirmations"]["TEST-1512|52"]["draft_id"], r["draft_id"])
+        self.assertIn("lưu vào Outlook", self.lines[-1])
+
+    def test_deny_leaves_outlook_untouched(self):
+        ReviewTest.reply(self)
+        review.deny(self.mail, self.st, self.tg, "1", out=self.lines.append)
+        self.assertEqual(self.outlook_drafts(), [])
+        self.assertIn("không lưu gì vào Outlook", self.lines[-1])
+
+    def test_no_telegram_falls_back_to_outlook(self):
+        self.tg = None
+        d = ReviewTest.reply(self)
+        self.assertFalse(d["id"].startswith("pending-"))
+        self.assertIsNotNone(self.mail.get_draft(d["id"]))
 
 
 class GraphReviewTest(unittest.TestCase):

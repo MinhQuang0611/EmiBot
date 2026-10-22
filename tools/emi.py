@@ -297,10 +297,27 @@ def _record(st, draft, args):
     st.record_draft(draft["id"], args.ref or "", int(args.row or 0), args.kind)
 
 
+def telegram_first(tg):
+    """EMI_DRAFT_MODE=telegram: drafts go to Telegram only and reach Outlook on Accept. Without a working
+    Telegram set-up the draft goes straight to Outlook, so no draft is ever lost."""
+    return os.environ.get("EMI_DRAFT_MODE", "outlook").lower() == "telegram" and tg is not None
+
+
+def pending_store():
+    return os.path.join(config.SIM_DIR or WORK_DIR, "pending")
+
+
 def draft_reply(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     text = read_text(args.body)
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
+                           ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
+                           mailbox=config.MAILBOX)
+        st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
+        out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}")
+        return {"id": review.PENDING + n}
     d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
@@ -312,6 +329,13 @@ def draft_reply(mail, st, args, tg=None, out=print):
 def draft_forward(mail, st, args, tg=None, out=print):
     to = [a.strip() for a in args.to.split(",") if a.strip()]
     text = read_text(args.body)
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="forward", source=args.message_id, kind=args.kind,
+                           ref=args.ref, row=int(args.row or 0), text=text, to=to)
+        st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
+        out(f"forward draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n} "
+            f"(to {', '.join(to)})")
+        return {"id": review.PENDING + n}
     d = mail.forward_draft_with_text(args.message_id, to, text)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="forward", source=args.message_id, kind=args.kind, ref=args.ref,
@@ -323,10 +347,16 @@ def draft_forward(mail, st, args, tg=None, out=print):
 def draft_attach(mail, st, draft_id, path, out=print):
     with open(path, "rb") as f:
         data = f.read()
+    name = os.path.basename(path)
     ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
-    mail.add_attachment(draft_id, os.path.basename(path), data, content_type=ctype)
-    review.attached(st, draft_id, os.path.basename(path))
-    out(f"attached {os.path.basename(path)} to {draft_id}")
+    if draft_id.startswith(review.PENDING):
+        if review.attached(st, draft_id, name, data, ctype, store=pending_store()) is None:
+            raise Refused(f"no draft {draft_id}")
+        out(f"attached {name} to {draft_id} (goes into Outlook with the draft on Accept)")
+        return
+    mail.add_attachment(draft_id, name, data, content_type=ctype)
+    review.attached(st, draft_id, name)
+    out(f"attached {name} to {draft_id}")
 
 
 def _review_n(text):
@@ -462,6 +492,14 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     if mime != "application/pdf":
         raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                       f"exported from EZFOLIO. No draft made.")
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind="confirmation",
+                           ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
+                           files=[(name, data, "application/pdf")])
+        st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation")
+        out(f"confirmation draft #{n} sent to Telegram for review with the PDF, not in Outlook until Accept: "
+            f"{review.PENDING}{n}")
+        return {"id": review.PENDING + n}
     d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all)
     mail.add_attachment(d["id"], name, data, content_type="application/pdf")
     st.record_draft(d["id"], ref, int(args.row), "confirmation")
@@ -519,6 +557,8 @@ def status(st, out=print):
     waiting = [n for n, r in d["reviews"].items() if r["status"] == "pending"]
     out(f"drafts waiting for review: {len(waiting)}" + (f" (#{', #'.join(waiting)})" if waiting else ""))
     out("telegram notices: " + ("on" if os.environ.get("EMI_TELEGRAM_CHAT_ID") else "off (EMI_TELEGRAM_CHAT_ID not set)"))
+    out("draft mode: " + ("telegram (Outlook only on Accept)" if os.environ.get("EMI_DRAFT_MODE", "").lower() == "telegram"
+                          else "outlook (saved in Drafts at once)"))
 
 
 def parser():
