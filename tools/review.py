@@ -6,7 +6,8 @@
                be drafted again.
     rewrite -> Emi writes a new text from the reviewer's comments; a new draft on the same thread replaces the
                old one, attachments carried over, same #n, version + 1, new notice.
-    info    -> everything about #n: status, source email, the full text, history.
+    info    -> everything about #n: status, source email, the full text, history (a typed command, not a
+               button: the notice already shows the draft).
 
 Drafts a person sends or deletes straight in Outlook show up as 'gone' in review-list.
 """
@@ -21,7 +22,7 @@ KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
     "inquiry": "Báo giá / tư vấn", "deposit_reminder": "Nhắc đặt cọc", "balance_reminder": "Nhắc thanh toán",
 }
-PREVIEW = 2800  # characters of the draft shown in the notice; Info shows all of it
+PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
 
 class ReviewError(Exception):
@@ -43,10 +44,18 @@ def _headline(n, r):
     return f"Draft #{n} — {KIND_LABEL.get(r['kind'], r['kind'])}{ref}{version}"
 
 
-def notify(tg, n, r, note=""):
+def _buttons(n):
+    # Info is not a button: the notice already shows the whole draft. Only Accept / Deny end a review.
+    return [[("Accept", f"emi review accept {n}"), ("Deny", f"emi review deny {n}")],
+            [("Rewrite", f"emi review rewrite {n}")]]
+
+
+def notify(tg, n, r, note="", in_place=False):
+    """Send the notice for #n, or with in_place=True rewrite the existing one (text and buttons) so one
+    draft keeps one message. Falls back to a new message if the old one can't be edited."""
     if tg is None:
         return None
-    text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + "\n… (Info: toàn bộ)"
+    text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + f"\n… (nhắn: xem {n} để đọc hết)"
     lines = [f"✉️ <b>{esc(_headline(n, r))}</b>",
              f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
              f"<b>Tiêu đề:</b> {esc(r['subject'])}"]
@@ -55,11 +64,18 @@ def notify(tg, n, r, note=""):
     if note:
         lines.append(f"<b>Đã sửa theo:</b> {esc(note)}")
     lines += ["", f"<blockquote expandable>{esc(text)}</blockquote>",
-              f"Accept = duyệt (vẫn phải bấm Send trong Outlook). Sửa: nhắn <code>rewrite {n} ý kiến</code>"]
-    buttons = [[("✅ Accept", f"emi review accept {n}"), ("❌ Deny", f"emi review deny {n}")],
-               [("✏️ Rewrite", f"emi review rewrite {n}"), ("ℹ️ Info", f"emi review info {n}")]]
+              f"Accept = duyệt (vẫn phải bấm Send trong Outlook). Rewrite = nhắn ý kiến sửa, "
+              f"hoặc <code>rewrite {n} ý kiến</code>"]
+    if in_place and r.get("tg"):
+        try:
+            tg.edit(r["tg"], "\n".join(lines), _buttons(n))
+            r.pop("tg_error", None)
+            return r["tg"]
+        except Exception:
+            pass  # too old or deleted: send a fresh one
     try:
-        r["tg"] = tg.send("\n".join(lines), buttons)
+        r["tg"] = tg.send("\n".join(lines), _buttons(n))
+        r.pop("tg_error", None)
     except Exception as e:  # the draft is saved either way; review-list still shows it
         r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
     return r.get("tg")
@@ -149,8 +165,7 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     r["history"].append({"at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                          "status": "rewritten", "note": feedback, "old_text": r["text"]})
     r.update(draft_id=d["id"], text=text, version=r["version"] + 1, attachments=[a["name"] for a in files])
-    _mark(tg, r, f"♻️ #{n} đã viết lại → v{r['version']} (tin mới bên dưới).")
-    notify(tg, n, r, note=feedback)
+    notify(tg, n, r, note=feedback, in_place=True)  # same message, new text, buttons kept
     out(f"#{n} rewritten as v{r['version']}: new draft {d['id']} (old one moved to Deleted Items), "
         f"{len(files)} attachment(s) carried over")
     return d

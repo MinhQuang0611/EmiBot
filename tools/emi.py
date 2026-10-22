@@ -26,7 +26,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi review-accept <n> [--by NAME]     # tag 'Emi approved' — NOT sent; a person presses Send
     python -m tools.emi review-deny <n> [--reason R]      # draft to Deleted Items
     python -m tools.emi review-rewrite <n> <body.txt> --feedback "reviewer's words"  # new draft replaces old
-    python -m tools.emi review-notify <n>                 # send the Telegram notice again
+    python -m tools.emi review-notify <n>                 # notice + buttons back in place (or sent again)
     python -m tools.emi sim-reset <scenario>              # test/sim/<scenario>: fresh test inbox, old TEST rows removed
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
@@ -487,11 +487,14 @@ def run_review(mail, st, tg, args, out=print):
             _, r = st.review(n)
             check = check_confirmation_text if r["kind"] == "confirmation" else None
             review.rewrite(mail, st, tg, n, read_text(args.body), feedback=args.feedback, check=check, out=out)
-        elif args.cmd == "review-notify":  # send the notice again (e.g. Telegram was down)
+        elif args.cmd == "review-notify":  # put the notice and its buttons back (Telegram down, buttons gone)
             n, r = st.review(n)
             if tg is None:
                 raise Refused("Telegram is not set up: EMI_TELEGRAM_CHAT_ID and the bot token")
-            out(f"notice for #{n} sent" if review.notify(tg, n, r) else f"not sent: {r.get('tg_error', '?')}")
+            if r["status"] != "pending":
+                raise Refused(f"#{n} is already {r['status']}: no buttons to put back")
+            out(f"notice for #{n} sent, buttons on" if review.notify(tg, n, r, in_place=True)
+                else f"not sent: {r.get('tg_error', '?')}")
     except (review.ReviewError, KeyError, PermissionError) as e:
         raise Refused(str(e).strip("'\"")) from None
     finally:

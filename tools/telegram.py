@@ -59,14 +59,28 @@ class Telegram:
         resp = self.http("POST", f"{API}/bot{self.bot_token}/{method}", body=body)
         return resp.get("result") or {}
 
+    @staticmethod
+    def _keyboard(buttons):
+        return {"inline_keyboard": [[{"text": t, "callback_data": v} for t, v in row] for row in buttons or []]}
+
     def send(self, text, buttons=None):
         """HTML text; buttons = [[(label, callback_value), ...], ...]. Returns Telegram's message id."""
         body = {"chat_id": self.chat_id, "text": text[:LIMIT], "parse_mode": "HTML",
                 "disable_web_page_preview": True}
         if buttons:
-            body["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": v} for t, v in row]
-                                                        for row in buttons]}
+            body["reply_markup"] = self._keyboard(buttons)
         return self._call("sendMessage", body).get("message_id")
+
+    def edit(self, message_id, text, buttons=None):
+        """Replace an earlier notice's text and buttons in place. Unchanged content is not an error."""
+        body = {"chat_id": self.chat_id, "message_id": message_id, "text": text[:LIMIT], "parse_mode": "HTML",
+                "disable_web_page_preview": True, "reply_markup": self._keyboard(buttons)}
+        try:
+            self._call("editMessageText", body)
+        except httpjson.HttpError as e:
+            if "message is not modified" not in e.body:
+                raise
+        return message_id
 
     def mark(self, message_id, note):
         """Take the buttons off an earlier notice and say what happened to it."""

@@ -53,7 +53,7 @@ class ReviewTest(unittest.TestCase):
                                ref="TEST-1512" if kind != "reply" else "", row="52" if kind != "reply" else "")
         return emi.draft_reply(self.mail, self.st, args, tg=self.tg, out=self.lines.append)
 
-    def test_every_draft_gets_a_number_and_a_notice_with_four_buttons(self):
+    def test_every_draft_gets_a_number_and_a_notice_with_three_buttons(self):
         d = self.reply()
         self.assertIn("draft #1 saved", self.lines[-1])
         msg = self.http.sent()[0]
@@ -62,8 +62,9 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("RE: TEST - Đặt phòng TEST-1512", msg["text"])
         self.assertIn("HAYA đã nhận.", msg["text"])
         values = [b["callback_data"] for row in msg["reply_markup"]["inline_keyboard"] for b in row]
-        self.assertEqual(values, ["emi review accept 1", "emi review deny 1", "emi review rewrite 1",
-                                  "emi review info 1"])
+        self.assertEqual(values, ["emi review accept 1", "emi review deny 1", "emi review rewrite 1"])
+        labels = [b["text"] for row in msg["reply_markup"]["inline_keyboard"] for b in row]
+        self.assertEqual(labels, ["Accept", "Deny", "Rewrite"])
         self.assertEqual(self.st.data["reviews"]["1"]["draft_id"], d["id"])
 
     def test_accept_tags_but_never_sends(self):
@@ -96,9 +97,13 @@ class ReviewTest(unittest.TestCase):
         self.assertIsNone(self.mail.get_draft(d["id"]))
         self.assertEqual([a["name"] for a in self.mail.list_draft_attachments(new["id"])], ["TEST-1512.pdf"])
         self.assertEqual(self.st.data["confirmations"]["TEST-1512|52"]["draft_id"], new["id"])
-        last = self.http.sent()[-1]["text"]
-        self.assertIn("v2", last)
-        self.assertIn("thêm dòng tầng cao", last)
+        self.assertEqual(len(self.http.sent()), 1)  # no second message: the first one is edited in place
+        edit = self.http.sent("editMessageText")[-1]
+        self.assertEqual(edit["message_id"], r["tg"])
+        self.assertIn("v2", edit["text"])
+        self.assertIn("thêm dòng tầng cao", edit["text"])
+        self.assertEqual(len(edit["reply_markup"]["inline_keyboard"]), 2)  # buttons still on
+        self.assertEqual(self.http.sent("editMessageReplyMarkup"), [])
 
     def test_rewrite_of_confirmation_still_checked(self):
         self.reply(CONFIRMATION, kind="confirmation")
