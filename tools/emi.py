@@ -10,6 +10,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
     python -m tools.emi sheet-find <text>                 # rows whose booking_ref or guest_names contain text
+    python -m tools.emi sheet-rows <first> [<last>]       # rows as they are on the sheet, filled cells only
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
@@ -216,6 +217,14 @@ def sheet_check(sheet, data, out=print):
         raise Refused("fix these, then run sheet-check again:\n  " + "\n  ".join(errors))
     out(f"OK: {len(records)} row(s) pass the checks")
     return records
+
+
+def sheet_rows(sheet, first, last=None, out=print):
+    """Rows first..last as they are on the sheet, filled cells only. Read-only."""
+    rows = [r for r in sheet.rows() if r["_row"] >= first and (last is None or r["_row"] <= last)]
+    for r in rows:
+        out(f"row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != "_row"}, ensure_ascii=False))
+    out(f"{len(rows)} row(s)")
 
 
 def sheet_audit(sheet, first_row=3, out=print):
@@ -593,6 +602,8 @@ def parser():
     s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
     s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
+    s = sub.add_parser("sheet-rows", help="rows FIRST..LAST as they are on the sheet (read-only)")
+    s.add_argument("first", type=int); s.add_argument("last", type=int, nargs="?")
     s = sub.add_parser("sheet-audit", help="check rows already on the sheet with the sheet-check rules")
     s.add_argument("--from-row", type=int, default=3)
     s = sub.add_parser("sheet-append"); s.add_argument("file")
@@ -678,6 +689,8 @@ def main(argv=None):
             sheet_check(config.sheet(), read_json(args.file))
         elif c == "sheet-find":
             sheet_find(config.sheet(), args.text)
+        elif c == "sheet-rows":
+            sheet_rows(config.sheet(), args.first, args.last)
         elif c == "sheet-audit":
             sheet_audit(config.sheet(), args.from_row)
         elif c == "sheet-append":
