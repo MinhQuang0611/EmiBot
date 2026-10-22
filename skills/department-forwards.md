@@ -2,6 +2,12 @@
 
 Every forward is saved to the Drafts folder for a person to send. I never send it myself. Forward the original email with its attachments intact; add a short note on top, never edit the original below it.
 
+**The note on top, in Karen's style (dev, 2026-10-22):** Vietnamese, labels and bullets, nothing else. The colleague reading it should know in five seconds which booking, when, and what to do, without opening the email below. HAYA's own forwards to accounting carry a single line ("Mã đoàn: #29519"); front office gets the short block below.
+- **When first.** If the guest arrives today or tomorrow, say so in the stay line: "22/10/2026 – 24/10/2026 (đến hôm nay)".
+- **One line per request,** in plain words: "Phòng không hút thuốc", not a copy of the email.
+- **One polite ask at the end, only if they must do something now:** "Nhờ lễ tân giữ phòng không hút thuốc cho khách." No reasons, no "Dear team", no sign-off paragraph.
+- **Never forward an email back to the colleague who forwarded it to us** (sender `haya@haya-hotels.com` → nothing back to haya@). They have it; the reply to the guest or agency cc's them (`email-templates.md`, "Who the reply goes to"). `draft-forward` refuses it.
+
 ## Accounting — `accountant@palmahotel.vn` (no "s")
 | Forward | Note on top must include |
 |---|---|
@@ -29,6 +35,8 @@ Address given by Karen, 2026-10-08. The list above is still Monica's working dra
 
 The reply alone is not enough: front office hears it from me, not from the guest at check-in. This holds when the sender volunteered the detail without being asked (I don't ask for arrival time or pickup — `email-templates.md` — but what they give me still goes to front office).
 
+**Exception:** front office forwarded the email to us. Then the reply goes to the original writer with `--cc haya@haya-hotels.com`, and that cc is front office's copy. No forward.
+
 **Booking not on the sheet yet** (no group code — OTA bookings often arrive this way): forward anyway, unlike accounting. The note says so, and the scan report lists the refs to check. Note on top, in Vietnamese:
 ```
 **Booking:** [mã đặt phòng của khách / OTA] — chưa có trên sheet intake, chưa có mã đoàn
@@ -40,6 +48,18 @@ The reply alone is not enough: front office hears it from me, not from the guest
 • [Hỏi trả phòng muộn và gửi hành lý sau khi trả phòng]
 ```
 With a group code: `**Mã đoàn:** #[mã đoàn]` in place of the first line.
+
+Example, a SynXis notice for a Booking.com guest arriving the same day who asked for a non-smoking room (live run 2026-10-22, guest name replaced):
+```
+**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có trên sheet intake, chưa có mã đoàn
+**Khách:** [tên khách], 1 người lớn
+**Lưu trú:** 22/10/2026 – 24/10/2026 (đến hôm nay)
+**Phòng:** 1 Standard Garden View (1 Queen Bed)
+**Yêu cầu:**
+• Phòng không hút thuốc
+
+Nhờ lễ tân giữ phòng không hút thuốc cho khách.
+```
 
 ## Other departments
 Housekeeping, F&B, engineering: no email route defined. If an email needs one of them, it goes to Karen in the scan report.

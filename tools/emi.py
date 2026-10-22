@@ -14,14 +14,14 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
-    python -m tools.emi draft-reply <message_id> <body.txt> [--all] [--kind K --ref R --row N]
+    python -m tools.emi draft-reply <message_id> <body.txt> [--all | --to A[,B] [--cc C]] [--kind K --ref R --row N]
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
-    python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all]  # reply draft + the EZFOLIO PDF
+    python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]]  # reply + EZFOLIO PDF
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
     python -m tools.emi review-info <n>                   # one draft: source email, full text, history
@@ -35,6 +35,11 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
 Every draft stays in Drafts with the Emi category. Nothing here can send (graph_mail refuses).
+
+A reply goes to whoever sent the email. When that is our own staff (haya@haya-hotels.com forwarding a guest's or
+agency's mail into sales@), draft-reply refuses: reply to the real sender, the From: in the quoted header, with
+--to <address> (--cc haya@haya-hotels.com so front office sees the answer). draft-forward refuses to send an
+email back to the colleague who forwarded it to us.
 Exit 0 = done, 2 = refused or failed (reason on stderr).
 """
 import argparse
@@ -46,6 +51,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive
+from .graph_mail import is_internal
 from . import quote as quoting
 from . import cancel_fee as cancelling
 from . import review, sim
@@ -249,12 +255,21 @@ def sheet_append(sheet, data, out=print):
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
+    on_sheet = None
     for rec in records:
-        ref = str(rec.get("booking_ref", "")).strip().lower()
         # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
-        if ref and rec.get("action") == "NEW" and sheet.find_by_ref(ref):
-            raise Refused(f"booking_ref {rec['booking_ref']!r} is already on the sheet: this is not a NEW "
-                          f"booking. Use action CHANGE (new rows, what_changed filled) or sheet-update for a fix")
+        # Each number counts on its own: '1783017402' is already there if '1783017402 / 92777EF002717' is.
+        if rec.get("action") != "NEW" or not str(rec.get("booking_ref", "")).strip():
+            continue
+        if on_sheet is None:
+            on_sheet = [(r["_row"], {p.lower() for p in schema.ref_parts(r.get("booking_ref", ""))})
+                        for r in sheet.rows()]
+        mine = {p.lower() for p in schema.ref_parts(rec["booking_ref"])}
+        hit = next(((row, parts & mine) for row, parts in on_sheet if parts & mine), None)
+        if hit:
+            raise Refused(f"booking_ref {rec['booking_ref']!r}: {', '.join(sorted(hit[1]))} is already on the sheet "
+                          f"(row {hit[0]}): this is not a NEW booking. Use action CHANGE (new rows, what_changed "
+                          f"filled), or sheet-update row {hit[0]} to add the other number")
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     out(f"appended {len(records)} row(s). Check them below; fix a wrong cell with sheet-update <row> by column name.")
@@ -335,28 +350,81 @@ def pending_store():
     return os.path.join(config.SIM_DIR or WORK_DIR, "pending")
 
 
+def _addresses(text):
+    return [a.strip() for a in (text or "").split(",") if a.strip()]
+
+
+def _sender_of(mail, message_id):
+    return (mail.get_message_text(message_id).get("from") or {}).get("emailAddress", {}).get("address", "")
+
+
+# Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
+GUEST_KINDS = ("request", "inquiry", "confirmation", "deposit_reminder", "balance_reminder")
+
+FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
+                "{sender}. If it is a forward (Fw:), the real sender is the 'From:' line in the quoted header: "
+                "reply to that address with --to <address> --cc {sender} (skills/email-templates.md, 'Who the "
+                "reply goes to'). Only if you really are answering a colleague: --internal (--kind reply).")
+
+
+def reply_recipients(mail, args, kind):
+    """(to, cc) for a reply: the --to / --cc lists, or (None, None) to let the mailbox answer the sender.
+    Refuses a reply that would land on our own staff: the bug of 2026-10-22, when replies to guests whose
+    mail front office had forwarded in went to haya@haya-hotels.com."""
+    to, cc = _addresses(getattr(args, "to", "")), _addresses(getattr(args, "cc", ""))
+    internal = getattr(args, "internal", False)
+    if cc and not to:
+        raise Refused("--cc goes with --to: name the main recipient too")
+    if to and getattr(args, "all", False):
+        raise Refused("--to sets the recipients itself: drop --all and list everyone in --to / --cc")
+    if internal and kind in GUEST_KINDS:
+        raise Refused(f"--internal is for a reply to a colleague; a {kind} draft goes to the guest or agency")
+    if to:
+        ours = [a for a in to if is_internal(a)]
+        if ours and not internal:
+            raise Refused(f"--to {', '.join(ours)} is our own address. Put the guest's or agency's address in --to "
+                          f"(the 'From:' of the forwarded mail) and our colleague in --cc")
+        return to, cc
+    sender = _sender_of(mail, args.message_id)
+    if is_internal(sender) and not internal:
+        raise Refused(FORWARDED_IN.format(sender=sender))
+    return None, None
+
+
+def _to_line(to, cc):
+    if not to:
+        return ""
+    return f" (to {', '.join(to)}" + (f", cc {', '.join(cc)}" if cc else "") + ")"
+
+
 def draft_reply(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     text = read_text(args.body)
+    to, cc = reply_recipients(mail, args, args.kind)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
-                           mailbox=config.MAILBOX)
+                           to=to, cc=cc, mailbox=config.MAILBOX)
         st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
-        out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}")
+        out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
+            + _to_line(to, cc))
         return {"id": review.PENDING + n}
-    d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all)
+    d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
-                      row=int(args.row or 0), text=text, reply_all=args.all)
-    out(f"draft #{n} saved in Drafts: {d['id']}")
+                      row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to))
+    out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
     return d
 
 
 def draft_forward(mail, st, args, tg=None, out=print):
-    to = [a.strip() for a in args.to.split(",") if a.strip()]
+    to = _addresses(args.to)
     text = read_text(args.body)
+    sender = _sender_of(mail, args.message_id)
+    if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
+        raise Refused(f"{sender} forwarded this email to us: it already has it. Don't forward it back. Answer the "
+                      f"guest or agency with draft-reply --to <the quoted From: address> --cc {sender}")
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="forward", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, to=to)
@@ -520,20 +588,22 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     if mime != "application/pdf":
         raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                       f"exported from EZFOLIO. No draft made.")
+    to, cc = reply_recipients(mail, args, "confirmation")
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind="confirmation",
                            ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
-                           files=[(name, data, "application/pdf")])
+                           to=to, cc=cc, files=[(name, data, "application/pdf")])
         st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation")
         out(f"confirmation draft #{n} sent to Telegram for review with the PDF, not in Outlook until Accept: "
             f"{review.PENDING}{n}")
         return {"id": review.PENDING + n}
-    d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all)
+    d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all, to=to, cc=cc)
     mail.add_attachment(d["id"], name, data, content_type="application/pdf")
     st.record_draft(d["id"], ref, int(args.row), "confirmation")
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind="confirmation", ref=ref,
-                      row=int(args.row), text=body, reply_all=args.all, attachments=[name])
-    out(f"confirmation draft #{n} saved in Drafts with the PDF attached: {d['id']}")
+                      row=int(args.row), text=body, reply_all=args.all, to=to, cc=cc, override=bool(to),
+                      attachments=[name])
+    out(f"confirmation draft #{n} saved in Drafts with the PDF attached: {d['id']}" + _to_line(to, cc))
     return d
 
 
@@ -589,6 +659,12 @@ def status(st, out=print):
                           else "outlook (saved in Drafts at once)"))
 
 
+def _recipient_args(s):
+    s.add_argument("--to", default="", help="comma-separated: reply to these instead of the email's sender, e.g. "
+                                            "the real sender of a mail our staff forwarded in (quoted From: line)")
+    s.add_argument("--cc", default="", help="comma-separated, with --to; e.g. the colleague who forwarded it")
+
+
 def parser():
     p = argparse.ArgumentParser(prog="python -m tools.emi", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -616,6 +692,9 @@ def parser():
         s.add_argument("body", help="UTF-8 text file with the message")
         if name == "draft-reply":
             s.add_argument("--all", action="store_true", help="reply all")
+            _recipient_args(s)
+            s.add_argument("--internal", action="store_true",
+                           help="the reply really is for our own colleague (haya@, palmahotel.vn); kind reply only")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, deposit_reminder, balance_reminder, inquiry, request")
         s.add_argument("--ref", default="")
@@ -641,6 +720,7 @@ def parser():
     s = sub.add_parser("draft-confirmation")
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
+    _recipient_args(s)
     sub.add_parser("status")
     s = sub.add_parser("review-list", help="drafts waiting for a person's accept / deny / rewrite")
     s.add_argument("--all", action="store_true", help="also the ones already decided")

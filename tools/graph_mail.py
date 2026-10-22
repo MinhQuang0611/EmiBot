@@ -237,6 +237,29 @@ def _recipients(addresses):
     return [{"emailAddress": {"address": a}} for a in addresses]
 
 
+# Our own mailboxes. An email from one of these is staff, not a guest or agency: usually front office (haya@)
+# forwarding a guest's mail into sales@. Replying to it would answer our own colleague.
+INTERNAL_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
+
+_PREFIX = re.compile(r"^\s*(re|aw|sv|fw|fwd|tr|trả lời|chuyển tiếp)\s*:\s*", re.I)
+
+
+def is_internal(address):
+    a = (address or "").strip().lower()
+    return any(a.endswith("@" + d) or a.endswith("." + d) for d in INTERNAL_DOMAINS)
+
+
+def reply_subject(subject):
+    """'Fw: RE: SI781659A - …' -> 'RE: SI781659A - …': one RE, no forward marks. Used when a reply goes to the
+    original sender of a mail our own staff forwarded in, so the agency sees its own subject back."""
+    s = subject or ""
+    while True:
+        t = _PREFIX.sub("", s)
+        if t == s:
+            return "RE: " + s.strip()
+        s = t
+
+
 class GraphMail:
     def __init__(self, mailbox, token, http=httpjson.request):
         # "me" = the signed-in personal test mailbox (DeviceCodeToken); otherwise app-only on a named mailbox.
@@ -362,9 +385,17 @@ class GraphMail:
         content = original[:m.end()] + ours + original[m.end():] if m else ours + original
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
 
-    def reply_draft_with_text(self, message_id, text, reply_all=False):
-        """Reply draft on the sender's thread with a multi-line plain-text answer on top."""
+    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None):
+        """Reply draft on the sender's thread with a multi-line plain-text answer on top.
+        to=[...] replaces the recipients Graph picked (createReply answers whoever sent the message, which for a
+        mail forwarded in by our own front office is front office): To and Cc become exactly to / cc, and the
+        subject becomes 'RE: <original subject>' without the 'Fw:'."""
         draft = self.create_reply_draft(message_id, "", reply_all=reply_all)
+        if to:
+            fields = {"toRecipients": _recipients(to), "ccRecipients": _recipients(cc or [])}
+            if draft.get("subject"):
+                fields["subject"] = reply_subject(draft["subject"])
+            self._call("PATCH", f"/messages/{draft['id']}", body=fields)
         self._prepend_text(draft["id"], text)
         return draft
 

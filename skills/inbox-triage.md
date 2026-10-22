@@ -5,6 +5,12 @@ Run this on every email in sales@haya-hotels.com. Default window: everything rec
 ## 1. Read it properly
 Read the whole thread and open every attachment (PDF vouchers, screenshots, Excel rooming lists, payment slips) before deciding what it is.
 
+**Then: who actually wrote it?** (dev, 2026-10-22.) If the sender is our own staff (`@haya-hotels.com`, `@palmahotel.vn`; usually front office, `haya@haya-hotels.com`) and the email is a forward ("Fw:", a quoted `From: … Sent: … To: … Subject: …` block), the writer is the **From:** of the quoted block, the first external address from the top. Classify and answer the email as if that person had written to sales@:
+- **The reply goes to the writer, not to our colleague.** `mail-find` the writer or the original subject first: if the original also reached sales@, work on that one and mark the forward `done` as a duplicate. If not, `draft-reply <forward id> … --to <writer> --cc <colleague>` (`email-templates.md`, "Who the reply goes to"). `draft-reply` refuses an internal sender, so this can't slip through.
+- **Never forward it back to the colleague who forwarded it in.** They have it already; the cc on the reply shows them the answer. `draft-forward` refuses this too. Another department (accounting) still gets its forward if the content calls for one.
+- The quoted block has no usable address, or the writer is a no-reply robot (OTA, `vn.robot@`) → no reply; intake if it's a booking notice, and a line in the scan report.
+- A forward from our staff with their own note on top ("please handle", "khách hỏi…") → the note says what they want; do that.
+
 ## 2. Classify
 | Type | What it looks like | Goes to |
 |---|---|---|
@@ -14,7 +20,9 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | Payment slip | Bank transfer proof for a deposit or balance | `booking-intake.md` payment columns + `department-forwards.md` (accounting) |
 | Inquiry / quote request | Availability, price, hotel questions, **no booking yet** | `inquiries-and-quotes.md` |
 | Money ask | Discount, upgrade, waived fee, free extra | Flag to Karen as a request. Never resolved by me. |
-| Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | Update the row if it changes the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts |
+| Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | Update the row if it changes the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts. Front office forwarded it in → the reply only, cc front office |
+| Chaser on a booking request | "Kindly resend", "any update?", "pls confirm" on a request we haven't confirmed (e.g. first sent to the wrong address, like `sales@palmahotel.vn`, or never answered) | It's the **booking request itself**: New booking → `booking-intake.md` (check the sheet first, the row may exist). Not an operational request, no front-office forward. No holding reply (`confirmation-replies.md`): top of the scan report for Karen, with how long they've waited. The confirmation later goes to the agency, `--to` if it was forwarded in |
+| Decline / thanks | "Not interested", "booked elsewhere", "thank you", "received" | Decline → a one- or two-line reply (`email-templates.md` section 6). Plain thanks with nothing to answer → no draft, one report line |
 | Palma | Anything about Palma Resort | Flag to Karen. Not mine. |
 | Noise | Marketing, SynXis one-time passcodes, internal chatter | Skip, don't log |
 
@@ -25,12 +33,16 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `request` — question or special request on an existing booking: arrival time, same floor, late check-out, luggage (`email-templates.md` section 5).
 - `confirmation`, `deposit_reminder`, `balance_reminder` — `confirmation-replies.md`.
 - `forward` — every forward to accounting or front office.
-- `reply` — anything else (a greeting, a thank-you).
+- `reply` — anything else (a decline, a greeting, a colleague's question).
+
+**Rates another agency gets** ("same rate as Aurora Travel", "as our partner X"): never quoted or compared (`inquiries-and-quotes.md`). The row's rate waits in `missing_info` and the question goes to Karen.
 
 ## 3. OTA emails
 OTA booking, change, and cancellation notices (SynXis, Agoda, Booking.com, Expedia, Trip.com, Traveloka, Ohmyhotel, MG, MakeMyTrip, Dida Travel, Mytour, VNTrip) go through intake like any other booking. They get no reply — the sender is a no-reply address. An Agoda email usually has a matching SynXis email: enter the booking once.
 
-A guest who booked through an OTA and writes to us from their own address (questions, requests on that booking) is not an OTA notice: it's Operational, with a reply and a front-office forward, even when the OTA ref isn't on the sheet yet.
+A guest who booked through an OTA and writes to us from their own address (questions, requests on that booking) is not an OTA notice: it's Operational, with a reply and a front-office forward, even when the OTA ref isn't on the sheet yet. That includes the OTA's relay addresses that pass mail to the guest (`…@guest.trip.com`, `…@guest.booking.com`): those are the guest, reply to them.
+
+B2B reservation systems and bedbanks (RezLive, Hotelbeds, WebBeds and the like) writing about a booking they hold — reconfirmations, special requests — are agencies, not OTA robots: they get a reply, unless the address says no-reply.
 
 Any OTA rate under **1,000,000 VND per room-night** is flagged to Karen the same day as a likely promotion mistake.
 

@@ -50,6 +50,52 @@ Never price a stay by hand. Run, from `/data/emi`:
 - Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
 - Tour operator or OTA → the command refuses and says where to look (tour operator contract file, or Karen for OTA).
 
+## Group enquiries and vague dates: answer with rates now (dev, 2026-10-22)
+"End of January", "mid-March", "around Tết", "70 pax, 3 nights": a vague date or a big group is **not** a reason to answer with questions only. That is a holding reply (AGENTS.md rule 9), and it is what the first live run did: the draft only asked for exact dates. An agency asking for "availability and best possible rates" gets rates in the first reply.
+
+1. **Pick a stay inside the period they named** and say it is an example: "end of January 2027, 3 nights" → 27/01/2027 – 30/01/2027. Stay within one season and before any holiday (see 4).
+2. **Rooms from the pax count:** 2 guests per room (double or twin). An odd number → one room for a single guest, at the same room rate. Write the assumption in the reply. Adults travelling as a group are not put four to a Quadruple even when `quote`'s "cheapest" option suggests it: run `quote --rooms N` with the room count you worked out.
+3. **More than 15 double/twin rooms = ROH** (`quote` prints the NOTE): every room at the Standard Double rate of that season, the hotel assigns the room types. That is the TA table's only group offer, so say it plainly; there is no other group discount to promise. Don't add a "sea-view upgrade" line under ROH (`quote` lists Deluxe Seaview at the ROH price only because of ROH; it is not an upgrade on offer). Groups of 15 rooms or fewer: normal rates by room type.
+4. **Season and holidays:** the reply says which period the rate covers. The TA table has no 2027 holiday dates. **Tết 2027 falls on 06/02/2027**, and the 2026 holiday block ran from 3 days before Tết to 5 days after it, so nights in early-to-mid February 2027 must not be quoted at the winter rate: their rate goes to Karen, and the reply says those nights are priced separately. Other 2027 holidays: the `quote` GAP list.
+5. **Give per room per night, and a total for the example stay:** per group and for everyone, if they gave two groups. Numbers copied from `quote`.
+6. **Nationality not given:** quote the standard TA rate and ask for nationality in the "to hold" line. If anything in the email suggests Indian guests (Indian agency, Indian names, an Indian phone number), the scan report puts the Indian +20% figure next to it for the reviewer to decide before sending. The rule is Karen's and is never explained in the email: HAYA's own confirmation for Indian guests just shows the higher rate.
+7. **GAP lines go in the scan report, not the email:** availability for that many rooms (always), holiday rates, nationality. The email is written as a full answer.
+8. **Then ask for what's needed to hold:** exact dates per group, rooming (twin/double, singles), nationality, special requests.
+
+**Example: the live-run enquiry (2026-10-22).** Asian Classic Travels (TA), Rotary group: 70 pax (35 × 2 groups), 3 nights, end of January 2027, "advise availability and best possible rates". Numbers from:
+`quote --arrival 27/01/2027 --departure 30/01/2027 --adults 35 --rooms 18` (one group: 18 rooms × 1.700.000 × 3 = 91.800.000) and `--adults 70 --rooms 35` (both groups: 178.500.000, deposit 89.250.000). All three nights are winter, ROH applies (18 rooms > 15).
+```
+Dear Saurabh,
+
+Thank you for your enquiry for the Rotary group.
+
+For 70 guests (2 groups of 35), 3 nights at the end of January 2027, we are pleased to quote as follows:
+
+**Rate:** VND 1,700,000 per room per night, 2 guests sharing a double or twin room. As each group is more than 15 rooms, all rooms are charged at this rate and the hotel assigns the room types.
+**Example stay:** 27/01/2027 – 30/01/2027 (3 nights)
+• One group of 35 guests, 18 rooms (17 shared and 1 single): VND 91,800,000
+• Both groups together, 35 rooms: VND 178,500,000
+**Included:** breakfast (06:30–10:30), pool, gym, wifi, VAT and service charge.
+
+**Payment terms:**
+
+• 50% deposit within 48 hours of receiving the booking confirmation.
+• The remaining 50% 7 days before check-in.
+
+This rate is for nights up to 31/01/2027. Stays in February 2027 around Tết are priced separately.
+
+To hold the rooms, please send the exact dates for each group, the rooming list (double, twin and single rooms), the guests' nationality and any special requests.
+
+Best,
+HAYA Team
+```
+Scan report lines for it:
+```
+- Draft: #5
+- Cần kiểm tra: còn 35 phòng cuối 01/2027 không (chưa nối file FUTURE AVAILABILITY)
+- Quốc tịch chưa rõ: nếu khách Ấn Độ, giá 2.040.000/phòng/đêm, cả đoàn 214.200.000 — sửa draft trước khi gửi
+```
+
 ## Reply to an inquiry — template (draft wording, not yet approved by Karen)
 Same rules as `email-templates.md` (anh/chị unless the thread shows it, `**Label:**`, `•` lists, "Best, / HAYA Team", sender's language). Drop any line that doesn't apply.
 ```
@@ -104,7 +150,8 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 
 ## Replies
 - Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.
-- No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen.
+- No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen. A vague date or a big group is not a reason to ask first: quote the period they named (above).
+- Write it the way HAYA's own sent mail reads (`email-templates.md`, "How HAYA writes a reply"): one line of thanks, then the numbers.
 - **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have is a visible `[…: hotel to confirm]` gap in the draft and a line in the scan report.
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.

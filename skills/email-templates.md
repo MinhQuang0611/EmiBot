@@ -4,7 +4,7 @@ Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 
 
 ## Rules that apply to all of them
 - **Formatting, same as HAYA's own sent confirmations:** write `**Label:**` for a bold label and start list lines with `•`. A blank line starts a new paragraph; lines without a blank between them stay together. `draft-reply` and `draft-confirmation` turn this into Outlook HTML (bold, bullet list) — the `**` never reaches the reader. Copy the templates below with their `**` and `•` exactly.
-- **Reply on the agency's own thread** (RE: their subject). No new subject line.
+- **Reply on the agency's own thread** (RE: their subject). No new subject line. The reply goes to whoever wrote the email, which is not always who put it in our inbox: see "Who the reply goes to" below.
 - **Language (Karen, 2026-10-08):** the language of the email, not the nationality of the agency. Sender wrote in Vietnamese → reply in Vietnamese. Sender wrote in English → reply in English. A Vietnamese agency that writes in English gets English. If a thread mixes both, use the language of the sender's most recent email. Any other language (Chinese, Korean, Russian) → English.
 - **Greeting:** Vietnamese "Kính gửi chị/anh [Name]"; if no name is known, "Kính gửi Quý Đối tác". English "Dear Ms./Mr. [Name]," or "Dear [Agency] team,".
 - **Greeting a guest (not an agency):** the name as the guest signs the email, else the guest name on the intake row or voucher. Write it exactly as given — never transliterate, translate, shorten, or guess which part is the family name. A From display name alone doesn't count when it isn't in Latin script (e.g. "유정아"). No usable name → "Dear Guest," / "Kính gửi Quý khách,".
@@ -25,6 +25,72 @@ Built 2026-10-08 from emails actually sent from sales@haya-hotels.com between 2 
   - Tên tài khoản: CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
   - Số tài khoản: 1020729617
   - Ngân hàng: Vietcombank, CN Phú Quốc
+
+---
+
+## How HAYA writes a reply — everything that isn't a fixed template (dev, 2026-10-22)
+Sections 1–4 are fixed forms. Every other reply (a guest's request, an update, an inquiry, a decline, a thank-you) is written fresh, and it must read like HAYA's own sent mail, not like a system log. Rebuilt from the sent emails after the first live run, where the drafts were correct but stiff.
+
+**What HAYA's sent emails do:**
+- **Open with one short line of thanks, then go straight to the answer.** "Thank you for your reply." / "Cảm ơn email của team." No restating of their email back to them.
+- **Concrete.** Room names, bed sizes, dates, rates, totals, the policy line that applies. A real number beats a sentence about numbers.
+- **A request is one clause, not a paragraph:** "HAYA ghi nhận yêu cầu xếp phòng Deluxe ở tầng cao, view đẹp tùy tình trạng phòng." The "subject to availability" goes inside the sentence, never as its own sentence.
+- **Answer only what was said or asked.** Someone who tells us their arrival time is not asking about check-in rules or charges.
+- **Short.** A request or update reply is 2–5 lines between greeting and sign-off. A quote can be longer because it carries numbers.
+- **Warm close in one line,** fitted to the reader: a guest coming → "Have a safe trip, and we look forward to welcoming you."; an agency or reconfirmation desk → "We look forward to welcoming your guests."; a thread that ends → "We hope to welcome you on another occasion." / "Nếu có booking khác, chị cứ liên hệ để HAYA hỗ trợ nhé."
+- **English says "we"; Vietnamese says "HAYA"** ("HAYA xin phép gửi…", "HAYA ghi nhận…"). Never "quoted by HAYA" in an English sentence.
+
+**Real examples to copy the tone from** (from sales@ Sent; guest data replaced by [ ]):
+
+1. Vietnamese confirmation opener, to an agency (Re: NEW BOOKING OBT071026MB, 06/10/2026):
+   ```
+   Dear Team,
+
+   Cảm ơn email của team.
+
+   HAYA xin phép gửi xác nhận đặt phòng như sau:
+   ```
+2. A room request inside a confirmation, one clause (Re: HAYA Hotel/TBA/11-15.01.2027/An0109, 07/10/2026):
+   ```
+   HAYA ghi nhận yêu cầu xếp phòng Deluxe ở tầng cao, view đẹp tùy tình trạng phòng.
+   ```
+3. English quote to a direct guest (RE: [Booking confirmation] Your booking at Haya Hotel Phu Quoc…, 22/10/2026):
+   ```
+   Dear Mr [Name],
+
+   Thank you for your reply.
+
+   We have noted your request for a quotation for one additional room, over and above your two King Suites with Sea View already booked.
+   We are pleased to quote as follows:
+   Rate: 3,600,000 VND per night for 3 adults, breakfast and VAT included
+   Total for 2 nights (18/11/2026 – 20/11/2026): 7,200,000 VND
+   Full payment is required before check-in.
+   ```
+4. Closing a thread that ends (cancellation, Amara Tours, 03/10/2026): "Cảm ơn chị và [tên đại lý] đã nghĩ đến HAYA. Nếu có booking khác trong thời gian tới, chị cứ liên hệ để HAYA hỗ trợ nhé."
+
+**Sounds like a robot — never write** (all from drafts of the 2026-10-22 live run):
+- "Thank you for your email about your stay from [date] to [date]." → "Thank you for your email." / "Thank you for letting us know."
+- "Check-in is from 14:00, so an evening arrival is a normal check-in with no extra charge." → say nothing about check-in rules; "our front office will be expecting you."
+- "…and will pass it to our front office." after every point → once at most, or "our front office will be expecting you".
+- "This is subject to availability." as its own sentence → ", subject to availability" inside the sentence.
+- "We have noted that you are not proceeding with the additional room quoted by HAYA." → "Thank you for letting us know."
+- "Please send the exact check-in and check-out dates… so HAYA can prepare the suitable room proposal and applicable rates." → give the rates for the period now, then ask for the dates to hold (`inquiries-and-quotes.md`, group and vague-date enquiries).
+- "We look forward to welcoming you." to a reservation desk or reconfirmation team → "…welcoming your guests."
+- "Please be informed that", "We would like to inform you", "Kindly note", "Greetings from HAYA" → not in HAYA's mail. Just say the thing.
+- Every blind-spot sentence ("not shown in the information available to us", "cannot be confirmed from the reservation record", "we will check and revert") → a `[…: hotel to confirm]` gap.
+
+## Who the reply goes to (dev, 2026-10-22)
+A reply goes to the person who wrote the email, not to whoever put it in our inbox.
+
+- **Forwarded in by our own staff.** Sender `@haya-hotels.com` or `@palmahotel.vn` (usually front office, `haya@haya-hotels.com`) and the email is a forward ("Fw:", and a quoted block `From: … Sent: … To: … Subject: …`). The writer is the **From:** of that quoted block: the first external address, reading from the top. `draft-reply` refuses to answer an internal sender for this reason: on 2026-10-22 two replies meant for RezLive and a guest went to haya@.
+  1. **Look for the original first:** `mail-find <the writer's address or the original subject>`. If the original is also in sales@ (they wrote to sales@ or cc'd it), reply on that one, normally, and mark the forward `done` as a duplicate.
+  2. **Otherwise reply on the forward with the writer's address:**
+     `draft-reply <forward id> <body> --kind <kind> --to <writer's address> --cc <the colleague who forwarded it>`
+     The draft goes To the writer, Cc our colleague, subject `RE: <their original subject>` without the "Fw:". The cc is how the colleague sees our answer, and it replaces any forward back to them (`department-forwards.md`).
+  3. **No usable address** (forwarded as an attachment, no quoted header, or the writer is a no-reply robot such as an OTA or `vn.robot@`): no reply. It goes in the scan report.
+  - Never `--internal` to get past the refusal for a guest or agency. `--internal` is only for a real answer to a colleague, `--kind reply`.
+- **Confirmation on a booking request that was forwarded in:** `draft-confirmation <id> <row> <body> --to <the agency's address> --cc <colleague>`, same reason. The agency's address is the quoted From:, which is also what the row's `company_email` should hold, never haya@.
+- **Reply-all (`--all`)** only when the sender cc'd their own colleagues (agency managers, accounts). With `--to`, list everyone yourself; `--all` and `--to` don't mix.
 
 ---
 
@@ -348,34 +414,32 @@ HAYA Team
 
 ---
 
-## 5. Guest request on an existing booking — `--kind request` (dev, 2026-10-22)
-**Status: draft wording from the first live run, not yet approved by Karen.** For a guest or agency asking a question or making a request about a booking they already have: arrival time, same floor, connecting rooms, early check-in / late check-out, luggage, transfer. Not for price or availability with no booking yet (that's `inquiries-and-quotes.md`, `--kind inquiry`).
+## 5. Guest request or update on an existing booking — `--kind request` (dev, 2026-10-22)
+**Status: rewritten 2026-10-22 from HAYA's sent emails after the first live run. Not yet approved by Karen.** For a guest or agency who tells us or asks us something about a booking they already have: arrival time, bed type, same floor, connecting rooms, early check-in / late check-out, luggage, transfer. Not price or availability with no booking yet (that's `inquiries-and-quotes.md`, `--kind inquiry`). Write it the way "How HAYA writes a reply" above says.
 
-- **Two drafts, always:** this reply (`draft-reply <id> <file> --kind request --ref <ref>`) and the forward to front office (`department-forwards.md`, `draft-forward <id> haya@haya-hotels.com <file> --kind forward --ref <ref>`). Also when the booking ref isn't on the intake sheet (OTA bookings often aren't yet) — the forward says so, the guest reply doesn't.
-- **Answer every question, in the guest's order,** from `docs/rate-knowledge/hotel-info.md`. A fact that isn't there is a `[…: hotel to confirm]` gap, listed in the scan report.
-- **Arrival time ≠ late check-out.** Arriving at 21:00 is a normal check-in (check-in is from 14:00): "noted, we will pass it to front office", never "subject to availability", no charge. Early check-in (before 14:00) and late check-out (after 12:00) are the charged ones.
-- **Room requests** (same floor, connecting, bed type): "noted, we will pass it to front office, subject to availability". Never promised.
+- **Two drafts:** this reply (`draft-reply <id> <file> --kind request --ref <ref>`) and the forward to front office (`department-forwards.md`), also when the ref isn't on the intake sheet yet. **Exception:** front office forwarded the email to us. Then it's one draft, the reply, to the original writer with front office in cc (see "Who the reply goes to"), and no forward back.
+- **Shape:** greeting, one line of thanks, one short paragraph answering their points in their order, one closing line, "Best, / HAYA Team".
+- **Arrival time, any hour:** "We have noted your arrival at around [HH:MM] on [DD/MM/YYYY], and our front office will be expecting you." That's all. No check-in rules, no "no extra charge", no "normal check-in". Check-in times come up only if they ask to check in before 14:00. (Whether the desk is staffed 24 hours is still unknown: `hotel-info.md`. Don't claim it, and don't raise it.)
+- **Room requests** (bed type, same floor, connecting, high floor, quiet room): one clause, "noted, subject to availability" / "HAYA ghi nhận … tùy tình trạng phòng". When the booked room already has what they ask for, say so with the bed size from `hotel-info.md`, for example "the Deluxe Double Seaview has one 1.8 m bed" for a king-size bed request.
+- **Early check-in / late check-out, when asked:** the bands from `hotel-info.md` with the gap for what the % is of. Never a free one.
 - **Free late check-out, upgrade, waived charge** → money ask, Karen (AGENTS.md rule 8). The reply gives the charges as they are.
-- Drop every bracketed line that doesn't apply.
+- **Pickup:** they said they'll take a taxi, or they don't need one → nothing to answer. They ask → the price from `hotel-info.md` or the gap.
+- A fact not in `hotel-info.md` → `[…: hotel to confirm]`, listed in the scan report.
 
 English:
 ```
 Dear [Name / Guest],
 
-Thank you for your email about your stay from [DD/MM/YYYY] to [DD/MM/YYYY].
+Thank you for [your email / letting us know].
 
-[We have noted your arrival at around [HH:MM] on [DD/MM/YYYY] and will pass it to our front office. Check-in is from 14:00, so an evening arrival is a normal check-in with no extra charge.]
+[Their points, in their order, in one short paragraph — keep only what applies:
+We have noted your arrival at around [HH:MM] on [DD/MM/YYYY], and our front office will be expecting you.
+We have noted your request for [two rooms on the same floor], subject to availability.
+The [room type] has one [1.8 m] bed[, so the king-size bed is already in place].
+Check-out is at 12:00. Late check-out is subject to availability and charged at [% of one night's room rate: hotel to confirm] — 25% until 15:00, 50% until 18:00, 100% after 18:00.
+[luggage storage after check-out: hotel to confirm]]
 
-[We have noted your request for [rooms on the same floor / connecting rooms / …] and will pass it to our front office. This is subject to availability.]
-
-[Check-out is at 12:00. Late check-out is subject to availability and is charged as a percentage of [one night's room rate: hotel to confirm]:
-• Check-out 12:00 – 15:00: 25%
-• Check-out 15:00 – 18:00: 50%
-• Check-out after 18:00: 100%]
-
-[Answer to each other question from hotel-info.md, or the gap: [luggage storage after check-out: hotel to confirm]]
-
-We look forward to welcoming you.
+[Have a safe trip, and we look forward to welcoming you. / We look forward to welcoming your guests.]
 
 Best,
 HAYA Team
@@ -385,24 +449,70 @@ Vietnamese:
 ```
 Kính gửi anh/chị [Tên] / Quý khách,
 
-Cảm ơn anh/chị đã gửi email về kỳ lưu trú từ [DD/MM/YYYY] đến [DD/MM/YYYY].
+Cảm ơn anh/chị đã báo cho HAYA.
 
-[HAYA đã ghi nhận anh/chị đến khoảng [HH:MM] ngày [DD/MM/YYYY] và sẽ báo bộ phận lễ tân. Giờ nhận phòng từ 14:00, nên đến buổi tối là nhận phòng bình thường, không phụ thu.]
+[Giữ dòng nào đúng, theo thứ tự khách hỏi:
+HAYA đã ghi nhận anh/chị đến khoảng [HH:MM] ngày [DD/MM/YYYY], lễ tân sẽ chờ đón anh/chị.
+HAYA ghi nhận yêu cầu [xếp 2 phòng cùng tầng] tùy tình trạng phòng.
+Phòng [hạng phòng] có 1 giường [1m8].
+Giờ trả phòng là 12:00. Trả phòng muộn tùy tình trạng phòng, phụ thu [% của giá phòng 1 đêm: khách sạn xác nhận]: 25% đến 15:00, 50% đến 18:00, 100% sau 18:00.
+[gửi hành lý sau khi trả phòng: khách sạn xác nhận]]
 
-[HAYA đã ghi nhận yêu cầu [xếp phòng cùng tầng / phòng thông nhau / …] và sẽ chuyển bộ phận lễ tân. Yêu cầu này tùy tình trạng phòng.]
-
-[Giờ trả phòng là 12:00. Trả phòng muộn tùy tình trạng phòng, phụ thu theo % của [giá phòng 1 đêm: khách sạn xác nhận]:
-• Trả phòng 12:00 – 15:00: 25%
-• Trả phòng 15:00 – 18:00: 50%
-• Trả phòng sau 18:00: 100%]
-
-[Trả lời từng câu hỏi khác từ hotel-info.md, hoặc khoảng trống: [gửi hành lý sau khi trả phòng: khách sạn xác nhận]]
-
-Hân hạnh được đón tiếp anh/chị tại HAYA Hotel Phu Quoc.
+[Chúc anh/chị chuyến đi thuận lợi, hẹn gặp anh/chị tại HAYA. / Hân hạnh được đón tiếp khách của anh/chị.]
 
 Best,
 HAYA Team
 ```
+
+**How the live-run drafts should have read** (2026-10-22; guest names replaced, refs shortened):
+
+A Trip.com guest (from a `@guest.trip.com` relay address, which is fine to reply to) says they land at 23:35 on 01/11 and will take a taxi:
+```
+Dear Minjun Park,
+
+Thank you for letting us know. We have noted your arrival at around 23:35 on 01/11/2026, and our front office will be expecting you.
+
+Have a safe trip, and we look forward to welcoming you to Phu Quoc.
+
+Best,
+HAYA Team
+```
+(A From name written in capitals, "MINJUN PARK", may be written in normal capitals. Never reorder or shorten it, and never guess Mr./Ms.)
+
+RezLive's reconfirmation team asks for a king-size bed in a Deluxe Double, 08–11/11/2026. Front office forwarded it in, so this goes `--to ssr@rezlive.com --cc haya@haya-hotels.com`, with no separate forward:
+```
+Dear Reconfirmation Team,
+
+Thank you for your email. The Deluxe Double Seaview booked for Mr. [Guest] and Ms. [Guest] (08/11/2026 – 11/11/2026, confirmation [AGIN…]) has one 1.8 m bed, so the king-size bed request is noted and our front office has it.
+
+We look forward to welcoming your guests.
+
+Best,
+HAYA Team
+```
+
+---
+
+## 6. Short replies: a decline, a "thank you", a "noted" (dev, 2026-10-22)
+**Status: default written 2026-10-22 from the sent emails, not yet approved by Karen.** `--kind reply`.
+
+- **They decline an offer or quote** ("Not interested, booked elsewhere"): **reply, in one or two lines.** HAYA closes threads warmly (both approved cancellation templates end on a goodwill line). Thank them, then:
+  - they still have a booking with us → look forward to welcoming them on the arrival date;
+  - they don't → "We hope to welcome you on another occasion."
+  Don't repeat what they declined and don't try to win them back with a better price (that's a money decision, Karen's).
+  If they say they booked "the same days through Booking.com" (or another OTA), it may be a booking at HAYA: the scan report says to watch for a matching OTA booking.
+- **A plain "thank you", "received", "ok"** with nothing to answer or record → no draft. One line in the scan report: "không cần trả lời".
+
+The decline from the live run (a direct guest who still has two suites booked for 18–20/11/2026; haya@ forwarded it in, but the guest had also written to sales@, so the reply goes on that original):
+```
+Dear Mr [Name],
+
+Thank you for letting us know. We look forward to welcoming you on 18/11/2026.
+
+Best,
+HAYA Team
+```
+Vietnamese: "Cảm ơn anh/chị đã báo cho HAYA. Hẹn gặp anh/chị ngày [DD/MM/YYYY]." / "Hy vọng sẽ được đón tiếp anh/chị vào dịp khác."
 
 ---
 

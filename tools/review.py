@@ -18,6 +18,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
+from .graph_mail import reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -78,8 +79,10 @@ def notify(tg, n, r, note="", in_place=False):
         return None
     text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + f"\n… (nhắn: xem {n} để đọc hết)"
     lines = [f"✉️ <b>{esc(_headline(n, r))}</b>",
-             f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
-             f"<b>Tiêu đề:</b> {esc(r['subject'])}"]
+             f"<b>Gửi:</b> {esc(', '.join(r['to']))}"]
+    if r.get("cc"):
+        lines.append(f"<b>Cc:</b> {esc(', '.join(r['cc']))}")
+    lines.append(f"<b>Tiêu đề:</b> {esc(r['subject'])}")
     if r.get("attachments"):
         lines.append(f"<b>Đính kèm:</b> {esc(', '.join(r['attachments']))}")
     if note:
@@ -115,34 +118,43 @@ def _mark(tg, r, note):
 # --- a new draft ---
 
 def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-           attachments=()):
-    """Outlook mode: called right after the draft is saved in Outlook. Returns the review number."""
+           cc=None, override=False, attachments=()):
+    """Outlook mode: called right after the draft is saved in Outlook. Returns the review number.
+    override=True: a reply whose recipients were set by --to (the draft is rebuilt with them on rewrite)."""
     d = mail.get_draft(draft_id) or {}
     n = st.open_review(draft_id, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
-                       to=_addresses(d.get("toRecipients")) or list(to or []), subject=d.get("subject", ""),
-                       text=text, attachments=list(attachments), files=[])
+                       to=_addresses(d.get("toRecipients")) or list(to or []),
+                       cc=_addresses(d.get("ccRecipients")) or list(cc or []), to_override=bool(override),
+                       subject=d.get("subject", ""), text=text, attachments=list(attachments), files=[])
     notify(tg, n, st.data["reviews"][n])
     return n
 
 
 def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-            files=(), mailbox=""):
+            cc=None, files=(), mailbox=""):
     """Telegram mode: nothing goes to Outlook. The draft (text + files under store/<n>/) waits for Accept.
-    files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'."""
+    files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'.
+    A reply with to=[...] goes to exactly to / cc (the real sender of a mail our staff forwarded in), and its
+    subject is 'RE: <original subject>' without the 'Fw:'; Accept writes it into Outlook the same way."""
     src = mail.get_message_text(source)
     subject = src.get("subject", "")
     prefix = "FW: " if how == "forward" else "RE: "
     if not subject.upper().startswith(prefix.strip()):
         subject = prefix + subject
+    override = how == "reply" and bool(to)
     if how == "forward":
         recipients = list(to or [])
+    elif override:
+        recipients = list(to)
+        subject = reply_subject(src.get("subject", ""))
     else:
         recipients = _addresses([src.get("from")])
         if reply_all:
             others = _addresses(src.get("toRecipients")) + _addresses(src.get("ccRecipients"))
             recipients += [a for a in others if a.lower() != mailbox.lower() and a not in recipients]
     n = st.open_review(None, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
-                       to=recipients, subject=subject, text=text, attachments=[], files=[])
+                       to=recipients, cc=list(cc or []) if override else [], to_override=override,
+                       subject=subject, text=text, attachments=[], files=[])
     r = st.data["reviews"][n]
     r["draft_id"] = PENDING + n
     for name, data, ctype in files:
@@ -184,12 +196,19 @@ def _repoint(st, old, new):
                 v["draft_id"] = new
 
 
+def _write(mail, r, text):
+    """The draft for review r, written into Outlook: a forward, a reply to whoever sent the source, or a reply
+    to the addresses --to gave."""
+    if r["how"] == "forward":
+        return mail.forward_draft_with_text(r["source"], r["to"], text)
+    if r.get("to_override"):
+        return mail.reply_draft_with_text(r["source"], text, to=r["to"], cc=r.get("cc") or [])
+    return mail.reply_draft_with_text(r["source"], text, reply_all=r.get("reply_all", False))
+
+
 def _to_outlook(mail, st, r):
     """Accept in Telegram mode: write the draft into Outlook Drafts now, files attached."""
-    if r["how"] == "forward":
-        d = mail.forward_draft_with_text(r["source"], r["to"], r["text"])
-    else:
-        d = mail.reply_draft_with_text(r["source"], r["text"], reply_all=r.get("reply_all", False))
+    d = _write(mail, r, r["text"])
     for f in r.get("files", []):
         with open(f["path"], "rb") as fh:
             mail.add_attachment(d["id"], f["name"], fh.read(), content_type=f["contentType"])
@@ -279,10 +298,7 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     old = r["draft_id"]
     files = [a for a in mail.list_draft_attachments(old)
              if a.get("@odata.type") == "#microsoft.graph.fileAttachment" and not a.get("isInline") and a.get("data")]
-    if r["how"] == "forward":
-        d = mail.forward_draft_with_text(r["source"], r["to"], text)
-    else:
-        d = mail.reply_draft_with_text(r["source"], text, reply_all=r.get("reply_all", False))
+    d = _write(mail, r, text)
     for a in files:
         mail.add_attachment(d["id"], a["name"], a["data"], content_type=a.get("contentType") or "application/pdf")
     mail.delete_draft(old)
@@ -307,6 +323,8 @@ def info(mail, st, n, out=print):
     where = "in Outlook Drafts" if in_outlook(r) else "Telegram only, not in Outlook until Accept"
     out(f"status: {r['status']}" + (f" ({where})" if r["status"] == REVIEW_OPEN else ""))
     out(f"to: {', '.join(r['to'])}")
+    if r.get("cc"):
+        out(f"cc: {', '.join(r['cc'])}")
     out(f"subject: {r['subject']}")
     if r.get("attachments"):
         out(f"attachments: {', '.join(r['attachments'])}")

@@ -1,0 +1,20 @@
+{
+  "about": "Front office (haya@haya-hotels.com) forwards a RezLive special-request email (king-size bed, 08–11/11/2026) into sales@. Copy of drafts #7/#8 from the live run of 2026-10-22, refs prefixed TEST-: the reply went to haya@ and a 'forward to front office' went back to haya@, who sent it to us.",
+  "needs": "Nothing on the sheet. TEST-AGIN0116572610466700 must NOT be there (a request on an existing booking makes no row).",
+  "want": "One reply, --kind request, made with draft-reply --to ssr@rezlive.example --cc haya@haya-hotels.com: subject 'RE: TEST-REZ6AD9A3A2: …' (no Fw:), short, says the king-size bed is noted for the two guests and the dates (the Deluxe Double has one 1.8 m bed), subject to availability. No forward back to haya@. No intake row, no confirmation.",
+  "cleanup": [
+    {"ref": "TEST-AGIN0116572610466700"}
+  ],
+  "expect": [
+    {"ref": "TEST-AGIN0116572610466700", "action": "NEW", "rows": 0}
+  ],
+  "drafts": {
+    "max_confirmations": 0,
+    "reply_to": ["ssr@rezlive.example"],
+    "no_reply_to_domain": ["haya-hotels.com", "palmahotel.vn"],
+    "no_forward_to": ["haya@haya-hotels.com"],
+    "must_not_contain": ["available to us", "get back to you", "Thank you for your email about", "normal check-in",
+                         "no extra charge"],
+    "kinds": {"request": 1, "forward": 0, "inquiry": 0, "confirmation": 0}
+  }
+}

@@ -16,7 +16,7 @@ Tờ thông tin ngắn Emi dùng khi khách hoặc đại lý hỏi về khách 
 
 ## Nhận phòng / trả phòng
 - **Nhận phòng sau 14:00, trả phòng trước 12:00.** Nguồn: `direct.md`, `ta.md` (trang 4 file TA).
-- **Khách đến muộn (ví dụ 21:00) là nhận phòng bình thường**, không phải nhận phòng sớm hay trả phòng muộn. Không có phụ thu, không viết "tùy tình trạng phòng". Thư trả lời: đã ghi nhận giờ đến và sẽ báo lễ tân (bản chuyển tiếp còn chờ người duyệt, nên không viết "đã báo"). Giờ đến luôn chuyển cho lễ tân (`skills/department-forwards.md`). Khách đến sau nửa đêm hoặc hỏi lễ tân có trực 24 giờ không → xem "Chưa biết".
+- **Khách đến muộn (ví dụ 21:00) là nhận phòng bình thường**, không phải nhận phòng sớm hay trả phòng muộn. Không có phụ thu, không viết "tùy tình trạng phòng". Đây là để Emi hiểu, **không viết vào thư**: thư chỉ nói đã ghi nhận giờ đến và lễ tân sẽ chờ đón ("our front office will be expecting you" / "lễ tân sẽ chờ đón anh/chị"), không giải thích giờ nhận phòng hay phụ thu khi khách không hỏi (`skills/email-templates.md` mục 5). Giờ đến luôn chuyển cho lễ tân (`skills/department-forwards.md`). Khách **hỏi** lễ tân có trực 24 giờ không → xem "Chưa biết".
 - **Phụ thu nhận phòng sớm / trả phòng muộn** — chỉ khi nhận phòng **trước 14:00** hoặc trả phòng **sau 12:00**:
 
   | Nhận phòng | Trả phòng | Phụ thu |
@@ -45,6 +45,21 @@ Tờ thông tin ngắn Emi dùng khi khách hoặc đại lý hỏi về khách 
 Giá 1 chiều cho **đại lý (TA)**, từ `ta.md`: sân bay–Haya ngày thường 200.000 (4 chỗ) / 250.000 (7 chỗ) / 400.000 (16 chỗ); ngày lễ 300.000 / 400.000 / 650.000. Bến tàu: xem `ta.md` (cột ngày lễ in sai, ⚠ hỏi Karen).
 - Không miễn phí. Không có giá cho khách lẻ / khách OTA (`direct.md`, "Không có trên file") → `[giá đưa đón: khách sạn xác nhận]`.
 - Không **hỏi** khách có cần đưa đón không (`skills/email-templates.md`, luật đã tạm dừng). Khách tự hỏi → trả lời theo trên.
+
+## Giường theo hạng phòng
+Nguồn: bảng giá TA (`ta.md`, cột "Giường"). Dùng khi khách hỏi loại giường: nếu hạng phòng đã đặt có sẵn giường khách muốn, thư nói thẳng cỡ giường thay vì "tùy tình trạng phòng".
+
+| Hạng phòng | Giường | Ghi chú cho thư |
+|---|---|---|
+| Standard Double | 1 giường 1m6 | Không phải giường king. Khách xin giường king → chỉ có ở hạng khác, có chênh lệch giá: không hứa, không tự đổi, báo Karen (AGENTS.md luật 8) |
+| Superior Twin | 2 giường 1m2 | Phòng 2 giường đơn |
+| Superior Double Pool View | 1 giường 1m8 | 1m8 = cỡ king |
+| Deluxe Double Seaview | 1 giường 1m8 | 1m8 = cỡ king. "Deluxe Double" trên voucher đại lý/B2B hiểu là hạng này (bảng TA chỉ có một hạng Deluxe Double; ⚠ giả định của dev 2026-10-22, chờ Karen xác nhận) |
+| Suite Seaview | 1 giường 2m | |
+| Triple | 1 giường 1m2 + 1 giường 1m6 | |
+| Quadruple | 2 giường 1m8 | |
+
+Tên hạng phòng trên OTA/SynXis khác tên trên bảng TA (ví dụ "Standard Garden View (1 Queen Bed)", "Suite Sea View (1 King Bed)"): dùng đúng tên trên voucher khi viết thư, cỡ giường theo bảng trên chỉ khi chắc chắn là cùng hạng phòng.
 
 ## Yêu cầu xếp phòng (cùng tầng, phòng thông nhau, loại giường, tầng cao…)
 Không có quy định trong file nào. Cách trả lời đã dùng: **"đã ghi nhận và chuyển lễ tân, tùy tình trạng phòng"** — không hứa. Luôn chuyển cho lễ tân (`skills/department-forwards.md`). Không phải là yêu cầu miễn phí/nâng hạng; nếu khách xin nâng hạng phòng → Karen (AGENTS.md luật 8).

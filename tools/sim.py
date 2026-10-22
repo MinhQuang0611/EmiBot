@@ -7,7 +7,10 @@ sim-reset copies the inbox to <work dir>/sim/<scenario>/ (fresh state, no drafts
 scenario's TEST- rows from the sandbox sheet; sim-check grades the sheet and the drafts.
 
 scenario.json "drafts" rules: max_confirmations, must_not_contain [text], must_include_forward_to [address],
-kinds {kind: n} (n >= 1 = at least n drafts of that --kind, 0 = none). Drafts are read from drafts/ and from
+kinds {kind: n} (n >= 1 = at least n drafts of that --kind, 0 = none), reply_to [address] (a reply goes to it),
+no_reply_to_domain [domain] (no reply's To is at that domain: a mail forwarded in by our staff is answered to
+the original sender), no_forward_to [address] (nothing is forwarded there, e.g. back to the colleague who
+forwarded it in). Drafts are read from drafts/ and from
 the reviews in state.json, so Telegram-mode drafts (not in Outlook until Accept) are graded too.
 """
 import glob
@@ -83,14 +86,15 @@ def collect_drafts(target):
             continue  # sent or deleted in Outlook
         seen.add(did)
         drafts.append({"id": f"#{n}", "kind": r.get("kind", ""), "how": r.get("how", ""),
-                       "status": r.get("status", ""), "to": list(r.get("to", [])),
+                       "status": r.get("status", ""), "to": list(r.get("to", [])), "cc": list(r.get("cc", [])),
                        "subject": r.get("subject", ""), "text": r.get("text", ""),
                        "attachments": list(r.get("attachments", []))})
     for did, d in files.items():  # a draft written without a review record
         if did in seen:
             continue
         drafts.append({"id": did, "kind": st.get("drafts", {}).get(did, {}).get("kind", d["kind"]),
-                       "how": d["kind"], "status": "outlook", "to": d["to"], "subject": d["subject"],
+                       "how": d["kind"], "status": "outlook", "to": d["to"], "cc": d.get("cc", []),
+                       "subject": d["subject"],
                        "text": d["text"], "attachments": [a["name"] for a in d["attachments"]]})
     return drafts, st
 
@@ -138,13 +142,24 @@ def check(sheet, name, work_dir, out=print):
     for address in rules.get("must_include_forward_to", []):
         hits = [d["id"] for d in drafts if d["how"] == "forward" and address.lower() in [a.lower() for a in d["to"]]]
         verdict(bool(hits), f"a forward to {address}" + (f" ({hits})" if hits else ": none"))
+    replies = [d for d in drafts if d["how"] == "reply"]
+    for address in rules.get("reply_to", []):
+        hits = [d["id"] for d in replies if address.lower() in [a.lower() for a in d["to"]]]
+        verdict(bool(hits), f"a reply to {address}" + (f" ({hits})" if hits else ": none"))
+    for domain in rules.get("no_reply_to_domain", []):
+        bad = [f"{d['id']} to {a}" for d in replies for a in d["to"] if a.lower().endswith("@" + domain.lower())]
+        verdict(not bad, f"no reply to @{domain}" + (f" (found {bad})" if bad else ""))
+    for address in rules.get("no_forward_to", []):
+        bad = [d["id"] for d in drafts if d["how"] == "forward" and address.lower() in [a.lower() for a in d["to"]]]
+        verdict(not bad, f"no forward to {address}" + (f" (found {bad})" if bad else ""))
     for kind, want in rules.get("kinds", {}).items():  # {"request": 1} = at least one; {"inquiry": 0} = none
         got = sum(1 for d in drafts if d["kind"] == kind)
         verdict(got == 0 if want == 0 else got >= want,
                 f"drafts of kind {kind!r}: {got}, want " + ("none" if want == 0 else f"at least {want}"))
     out(f"drafts written: {len(drafts)}")
     for d in drafts:
-        out(f"--- {d['id']} {d['kind']} ({d['how']}, {d['status']}) to {', '.join(d['to'])} | {d['subject']}"
+        out(f"--- {d['id']} {d['kind']} ({d['how']}, {d['status']}) to {', '.join(d['to'])}"
+            + (f" cc {', '.join(d['cc'])}" if d.get("cc") else "") + f" | {d['subject']}"
             + (f" | attachments {d['attachments']}" if d["attachments"] else ""))
         out(d["text"])
     out(f"\nRESULT: {'PASS' if not fails else 'FAIL'} ({len(fails)} failed check(s))")

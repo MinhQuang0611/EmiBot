@@ -51,9 +51,14 @@ class NoRows:
         return []
 
 
-GOOD_REPLY = ("Dear Guest,\n\nThank you for your email about your stay from 14/11/2026 to 17/11/2026.\n\n"
-              "We have noted your arrival at around 21:00 on 14/11/2026 and will pass it to our front office.\n\n"
-              "[luggage storage after check-out: hotel to confirm]\n\nBest,\nHAYA Team")
+GOOD_REPLY = ("Dear Guest,\n\nThank you for your email. We have noted your request for two rooms on the same floor, "
+              "subject to availability, and your arrival at around 21:00 on 14/11/2026: our front office will be "
+              "expecting you. Check-out is at 12:00; late check-out is subject to availability and charged at "
+              "[% of one night's room rate: hotel to confirm]. [luggage storage after check-out: hotel to confirm]"
+              "\n\nWe look forward to welcoming you.\n\nBest,\nHAYA Team")
+OLD_STYLE = ("Dear Guest,\n\nThank you for your email about your stay from 14/11/2026 to 17/11/2026.\n\nWe have noted "
+             "your arrival at around 21:00 on 14/11/2026 and will pass it to our front office. Check-in is from 14:00, "
+             "so an evening arrival is a normal check-in with no extra charge.\n\nBest,\nHAYA Team")
 BAD_REPLY = ("Dear 유정아,\n\nThe luggage-storage policy is not shown in the reservation record currently "
              "available to us.\n\nBest,\nHAYA Team")
 FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có trên sheet intake\n"
@@ -108,6 +113,15 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.assertTrue(ok, report)
         self.assertIn("PASS a forward to haya@haya-hotels.com", report)
         self.assertIn("PASS drafts of kind 'request': 1", report)
+
+    def test_robotic_reply_fails(self):
+        self.draft(OLD_STYLE, "request")  # draft #3 of the live run, 2026-10-22
+        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        ok, report = self.grade()
+        self.assertFalse(ok)
+        for line in ("FAIL no draft says 'normal check-in'", "FAIL no draft says 'no extra charge'",
+                     "FAIL no draft says 'Thank you for your email about'"):
+            self.assertIn(line, report)
 
     def test_first_live_run_fails(self):
         self.draft(BAD_REPLY, "inquiry")  # draft #2 as it was: wrong kind, blind-spot sentences, no forward

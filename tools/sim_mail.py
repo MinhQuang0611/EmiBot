@@ -15,7 +15,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from datetime import timezone
 
-from .graph_mail import text_to_html
+from .graph_mail import reply_subject, text_to_html
 
 
 def _thread_key(subject):
@@ -94,25 +94,33 @@ class SimMail:
 
     # --- drafts, to files ---
 
-    def _write_draft(self, kind, message_id, to, text):
+    def _write_draft(self, kind, message_id, to, text, cc=(), subject=None):
         os.makedirs(self.drafts, exist_ok=True)
         n = len(glob.glob(os.path.join(self.drafts, "*.json"))) + 1
         did = f"sim-draft-{n:03d}"
         src = self._load().get(message_id, {})
-        subject = src.get("subject", "")
-        prefix = "RE: " if kind == "reply" else "FW: "
-        if not subject.upper().startswith(prefix.strip()):
-            subject = prefix + subject
+        if subject is None:
+            subject = src.get("subject", "")
+            prefix = "RE: " if kind == "reply" else "FW: "
+            if not subject.upper().startswith(prefix.strip()):
+                subject = prefix + subject
         meta = {"id": did, "kind": kind, "in_reply_to": message_id, "subject": subject,
-                "to": to, "attachments": [], "text": text}
+                "to": list(to), "cc": list(cc), "attachments": [], "text": text}
         with open(os.path.join(self.drafts, did + ".json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
+        cc_line = f"<br><b>Cc:</b> {', '.join(cc)}" if cc else ""
         with open(os.path.join(self.drafts, did + ".html"), "w", encoding="utf-8") as f:
-            f.write(f"<p><b>To:</b> {', '.join(to)}<br><b>Subject:</b> {meta['subject']}</p>\n{text_to_html(text)}")
+            f.write(f"<p><b>To:</b> {', '.join(to)}{cc_line}<br><b>Subject:</b> {meta['subject']}</p>\n"
+                    f"{text_to_html(text)}")
         return {"id": did}
 
-    def reply_draft_with_text(self, message_id, text, reply_all=False):
-        sender = self._load()[message_id]["from"]["emailAddress"]["address"]
+    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None):
+        """Same as GraphMail: to=[...] replaces the recipients and the subject loses its 'Fw:'."""
+        m = self._load()[message_id]
+        if to:
+            return self._write_draft("reply", message_id, list(to), text, cc=list(cc or []),
+                                     subject=reply_subject(m["subject"]))
+        sender = m["from"]["emailAddress"]["address"]
         return self._write_draft("reply", message_id, [sender], text)
 
     def forward_draft_with_text(self, message_id, to, text):
@@ -144,6 +152,7 @@ class SimMail:
             return None
         return {"id": draft_id, "subject": meta["subject"], "isDraft": True,
                 "toRecipients": [{"emailAddress": {"address": a}} for a in meta["to"]],
+                "ccRecipients": [{"emailAddress": {"address": a}} for a in meta.get("cc", [])],
                 "categories": meta.get("categories", ["Emi"]), "hasAttachments": bool(meta["attachments"])}
 
     def approve_draft(self, draft_id):

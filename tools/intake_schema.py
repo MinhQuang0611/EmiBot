@@ -28,7 +28,10 @@ ENUMS = {
     "action": ("NEW", "CHANGE", "CANCEL"),
     "property": ("HAYA",),  # Palma is not Emi's (AGENTS.md rule 11)
     "channel_type": ("TA", "OTA", "Direct", "Tour operator"),
-    "rate_source": ("TA card", "Anex contract", "OTA net", "Special (Karen)", "Other"),
+    # "<operator> contract" for every tour operator with a contract this season (booking-intake.md, Rates).
+    # Fun and Sun has none. The sheet's own instruction still lists only "Anex contract".
+    "rate_source": ("TA card", "Anex contract", "Odeon contract", "Pegas contract", "Crystal Bay contract",
+                    "Selfie contract", "OTA net", "Special (Karen)", "Other"),
     "status": ("Definite", "Tentative", "Cancelled"),
     "priority": ("Normal", "Urgent"),
 }
@@ -40,6 +43,115 @@ AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "Surch
            "Payment 1", "Payment 2", "Remaining amount")
 AGENCY_CHANNELS = ("TA", "Tour operator")
 NEVER_FOR_AGENCIES = ("TW-DLX",)  # MEMORY: never TW-DLX or APT to agencies
+# Where the detail goes instead, added to an enum error ("Tour operator (Anex)", "OTA net (Expedia remittance)").
+ENUM_HINTS = {"channel_type": "; the operator's or OTA's name goes in company",
+              "rate_source": "; how the rate was worked out goes in notes item 6"}
+
+# One spelling per channel in `company`: the tour operators and OTAs named in MEMORY.md (2026-10-09).
+# The sheet wants the name "exactly as in Ezfolio"; Karen has not confirmed these against EZFOLIO's list yet.
+# Values: other spellings seen or likely, written the way _norm() leaves them.
+CANONICAL_COMPANIES = {
+    "Anex": ("anex tour", "anextour"),
+    "Odeon": ("odeon tours",),
+    "Pegas": ("pegas touristik", "pegast"),
+    "Crystal Bay": ("crystalbay",),
+    "Selfie": ("selfie travel",),
+    "Fun and Sun": ("fun sun", "funsun", "funandsun"),
+    "Booking.com": ("booking com",),
+    "Agoda": (),
+    "Expedia": (),
+    "Trip.com": ("trip com", "ctrip"),
+    "Traveloka": (),
+    "MG": ("mg bedbank", "mgbedbank", "mg holiday", "mg holidays"),
+    "Ohmyhotel": ("oh my hotel",),
+    "MakeMyTrip": ("make my trip",),
+    "Dida Travel": ("dida",),
+    "Mytour": ("my tour",),
+    "VNTrip": ("vn trip",),
+    "SynXis": ("sabre synxis",),
+}
+# Dropped from the end of a company name before matching: "BOOKING.COM BV", "Agoda Company Pte Ltd".
+LEGAL_SUFFIXES = {"bv", "ltd", "llc", "inc", "pte", "co", "company", "limited", "jsc", "gmbh", "corp",
+                  "corporation", "plc", "sa", "ag"}
+# nationality: full English country name. Codes seen or likely on vouchers, for the error message.
+COUNTRY_CODES = {
+    "VN": "Vietnam", "VNM": "Vietnam", "IN": "India", "IND": "India", "RU": "Russia", "RUS": "Russia",
+    "KR": "South Korea", "KOR": "South Korea", "CN": "China", "CHN": "China", "TW": "Taiwan", "TWN": "Taiwan",
+    "JP": "Japan", "JPN": "Japan", "MY": "Malaysia", "MYS": "Malaysia", "SG": "Singapore", "SGP": "Singapore",
+    "TH": "Thailand", "THA": "Thailand", "PH": "Philippines", "PHL": "Philippines", "ID": "Indonesia",
+    "IDN": "Indonesia", "HK": "Hong Kong", "HKG": "Hong Kong", "US": "United States", "USA": "United States",
+    "UK": "United Kingdom", "GB": "United Kingdom", "GBR": "United Kingdom", "AU": "Australia",
+    "AUS": "Australia", "CA": "Canada", "CAN": "Canada", "DE": "Germany", "DEU": "Germany", "GER": "Germany",
+    "FR": "France", "FRA": "France", "KZ": "Kazakhstan", "KAZ": "Kazakhstan", "UZ": "Uzbekistan",
+    "UZB": "Uzbekistan", "IR": "Iran", "IRN": "Iran", "IL": "Israel", "ISR": "Israel",
+    "AE": "United Arab Emirates", "ARE": "United Arab Emirates", "UAE": "United Arab Emirates",
+}
+REF_EXAMPLE = "'1783017402 / 92777EF002717'"
+NOTES_EXAMPLE = "'1. Booking.com – Ref 5374635524'"
+
+
+def _norm(name):
+    """'BOOKING.COM BV' -> 'bookingcom bv'; 'Fun&Sun' -> 'fun and sun'."""
+    s = str(name).lower().replace("&", " and ").replace(".", "")
+    return " ".join(re.sub(r"[^\w]+", " ", s).split())
+
+
+_COMPANY_KEYS = {}
+for _canon, _aliases in CANONICAL_COMPANIES.items():
+    for _key in (_norm(_canon),) + _aliases:
+        _COMPANY_KEYS[_key] = _canon
+
+
+def _match_company(name):
+    """(canonical name, extra words) for a known channel, else (None, '')."""
+    words = _norm(name).split()
+    while len(words) > 1 and words[-1] in LEGAL_SUFFIXES:
+        words.pop()
+    s = " ".join(words)
+    for key in sorted(_COMPANY_KEYS, key=len, reverse=True):
+        if s == key or s.startswith(key + " "):
+            return _COMPANY_KEYS[key], s[len(key):].strip().title()
+    return None, ""
+
+
+def canonical_company(name):
+    """The one spelling for a known channel, or None. 'ANEX KHABAROVSK' -> 'Anex', 'BOOKING.COM BV' -> 'Booking.com'.
+    A known name followed by more words (an office, a city) still counts: the extra goes in notes item 1."""
+    return _match_company(name)[0]
+
+
+def ref_parts(booking_ref):
+    """The separate reference numbers in one booking_ref: '1783017402 / 92777EF002717' -> both.
+    For the duplicate check: an OTA email and its SynXis notice each carry one of them."""
+    return [p.strip() for p in str(booking_ref).split(" / ") if p.strip()]
+
+
+def _ref_problems(ref):
+    found = []
+    if re.search(r"[()]", ref):
+        found.append("brackets")
+    norm = _norm(ref)
+    words = sorted({_COMPANY_KEYS[k] for k in _COMPANY_KEYS if re.search(rf"(?<!\w){re.escape(k)}(?!\w)", norm)})
+    if words:
+        found.append("the channel name " + "/".join(words))
+    return found
+
+
+def _notes_problems(rec, g):
+    """NOTES RULE: exactly 7 lines, numbered 1. to 7., item 1 = '<company> – Ref <booking_ref>'."""
+    lines = [x.strip() for x in g("notes").splitlines() if x.strip()]
+    nums = [m.group(1) for m in (re.match(r"([0-9]+)\.\s", x) for x in lines) if m]
+    if nums != list("1234567") or len(lines) != 7:
+        return [f"notes: NOTES RULE wants exactly 7 lines numbered '1. ' to '7. ', one item per line "
+                f"(found {len(lines)} line(s), numbered {nums or 'none'}); format in booking-intake.md"]
+    want = []
+    if g("company") and not lines[0][3:].startswith(g("company")):
+        want.append(f"start with the company {g('company')!r}")
+    if g("booking_ref") and f"Ref {g('booking_ref')}" not in lines[0]:
+        want.append(f"contain 'Ref {g('booking_ref')}'")
+    if want:
+        return [f"notes: item 1 should " + " and ".join(want) + f", e.g. {NOTES_EXAMPLE}"]
+    return []
 
 
 def _blank(v):
@@ -59,12 +171,26 @@ def check_row(rec, room_codes=None):
     g = lambda k: str(rec.get(k, "") if rec.get(k) is not None else "").strip()
     action = g("action")
     note = g("missing_info")
+    built = g("tracy_status") in ("Entered", "Problem")  # the build tool has been at this row
+
+    # 2026-10-22, row 79: only source_email "s", typed by hand. Not a booking; say so instead of 9 errors.
+    filled = [k for k in rec if k != "_row" and g(k) and not (k == "tracy_status" and g(k) == "Pending")]
+    if len(filled) <= 2:
+        return ([f"row: only {len(filled)} cell(s) filled ({', '.join(filled) or 'none'}) — an accidental "
+                 f"partial write, not a booking. Write the whole booking with sheet-append; a stray row "
+                 f"already on the sheet goes to Karen to delete"], [])
 
     for k in ALWAYS:
         if k == "booking_ref" and g("channel_type") == "Direct":
             continue  # a direct guest has no agency code
+        if k == "nationality" and "nationality" in note.lower():
+            continue  # only a source market / residence given: blank, named in missing_info
         if _blank(rec.get(k)):
-            errors.append(f"{k}: never blank" + (" (TBA if names not given)" if k == "guest_names" else ""))
+            errors.append(f"{k}: never blank" + {
+                "guest_names": " (TBA if names not given)",
+                "nationality": " — from the passport or nationality field (or the names); if the email gives "
+                               "only a market or country of residence, write 'nationality – only source market "
+                               "<X> given' in missing_info"}.get(k, ""))
     direct = g("channel_type") == "Direct"
     if direct and g("company"):
         # 2026-10-22: row 57 had the guest's own name as company and "new company" in missing_info
@@ -87,13 +213,15 @@ def check_row(rec, room_codes=None):
 
     for k, allowed in ENUMS.items():
         if g(k) and g(k) not in allowed:
-            errors.append(f"{k}: {g(k)!r} not allowed; use one of {list(allowed)}")
+            errors.append(f"{k}: {g(k)!r} not allowed; use one of {list(allowed)}{ENUM_HINTS.get(k, '')}")
     for k, allowed in PREFIX_ENUMS.items():
         if g(k) and not g(k).startswith(allowed):
             errors.append(f"{k}: must start with {' or '.join(allowed)}")
     for k in DATES:
-        if g(k) and not _date(g(k), "%d/%m/%Y"):
-            errors.append(f"{k}: {g(k)!r} is not DD/MM/YYYY")
+        # hold_until: an agency's time limit often has an hour ("07/10/2026 17:00"); dropping it would
+        # make the hold look a day long. Arrival/departure are dates only.
+        if g(k) and not _date(g(k), "%d/%m/%Y") and not (k == "hold_until" and _date(g(k), "%d/%m/%Y %H:%M")):
+            errors.append(f"{k}: {g(k)!r} is not DD/MM/YYYY" + (" (or DD/MM/YYYY HH:MM)" if k == "hold_until" else ""))
     for k in DATETIMES:
         if g(k) and not _date(g(k), "%d/%m/%Y %H:%M"):
             errors.append(f"{k}: {g(k)!r} is not DD/MM/YYYY HH:MM (Vietnam time)")
@@ -125,11 +253,42 @@ def check_row(rec, room_codes=None):
     if re.search(r"https?://|AAMk", g("source_email") + " " + g("notes")):
         errors.append("source_email/notes: no links or email IDs")
     for k in NOT_EMI:
-        if g(k) and not (k == "tracy_status" and g(k) == "Pending") and action == "NEW":
+        # Once the build tool has set Entered/Problem its own cells are filled; a later sheet-update
+        # (a payment slip) must still pass. intake_sheet refuses Emi writing tracy_status/pdf_link anyway.
+        if g(k) and not (k == "tracy_status" and g(k) == "Pending") and action == "NEW" and not built:
             errors.append(f"{k}: filled by the build tool, leave blank on a NEW row")
 
-    if action in ("NEW", "CHANGE") and g("notes") and not g("notes").startswith("1."):
-        warnings.append("notes: NOTES RULE wants the EZFOLIO Notice numbered 1–7, one item per line")
+    # booking_ref: the reference number(s) only, so the duplicate check (exact match) and sheet-find
+    # (substring) find the booking from either the OTA's email or its SynXis notice.
+    ref_bad = _ref_problems(g("booking_ref")) if g("booking_ref") else []
+    if ref_bad:
+        msg = (f"booking_ref: {g('booking_ref')!r} has {' and '.join(ref_bad)} in it. Write the reference "
+               f"number(s) only, two joined by ' / ', e.g. {REF_EXAMPLE}; the channel goes in company")
+        if g("pdf_link") or built:
+            # The confirmation record is keyed by booking_ref + row: renaming a built row could re-draft it.
+            warnings.append(msg + " (row already built: leave it, Karen decides)")
+        else:
+            errors.append(msg)
+    canon, extra = _match_company(g("company")) if g("company") and not direct else (None, "")
+    if canon and g("company") != canon:
+        warnings.append(f"company: {g('company')!r} is {canon!r} — write {canon!r}, one spelling per channel "
+                        f"(the EZFOLIO name, Karen to confirm); a legal suffix (BV, Ltd) is dropped"
+                        + (f", the office goes in notes item 1: '1. {canon} ({extra}) – Ref {g('booking_ref')}'"
+                           if extra else ""))
+    if canon == "SynXis":
+        warnings.append("company: SynXis is the channel manager; write the OTA the notice names "
+                        "(Booking.com, Expedia, Agoda…) and SynXis only if it names none")
+    for part in re.split(r"\s*[;,/]\s*", g("nationality")):
+        if re.fullmatch(r"[A-Za-z]{2,3}", part):
+            name = COUNTRY_CODES.get(part.upper())
+            errors.append(f"nationality: {part!r} is a code; write the full English country name"
+                          + (f" ({name!r})" if name else ""))
+
+    if action in ("NEW", "CHANGE") and g("notes"):
+        warnings += _notes_problems(rec, g)
+    if action == "CANCEL" and g("notes") and not g("notes").startswith("Cancellation charge"):
+        warnings.append("notes: a CANCEL row's notes is the one line 'Cancellation charge (<policy>): <amount> "
+                        "VND — <days> days before check-in, <rule>. Paid: <amount>.' (booking-intake.md)")
     avg, rooms, nights, total = (g("Average rate per night after discount"), g("rooms"), g("nights"), g("total_vnd"))
     extra = g("Surcharge amount") or "0"
     if all(x.isdigit() for x in (avg, rooms, nights, total, extra)):

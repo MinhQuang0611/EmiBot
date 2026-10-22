@@ -220,6 +220,13 @@ class SheetCommandsTest(unittest.TestCase):
         emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
         self.assertEqual(appended(http)[0]["action"], "CHANGE")
 
+    def test_new_refused_when_one_of_its_numbers_is_on_the_sheet(self):
+        sh, _ = real_sheet([["NEW", "", "", "", "", "", "", "", "1783017402 / 92777EF002717"]])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": dict(BOOKING, booking_ref="92777EF002717"), "room_lines": [DLX]},
+                             out=lambda *_: None)
+        self.assertIn("92777ef002717 is already on the sheet", str(e.exception))
+
     def test_unknown_room_codes_tab_skips_that_check(self):
         sh, _ = real_sheet(codes=False)
         emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [dict(DLX, room_code="ANY")]}, out=lambda *_: None)
