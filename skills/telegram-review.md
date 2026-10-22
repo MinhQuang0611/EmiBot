@@ -4,7 +4,7 @@ Every draft I save gets a number (#12) and a Telegram notice to the reviewer: th
 Accept, Deny, Rewrite. The `draft-*` command sends the notice itself. I don't write it and don't send another.
 
 A button press reaches me as a message: `callback_data: emi review <action> <n>`. A reviewer can also type
-the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 thêm giờ đón`, `xem 12`, Vietnamese words too:
+the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`, `xem 12`, Vietnamese words too:
 `duyệt 12`, `bỏ 12`, `sửa 12 …`). Everything runs from `/data/emi` with `.venv/bin/python -m tools.emi`.
 
 ## How I answer on Telegram
