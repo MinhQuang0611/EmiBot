@@ -1,0 +1,25 @@
+{
+  "about": "Today's fixes (2026-10-27). 01 NEW TEST-2710: 2 STD + 1 TPL, 10–13/11/2026 — on the 27/10 availability sheet STD has none left on 11–12/11, so the rows are written but missing_info names availability (Emi doesn't decline). 02 deposit slip 8,000,000 → CHANGE rows with Payment 1, NEW rows untouched, forward to accounting. 03 flight VJ321 + vegetarian → its own CHANGE rows, forward to front office. 04 TA inquiry for 2 STD on the same dates + car parking + USD cash → reply offers a type that is free every night (not the STD rate 1,700,000), says no car parking and VND only (hotel-info.md, from the FAQ).",
+  "needs": "Nothing on the sheet for TEST-2710. The availability sheet as of 27/10/2026 (STD none left 11–12/11); re-check before running on a later day.",
+  "cleanup": [
+    {"ref": "TEST-2710"}
+  ],
+  "expect": [
+    {"ref": "TEST-2710", "action": "NEW", "rows": 2, "room_codes": ["STD", "TPL"],
+     "fields": {"arrival": "10/11/2026", "departure": "13/11/2026", "nights": "3", "channel_type": "TA",
+                "status": "Definite", "meal_plan": "BB"},
+     "contains": {"missing_info": "availability"},
+     "blank": ["Payment 1"]},
+    {"ref": "TEST-2710", "action": "CHANGE", "rows": 4, "room_codes": ["STD", "STD", "TPL", "TPL"],
+     "fields": {"company": "TEST Travel", "arrival": "10/11/2026", "departure": "13/11/2026"},
+     "nonblank": ["what_changed", "rate_per_night_vnd", "adults"]},
+    {"ref": "TEST-2710", "action": "CANCEL", "rows": 0}
+  ],
+  "drafts": {
+    "max_confirmations": 0,
+    "must_include_forward_to": ["accountant@palmahotel.vn", "haya@haya-hotels.com"],
+    "kinds": {"inquiry": 1, "confirmation": 0},
+    "must_contain": ["ô tô", "VND"],
+    "must_not_contain": ["1.700.000", "get back to you", "kiểm tra và phản hồi"]
+  }
+}

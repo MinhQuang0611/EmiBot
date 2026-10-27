@@ -6,7 +6,9 @@ test/sim/<scenario>/scenario.json what to clean before, what the sheet and draft
 sim-reset copies the inbox to <work dir>/sim/<scenario>/ (fresh state, no drafts) and deletes the
 scenario's TEST- rows from the sandbox sheet; sim-check grades the sheet and the drafts.
 
-scenario.json "drafts" rules: max_confirmations, must_not_contain [text], must_include_forward_to [address],
+scenario.json "expect" rules per ref + action: rows, rows_min, fields {col: exact}, contains {col: text},
+blank [col], nonblank [col], room_codes, notes_contains.
+scenario.json "drafts" rules: max_confirmations, must_contain [text], must_not_contain [text], must_include_forward_to [address],
 kinds {kind: n} (n >= 1 = at least n drafts of that --kind, 0 = none), reply_to [address] (a reply goes to it),
 no_reply_to_domain [domain] (no reply's To is at that domain: a mail forwarded in by our staff is answered to
 the original sender), no_forward_to [address] (nothing is forwarded there, e.g. back to the colleague who
@@ -123,6 +125,11 @@ def check(sheet, name, work_dir, out=print):
             verdict(got == sorted(e["room_codes"]), f"{label}: room codes {got}, want {sorted(e['room_codes'])}")
         for col in e.get("nonblank", []):
             verdict(rows and all(r.get(col, "").strip() for r in rows), f"{label}: {col} filled on every row")
+        for col in e.get("blank", []):  # e.g. Payment 1 stays off the NEW rows: a payment is a CHANGE row
+            verdict(rows and not any(r.get(col, "").strip() for r in rows), f"{label}: {col} blank on every row")
+        for col, text in e.get("contains", {}).items():  # every row's cell mentions it, case and 1.000/1,000 aside
+            verdict(rows and all(_digits(text).lower() in _digits(r.get(col, "")).lower() for r in rows),
+                    f"{label}: {col} mentions {text!r} on every row")
         for text in e.get("notes_contains", []):  # 2.100.000 = 2,100,000 = 2100000
             verdict(any(_digits(text) in _digits(r.get("notes", "")) for r in rows), f"{label}: notes mention {text!r}")
         for r in rows:
@@ -139,6 +146,9 @@ def check(sheet, name, work_dir, out=print):
     for text in rules.get("must_not_contain", []):
         bad = [d["id"] for d in drafts if text.lower() in d["text"].lower()]
         verdict(not bad, f"no draft says {text!r}" + (f" (found in {bad})" if bad else ""))
+    for text in rules.get("must_contain", []):  # at least one draft says it
+        hits = [d["id"] for d in drafts if _digits(text).lower() in _digits(d["text"]).lower()]
+        verdict(bool(hits), f"a draft says {text!r}" + (f" ({hits})" if hits else ": none"))
     for address in rules.get("must_include_forward_to", []):
         hits = [d["id"] for d in drafts if d["how"] == "forward" and address.lower() in [a.lower() for a in d["to"]]]
         verdict(bool(hits), f"a forward to {address}" + (f" ({hits})" if hits else ": none"))
