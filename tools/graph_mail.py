@@ -298,6 +298,11 @@ class GraphMail:
         )
         return list(self._pages(f"/mailFolders/{folder}/messages?{q}"))
 
+    def get_message_bodies(self, message_id):
+        """One message with body and uniqueBody (its own text, without the quoted history) as plain text."""
+        q = self._query(select="id,subject,from,toRecipients,ccRecipients,sentDateTime,categories,body,uniqueBody")
+        return self._call("GET", f"/messages/{message_id}?{q}", headers={"Prefer": 'outlook.body-content-type="text"'})
+
     def list_inbox_since(self, since_iso):
         return self.list_folder_since("inbox", since_iso)
 

@@ -137,6 +137,33 @@ def mail_find(mail, text, out=print):
     return hits
 
 
+def sent_dump(mail, days, path, own_chars=3000, quoted_chars=800, out=print):
+    """HAYA's sent mail of the last `days` days, to learn how the team writes each kind of reply. Read-only.
+    Per message: time, to/cc, subject, its own text and the start of what it answers. Emi's own drafts
+    (category Emi) are marked, so they can be left out of the style study."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    msgs = mail.list_sent_since(since)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    emi_n = 0
+    with open(path, "w", encoding="utf-8") as f:
+        for i, m in enumerate(msgs, 1):
+            full = mail.get_message_bodies(m["id"])
+            own = (full.get("uniqueBody") or {}).get("content", "").strip()
+            body = (full.get("body") or {}).get("content", "").strip()
+            quoted = body[len(own):].strip() if own and body.startswith(own[:50]) else ""
+            by_emi = "Emi" in (full.get("categories") or [])
+            emi_n += by_emi
+            cc = ", ".join(addr(r) for r in full.get("ccRecipients", []))
+            f.write(f"\n##### {i} | {vn(m.get('sentDateTime'))} | {'EMI DRAFT' if by_emi else 'staff'}\n"
+                    f"to: {', '.join(addr(r) for r in full.get('toRecipients', []))}\n"
+                    + (f"cc: {cc}\n" if cc else "")
+                    + f"subject: {full.get('subject', '')}\n--- text\n{own[:own_chars]}\n"
+                    + (f"--- answering\n{quoted[:quoted_chars]}\n" if quoted else ""))
+    out(f"sent since {vn(since)}: {len(msgs)} message(s), {emi_n} written by Emi -> {os.path.abspath(path)} "
+        f"({os.path.getsize(path)} bytes)")
+    return len(msgs)
+
+
 def _sender(m):
     return (m.get("from") or {}).get("emailAddress", {}).get("address", "").lower()
 
@@ -890,6 +917,9 @@ def parser():
     sub.add_parser("inbox-new")
     s = sub.add_parser("show"); s.add_argument("message_id")
     s = sub.add_parser("mail-find"); s.add_argument("text")
+    s = sub.add_parser("sent-dump", help="HAYA's sent mail of the last N days to a text file (read-only)")
+    s.add_argument("--days", type=int, default=14)
+    s.add_argument("--out", default=os.path.join(WORK_DIR, "sent-dump.txt"))
     s = sub.add_parser("done"); s.add_argument("message_id"); s.add_argument("outcome", nargs="+")
     s = sub.add_parser("mark-scanned"); s.add_argument("scan_started")
     sub.add_parser("sheet-schema")
@@ -980,6 +1010,8 @@ def main(argv=None):
             show(config.mail(), args.message_id)
         elif c == "mail-find":
             mail_find(config.mail(), args.text)
+        elif c == "sent-dump":
+            sent_dump(config.mail(), args.days, args.out)
         elif c == "done":
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
