@@ -2,7 +2,7 @@
 
 Every forward is saved to the Drafts folder for a person to send. I never send it myself. Forward the original email with its attachments intact; add a short note on top, never edit the original below it.
 
-**The note on top, in Karen's style (dev, 2026-10-22):** Vietnamese, labels and bullets, nothing else. The colleague reading it should know in five seconds which booking, when, and what to do, without opening the email below. HAYA's own forwards to accounting carry a single line ("Mã đoàn: #29519"); front office gets the short block below.
+**The note on top, in Karen's style (dev, 2026-10-22):** Vietnamese, labels and bullets, nothing else. The colleague reading it should know in five seconds which booking, when, and what to do, without opening the email below. Accounting gets the block in `email-templates.md` 4c (mã đoàn on the first line, then total, 50%, the amount on the slip and whether it is short, reference numbers, invoice details — as HAYA's own forward for An0109 on 15/10/2026, subject "Fw: … – UNC cọc #[mã đoàn]"); front office gets the short block below.
 - **When first.** If the guest arrives today or tomorrow, say so in the stay line: "22/10/2026 – 24/10/2026 (đến hôm nay)".
 - **One line per request,** in plain words: "Phòng không hút thuốc", not a copy of the email.
 - **One polite ask at the end, only if they must do something now:** "Nhờ lễ tân giữ phòng không hút thuốc cho khách." No reasons, no "Dear team", no sign-off paragraph.

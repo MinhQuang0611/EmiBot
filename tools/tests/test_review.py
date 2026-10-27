@@ -14,7 +14,7 @@ from tools.telegram import Telegram
 
 CONFIRMATION = ("Kính gửi anh/chị Minh,\n\n**Mã đặt phòng:** TEST-1512\n**Tổng tiền:** 4.200.000 VND, "
                 "bao gồm ăn sáng, VAT và phí dịch vụ.\nHạn cọc: 17:00 ngày 17/10/2026 (giờ Việt Nam, UTC+7)\n"
-                "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC — 1020729617\n\nBest,\nHAYA Team")
+                "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC — 1020729617\n\nTrân trọng,\nReservations Team")
 
 
 class FakeHttp:
@@ -51,7 +51,7 @@ class ReviewTest(unittest.TestCase):
             f.write(text)
         return self.body
 
-    def reply(self, text="Kính gửi anh/chị Minh,\n\nHAYA đã nhận.\n\nBest,\nHAYA Team", kind="reply"):
+    def reply(self, text="Kính gửi anh/chị Minh,\n\nHAYA đã nhận.\n\nTrân trọng,\nReservations Team", kind="reply"):
         args = SimpleNamespace(message_id="sim-01-new-1512", body=self.write(text), all=False, kind=kind,
                                ref="TEST-1512" if kind != "reply" else "", row="52" if kind != "reply" else "")
         return emi.draft_reply(self.mail, self.st, args, tg=self.tg, out=self.lines.append)
@@ -78,7 +78,7 @@ class ReviewTest(unittest.TestCase):
         self.assertNotIn("expandable", text)  # whole email visible, not folded away
 
     def test_guest_request_has_its_own_label(self):
-        self.reply("Dear Guest,\n\nNoted.\n\nBest,\nHAYA Team", kind="request")
+        self.reply("Dear Guest,\n\nNoted.\n\nTrân trọng,\nReservations Team", kind="request")
         self.assertIn("Draft #1 — Yêu cầu của khách", self.http.sent()[0]["text"])
 
     def test_accept_tags_but_never_sends(self):
@@ -103,7 +103,7 @@ class ReviewTest(unittest.TestCase):
         d = self.reply(CONFIRMATION, kind="confirmation")
         self.mail.add_attachment(d["id"], "TEST-1512.pdf", b"%PDF-1.4 x")
         review.attached(self.st, d["id"], "TEST-1512.pdf")
-        new_text = CONFIRMATION.replace("HAYA Team", "HAYA Team\n\nP.S. Phòng tầng cao theo yêu cầu.")
+        new_text = CONFIRMATION.replace("Reservations Team", "Reservations Team\n\nP.S. Phòng tầng cao theo yêu cầu.")
         new = review.rewrite(self.mail, self.st, self.tg, "1", new_text, feedback="thêm dòng tầng cao",
                              check=emi.check_confirmation_text, out=self.lines.append)
         r = self.st.data["reviews"]["1"]
@@ -125,7 +125,7 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("muốn chỉnh sửa nội dung nào trong email này (draft #1)", self.lines[-1])
         self.assertEqual(review.awaiting(self.st, out=self.lines.append), "1")
         self.assertEqual(len(self.http.sent("editMessageText")), 1)  # buttons put back on the notice
-        review.rewrite(self.mail, self.st, self.tg, "1", "Kính gửi anh/chị Minh,\n\nMới.\n\nBest,\nHAYA Team",
+        review.rewrite(self.mail, self.st, self.tg, "1", "Kính gửi anh/chị Minh,\n\nMới.\n\nTrân trọng,\nReservations Team",
                        feedback="ngắn hơn", out=self.lines.append)
         self.assertIsNone(review.awaiting(self.st, out=self.lines.append))
 

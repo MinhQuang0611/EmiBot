@@ -67,29 +67,31 @@ Never price a stay by hand. Run, from `/data/emi`:
 **Example: the live-run enquiry (2026-10-22).** Asian Classic Travels (TA), Rotary group: 70 pax (35 × 2 groups), 3 nights, end of January 2027, "advise availability and best possible rates". Numbers from:
 `quote --arrival 27/01/2027 --departure 30/01/2027 --adults 35 --rooms 18` (one group: 18 rooms × 1.700.000 × 3 = 91.800.000) and `--adults 70 --rooms 35` (both groups: 178.500.000, deposit 89.250.000). All three nights are winter, ROH applies (18 rooms > 15).
 ```
-Dear Saurabh,
+Dear Mr. Saurabh,
 
-Thank you for your enquiry for the Rotary group.
+Greetings from HAYA Hotel Phu Quoc, Trademark Collection by Wyndham, and thank you for considering us for the Rotary group (SAGRP0331).
 
-For 70 guests (2 groups of 35), 3 nights at the end of January 2027, we are pleased to quote as follows:
+We are pleased to offer the following:
 
-**Rate:** VND 1,700,000 per room per night, 2 guests sharing a double or twin room. As each group is more than 15 rooms, all rooms are charged at this rate and the hotel assigns the room types.
-**Example stay:** 27/01/2027 – 30/01/2027 (3 nights)
-• One group of 35 guests, 18 rooms (17 shared and 1 single): VND 91,800,000
-• Both groups together, 35 rooms: VND 178,500,000
-**Included:** breakfast (06:30–10:30), pool, gym, wifi, VAT and service charge.
+– Guests: 70 (2 groups of 35), 2 guests sharing a double or twin room
+– Example stay: 27/01/2027 – 30/01/2027 (3 nights)
+– Rate: VND 1,700,000 per room per night, breakfast included. As each group is more than 15 rooms, all rooms are charged at this rate and the hotel assigns the room types.
+– One group of 35 guests, 18 rooms (17 shared and 1 single): VND 1,700,000 × 18 rooms × 3 nights = VND 91,800,000
+– Both groups together, 35 rooms: VND 178,500,000
 
-**Payment terms:**
-
-• 50% deposit within 48 hours of receiving the booking confirmation.
-• The remaining 50% 7 days before check-in.
-
-This rate is for nights up to 31/01/2027. Stays in February 2027 around Tết are priced separately.
+Notes:
+– Rates are in VND per room per night, including daily breakfast, swimming pool and gym access, VAT and service charge.
+– This rate is for nights up to 31/01/2027. Stays in February 2027 around Tết are priced separately.
+– Payment: 50% deposit within 48 hours of our booking confirmation, balance 7 days before check-in, by bank transfer.
+– Cancellation: free of charge more than 7 days before check-in; 3–6 days: 1 night charge; within 3 days: 50%; no-show: 100%.
+– Check-in from 14:00, check-out before 12:00.
 
 To hold the rooms, please send the exact dates for each group, the rooming list (double, twin and single rooms), the guests' nationality and any special requests.
 
-Best,
-HAYA Team
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
 ```
 Scan report lines for it:
 ```
@@ -98,39 +100,78 @@ Scan report lines for it:
 - Quốc tịch chưa rõ: nếu khách Ấn Độ, giá 2.040.000/phòng/đêm, cả đoàn 214.200.000 — sửa draft trước khi gửi
 ```
 
-## Reply to an inquiry — template (draft wording, not yet approved by Karen)
-Same rules as `email-templates.md` (anh/chị unless the thread shows it, `**Label:**`, `•` lists, "Best, / HAYA Team", sender's language). Drop any line that doesn't apply.
+## Reply to an inquiry — template (from the Sent folder, 13–27/10/2026)
+Same rules as `email-templates.md` (greeting, opening line, plain `Label: value` lines, sums written out, sign-off "Trân trọng, / Best regards, + Reservations Team…", sender's language). Sources: Explore Vietnam (25/10, EN), Selina Tran (21/10, VI), J Chang (25/10, EN). Drop any line that doesn't apply.
+
+Vietnamese:
 ```
 Kính gửi anh/chị [Tên],
 
-HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn anh/chị đã quan tâm đến khách sạn.
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin chân thành cảm ơn anh/chị đã quan tâm và liên hệ với khách sạn.
 
-Với yêu cầu [n người lớn, n trẻ em (tuổi)] từ [DD/MM/YYYY] đến [DD/MM/YYYY] ([n] đêm), HAYA xin gửi phương án như sau:
+Khách sạn xin gửi báo giá cho [n người lớn[, n trẻ em (tuổi)]], thời gian lưu trú [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm) như sau:
 
-**Hạng phòng:** [n] [hạng phòng][ + n hạng phòng]
-**Gợi ý:** [một câu vì sao chọn cách xếp này, từ giường và sức chứa trong output, ví dụ: Phòng Quadruple (2 giường 1m8) ở được 4 người lớn và 1 bé dưới 12 tuổi, phòng Standard Double (giường 1m6) cho 2 người lớn và bé còn lại, nên cả nhà chỉ cần 2 phòng.]
-**Đơn giá:** [giá] VND/phòng/đêm ([hạng phòng])[; …]
-**Phụ thu trẻ em:** [bé [tuổi] tuổi ngủ chung giường: [giá] VND/đêm × [n] đêm = [số tiền] VND][; bé dưới 3 tuổi miễn phí]
-**Phụ thu ở 1 đêm:** [[giá] VND/khách × [n] khách = [số tiền] VND — chỉ khi ở 1 đêm]
-**Tổng tiền:** [tổng] VND cho [n] đêm, bao gồm ăn sáng, VAT và phí dịch vụ.
-[**Phương án khác:** [một dòng, ví dụ nâng lên Deluxe Double Seaview: tổng [tổng] VND]]
+– [Hạng phòng] ([giường]): [giá] VND/phòng/đêm × [n] phòng × [n] đêm = [tiền] VND
+[– [Hạng thứ hai] ([giường]): [giá] VND/phòng/đêm – tổng [n] đêm [tiền] VND]
+[– Phụ thu trẻ em [tuổi] tuổi (ngủ chung giường với bố mẹ): 350.000 VND/bé/đêm × [n] đêm = [tiền] VND; bé dưới 3 tuổi miễn phí]
+[– Phụ thu ở 1 đêm: [giá] VND/khách × [n] khách = [tiền] VND]
+Tổng tiền: [tổng] VND (đã bao gồm ăn sáng và 8% VAT)
+[Gợi ý: một câu vì sao chọn cách xếp phòng này, từ giường và sức chứa trong output của quote.]
+[Nếu anh/chị muốn [hạng khác], khách sạn có hạng [ ]: [giá] VND/phòng/đêm – tổng [n] đêm [tiền] VND.]
 
-**Bao gồm:** ăn sáng (06:30–10:30), hồ bơi, phòng gym, wifi.
-**Nhận phòng / trả phòng:** sau 14:00 / trước 12:00.
+Lưu ý:
+– Giá đã bao gồm ăn sáng (06:30–10:30), hồ bơi, phòng gym, wifi và 8% VAT.
+– Thanh toán: đặt cọc 50% trong vòng 48 giờ sau khi nhận xác nhận đặt phòng; 50% còn lại trước 07 ngày so với ngày nhận phòng. [Khách lẻ: thanh toán 100% trước khi nhận phòng.]
+– Chính sách hủy: [theo bảng giá của người gửi]
+– Nhận phòng từ 14:00, trả phòng trước 12:00.
 
-**Điều khoản thanh toán:**
+[Trả lời từng câu hỏi khác trong email, từ hotel-info.md: đưa đón, chỗ đậu xe, thanh toán bằng tiền mặt… Điều không có trong hotel-info.md: chưa soạn thư, hỏi Karen bằng `ask-karen` trước.]
 
-• Đặt cọc 50% trong vòng 48 giờ sau khi nhận được xác nhận đặt phòng.
-• 50% còn lại vui lòng thanh toán trước 07 ngày so với ngày nhận phòng.
+Để khách sạn giữ phòng, anh/chị vui lòng xác nhận giúp:
+1. Hạng phòng anh/chị chọn
+2. Họ tên đầy đủ của khách
+3. Số lượng người lớn và trẻ em (độ tuổi trẻ em nếu có), quốc tịch và yêu cầu đặc biệt (nếu có)
 
-[Trả lời từng câu hỏi khác trong email, từ hotel-info.md: đưa đón (giá từ ta.md, không miễn phí), nâng hạng / miễn phí (không có trên bảng giá — nói lý do thật), chính sách hủy, trẻ em… Điều không có trong hotel-info.md: chưa soạn thư, hỏi Karen bằng `ask-karen` trước]
-
-Để giữ phòng, anh/chị vui lòng gửi giúp HAYA: tên khách, ngày ở, hạng phòng, số người lớn và trẻ em, quốc tịch và yêu cầu đặc biệt (nếu có).
-
-Best,
-HAYA Team
+Trân trọng,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
 ```
-English: same blocks — "Thank you for your interest in HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.", **Room / Rate / Surcharge / Total / Alternative / Included / Check-in / check-out / Payment terms**, "To hold the rooms, please send the guest names, stay dates, room type, number of adults and children, nationality and any special requests."
+English:
+```
+Dear [Mr. / Ms. Name / Name] [and [Agency] team],
+
+Greetings from HAYA Hotel Phu Quoc, Trademark Collection by Wyndham, and thank you for your enquiry.
+
+We are pleased to offer the following for your request:
+
+– Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+– Rooms: [n] [room type], breakfast included
+– Guests: [n] adults[, n children aged …][ ([nationality])]
+
+Our offer:
+– [Room type] ([bed]): VND [rate] per room per night × [n] nights = VND [total]
+[– [Room type] ([bed]): VND [rate] per room per night × [n] nights = VND [total]]
+
+Notes:
+– Rates are in VND per room per night, including daily breakfast, swimming pool and gym access, and 8% VAT.
+– [Bed sizes, from hotel-info.md, when they asked about beds.]
+– Payment: 50% deposit within 48 hours of our booking confirmation, balance 7 days before check-in, by bank transfer. [Direct guests: full payment before check-in.]
+– Cancellation: [from the sender's rate file].
+– Check-in from 14:00, check-out before 12:00.
+
+[Answers to their other questions, one short paragraph each.]
+
+To proceed, please confirm your preferred room type together with the guests' full names, the number of adults and children, nationality and any special requests.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+- **The type they asked for is full** (`quote` NOT AVAILABLE): say it plainly first, then the offer: `We regret to inform you that our [room type] is fully booked for your requested dates, from [d] to [d]. However, we are pleased to offer you our [other type], which [why it fits].` / `Rất tiếc hạng [ ] đã hết phòng vào [ngày]; khách sạn xin gợi ý hạng [ ] như sau:`
+- **Nothing is free for the whole stay:** the short "fully booked" reply in `email-templates.md` section 9.
+- A late answer opens with an apology: `…xin cảm ơn chị đã phản hồi và xin lỗi chị vì phản hồi chậm.`
 
 ## Questions about offers, children, cancellation, payment
 Answer from the sender's own file in `docs/rate-knowledge/`. Example: "do we get anything for booking early or for a big group?"
@@ -153,7 +194,7 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 ## Replies
 - Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.
 - No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen. A vague date or a big group is not a reason to ask first: quote the period they named (above).
-- Write it the way HAYA's own sent mail reads (`email-templates.md`, "How HAYA writes a reply"): one line of thanks, then the numbers.
+- Write it the way HAYA's own sent mail reads (`email-templates.md`, "Rules that apply to every email"): one line of thanks, then the numbers.
 - **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have means no draft yet: `ask-karen`, and the scan report names the question.
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.

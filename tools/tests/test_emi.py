@@ -344,7 +344,7 @@ class ConfirmationPdfTest(unittest.TestCase):
             f.write("Dear Mr. Minh,\n\n**Total:** VND 7,050,000, including breakfast, VAT and service charge.\n\n"
                     "• 50% deposit by 14:00 on 17/10/2026, Vietnam time.\n\n"
                     "**Account name:** CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC\n**Account number:** 1020729617\n\n"
-                    "Best,\nHAYA Team")
+                    "Trân trọng,\nReservations Team")
         self.row = [BOOKING.get(h, DLX.get(h, "")) for h in REAL_HEADER]
 
     def tearDown(self):
@@ -422,7 +422,7 @@ class DraftCommandsTest(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.body = os.path.join(self.dir.name, "body.txt")
         with open(self.body, "w", encoding="utf-8") as f:
-            f.write("Dear Ms. Hương,\n\nCan you please confirm <the dates>?\n\nBest,\nHAYA Team")
+            f.write("Dear Ms. Hương,\n\nCan you please confirm <the dates>?\n\nTrân trọng,\nReservations Team")
 
     def tearDown(self):
         self.dir.cleanup()
@@ -444,11 +444,11 @@ class DraftCommandsTest(unittest.TestCase):
     def test_text_to_html_bold_lists_paragraphs(self):
         from tools.graph_mail import text_to_html
         h = text_to_html("Kính gửi chị Ân,\n\n**Mã đoàn:** #29519\n**Số xác nhận:** 25694\n\n"
-                         "**Điều khoản thanh toán:**\n\n• Đặt cọc 50% <ngay>\n• 50% còn lại\nĐặt phòng sẽ tự hủy.\n\nBest,\nHAYA Team")
+                         "**Điều khoản thanh toán:**\n\n• Đặt cọc 50% <ngay>\n• 50% còn lại\nĐặt phòng sẽ tự hủy.\n\nTrân trọng,\nReservations Team")
         self.assertNotIn("**", h)
         self.assertIn("<p><b>Mã đoàn:</b> #29519<br>\n<b>Số xác nhận:</b> 25694</p>", h)
         self.assertIn("<ul><li>Đặt cọc 50% &lt;ngay&gt;</li><li>50% còn lại</li></ul>\n<p>Đặt phòng sẽ tự hủy.</p>", h)
-        self.assertTrue(h.endswith("<p>Best,<br>\nHAYA Team</p>"))
+        self.assertTrue(h.endswith("<p>Trân trọng,<br>\nReservations Team</p>"))
 
     def test_labels_bold_without_markup(self):
         # 2026-10-15: Emi wrote the template without ** — labels must still come out bold.
@@ -464,11 +464,11 @@ class DraftCommandsTest(unittest.TestCase):
 
     def test_confirmation_text_must_follow_template(self):
         with self.assertRaises(emi.Refused) as e:
-            emi.check_confirmation_text("Kính gửi anh Minh,\nĐây là email test.\nBest,\nHAYA Team")
+            emi.check_confirmation_text("Kính gửi anh Minh,\nĐây là email test.\nTrân trọng,\nReservations Team")
         self.assertIn("bank account number", str(e.exception))
         emi.check_confirmation_text("hạn giữ phòng 14:00 ngày 17/10/2026 (giờ Việt Nam)\n"
                                     "Tổng tiền: 1 VND, bao gồm ăn sáng, VAT và phí dịch vụ.\n"
-                                    "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\nBest,\nHAYA Team")
+                                    "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\nTrân trọng,\nReservations Team")
 
     def test_anh_chi_greeting_leaves_no_lone_chi(self):
         base = ("Kính gửi anh/chị Minh,\nhạn giữ phòng 15:42 ngày 17/10/2026 (giờ Việt Nam, UTC+7)\n"
@@ -476,10 +476,10 @@ class DraftCommandsTest(unittest.TestCase):
                 "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC 1020729617\n• 50% còn lại vui lòng thanh toán\n")
         # TEST-1511, 2026-10-15: the VAT line kept the template's "Chị vui lòng"
         with self.assertRaises(emi.Refused) as e:
-            emi.check_confirmation_text(base + "Chị vui lòng bổ sung mã số thuế.\nBest,\nHAYA Team")
+            emi.check_confirmation_text(base + "Chị vui lòng bổ sung mã số thuế.\nTrân trọng,\nReservations Team")
         self.assertIn("Chị vui lòng bổ sung mã số thuế.", str(e.exception))
-        emi.check_confirmation_text(base + "Anh/Chị vui lòng bổ sung mã số thuế.\nBest,\nHAYA Team")
-        emi.check_confirmation_text(base.replace("anh/chị", "chị") + "Chị vui lòng bổ sung.\nBest,\nHAYA Team")
+        emi.check_confirmation_text(base + "Anh/Chị vui lòng bổ sung mã số thuế.\nTrân trọng,\nReservations Team")
+        emi.check_confirmation_text(base.replace("anh/chị", "chị") + "Chị vui lòng bổ sung.\nTrân trọng,\nReservations Team")
 
     def test_confirmation_needs_ref_and_row(self):
         mail, http = mail_with()

@@ -73,4 +73,4 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 **A slip arrives:** forward to accounting (see `department-forwards.md`), write the CHANGE row with the payment, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
 
 ## Voice
-Agency confirmations follow the templates and sign off "Best, HAYA Team" in both English and Vietnamese. Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.
+Agency confirmations follow the templates and sign off "Trân trọng," / "Best regards," + "Reservations Team / HAYA Hotel Phu Quoc, Trademark Collection by Wyndham / sales@haya-hotels.com" (dev, 2026-10-27, from the Sent folder). Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.

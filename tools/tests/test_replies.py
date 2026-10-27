@@ -23,7 +23,7 @@ GUEST = "ssr@rezlive.example"
 FRONT = "haya@haya-hotels.com"
 GOOD = ("Dear Reconfirmation Team,\n\nThank you for your email. We have noted the king-size bed request for "
         "Mr. TEST JOHN SIMGUEST and Ms. TEST ANNA SIMGUEST, 08/11/2026 – 11/11/2026. The Deluxe Double has one "
-        "1.8 m bed; we will do our best to arrange it, subject to availability at check-in.\n\nBest,\nHAYA Team")
+        "1.8 m bed; we will do our best to arrange it, subject to availability at check-in.\n\nTrân trọng,\nReservations Team")
 
 
 class NoRows:
@@ -183,7 +183,7 @@ class GraphRecipientsTest(unittest.TestCase):
             ("GET", "/messages/m1", {"from": {"emailAddress": {"address": FRONT}}, "subject": "Fw: X"}),
             ("POST", "/createReply", {"id": "d1", "subject": "RE: Fw: REZ6AD9A3A2: Special Request"}),
             ("GET", "/messages/d1?$select=body", {"body": {"content": "<html><body></body></html>"}})])
-        mail.reply_draft_with_text("m1", "Dear Team,\n\nNoted.\n\nBest,\nHAYA Team", to=[GUEST], cc=[FRONT])
+        mail.reply_draft_with_text("m1", "Dear Team,\n\nNoted.\n\nTrân trọng,\nReservations Team", to=[GUEST], cc=[FRONT])
         patch = next(b for m, u, b in http.calls if m == "PATCH" and b and "toRecipients" in b)
         self.assertEqual(patch["toRecipients"], [{"emailAddress": {"address": GUEST}}])
         self.assertEqual(patch["ccRecipients"], [{"emailAddress": {"address": FRONT}}])
@@ -195,7 +195,7 @@ class GraphRecipientsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             body = os.path.join(d, "b.txt")
             with open(body, "w", encoding="utf-8") as f:
-                f.write("Dear Team,\n\nBest,\nHAYA Team")
+                f.write("Dear Team,\n\nTrân trọng,\nReservations Team")
             with self.assertRaises(emi.Refused):
                 emi.draft_reply(mail, State(os.devnull + "-none"),
                                 SimpleNamespace(message_id="m1", body=body, all=False, kind="reply", ref="", row=""),

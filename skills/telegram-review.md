@@ -46,7 +46,7 @@ nằm trong Outlook › Drafts, mở và bấm Send." I never look for another w
    `Dạ, Emi đang sửa draft #<n> theo ý anh/chị.` The reviewer then knows it's in hand.
 4. `review-info <n>`: read the source email and the current text. This is for me; I don't paste it into the chat.
 5. Write the **whole** new text with the feedback applied. Everything in `email-templates.md` still holds:
-   the sender's language, anh/chị, `**Label:**`, bank details, deadline "(giờ Việt Nam, UTC+7)", "Best, / HAYA Team".
+   the sender's language, anh/chị, plain `Label: value` lines, bank details, deadline "(giờ Việt Nam, UTC+7)", the sign-off "Trân trọng, / Best regards, + Reservations Team…".
    Change only what the feedback asks for.
 6. Numbers: a new date, room, rate or total has to match the sheet (`tools.emi sheet-find`) or `quote` /
    `cancel-fee`. **Never a connector** (Google Drive, Codex Apps, Gmail, Outlook apps): only `tools.emi`.

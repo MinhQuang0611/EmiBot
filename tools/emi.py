@@ -737,13 +737,14 @@ def pdf_fetch(sheet, row, work_dir=None, out=print):
     return path, name, mime, data
 
 
-# What every confirmation must carry (skills/email-templates.md "Rules that apply to all of them").
+# What every confirmation must carry (skills/email-templates.md "Rules that apply to every email").
 CONFIRMATION_MUST_HAVE = (
     ("1020729617", "the bank account number"),
     ("CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC", "the bank account name"),
     (("giờ Việt Nam", "Vietnam time"), "the deposit deadline in Vietnam time"),
-    (("bao gồm ăn sáng, VAT và phí dịch vụ", "including breakfast, VAT and service charge"), "the total's inclusion line"),
-    ("HAYA Team", "the sign-off 'Best, / HAYA Team'"),
+    (("bao gồm ăn sáng", "including breakfast"), "the total's inclusion line"),
+    # Sign-off as the sales mailbox writes it (dev, 2026-10-27; replaces Karen's "Best, / HAYA Team" of 08/10)
+    ("Reservations Team", "the sign-off 'Trân trọng, / Best regards, + Reservations Team / HAYA Hotel Phu Quoc…'"),
 )
 
 
