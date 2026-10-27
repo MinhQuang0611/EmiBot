@@ -15,7 +15,7 @@ Bản chép tay (text + OCR đọc từ ảnh) của 7 file trong `docs/RATE TAB
 | Fun and Sun | — **không có hợp đồng mùa này.** Không báo giá; chuyển Karen. | |
 | Direct — khách lẻ | [direct.md](direct.md) | 01/03/2026–31/05/2026 ⚠ đã hết hạn; chờ Karen xác nhận còn dùng |
 | Tour operator khác, OTA | — không có file. Chuyển Karen. | |
-| Mọi bên — câu hỏi về khách sạn (giờ nhận/trả phòng, tiện ích, liên hệ, gửi hành lý…) | [hotel-info.md](hotel-info.md) — kèm danh sách "Chưa biết — hỏi Karen" | lấy từ file TA và Direct |
+| Mọi bên — câu hỏi về khách sạn (giờ nhận/trả phòng, tiện ích, liên hệ, gửi hành lý…) | [hotel-info.md](hotel-info.md) — kèm danh sách "Chưa biết — hỏi Karen" | lấy từ file TA, Direct và FAQ khách lẻ (`docs/FAQ/HAYA PALMA - FAQ.xlsx`, cột HAYA) |
 
 ## Luật dùng
 1. **Mỗi bên chỉ được nghe giá và điều khoản của chính mình.** Mọi hợp đồng tour operator đều có điều khoản bảo mật. Không đưa giá Anex cho Pegas, không đưa giá hợp đồng cho TA, không nói "bên khác được giảm nhiều hơn".
