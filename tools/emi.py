@@ -647,6 +647,9 @@ def run_quote(args, out=print, availability=None):
         out("\n" + avail.render(availability, result))
         for label, o in q["options"]:
             problems = avail.fits(result, o["alloc"])
+            if result["stop_sale"]:
+                # rooms may be free, but the rule says the dates are not offered at all
+                problems = [f"stop-sale on {', '.join(f'{n:%d/%m}' for n in result['stop_sale'])}"] + problems
             out(f"OPTION {label}: " + ("AVAILABLE" if not problems else "NOT AVAILABLE — " + "; ".join(problems)))
     q["availability"] = result
     return q

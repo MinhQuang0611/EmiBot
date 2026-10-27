@@ -2,6 +2,7 @@
 import unittest
 from datetime import date
 from types import SimpleNamespace
+from unittest import mock
 
 from tools import availability as avail
 from tools import emi
@@ -58,6 +59,12 @@ class CheckTest(unittest.TestCase):
 
 
 class QuoteWithAvailabilityTest(unittest.TestCase):
+    def setUp(self):
+        # the day before the stay: no stop-sale unless a test says otherwise
+        patcher = mock.patch.object(emi, "_today_vn", return_value=date(2026, 12, 29))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def args(self, **kw):
         base = dict(channel="TA", children="", alloc=None, arrival="30/12/2026", departure="01/01/2027", adults=2,
                     rooms=None, room_type=None, twin=False, indian=False)
@@ -72,6 +79,12 @@ class QuoteWithAvailabilityTest(unittest.TestCase):
         lines = []
         emi.run_quote(self.args(alloc="DLX-SV:1"), out=lines.append, availability=data())
         self.assertIn("OPTION as asked: AVAILABLE", "\n".join(lines))
+
+    def test_stop_sale_is_not_available(self):
+        lines = []
+        with mock.patch.object(emi, "_today_vn", return_value=date(2026, 12, 1)):
+            emi.run_quote(self.args(alloc="DLX-SV:1"), out=lines.append, availability=data())
+        self.assertIn("OPTION as asked: NOT AVAILABLE — stop-sale on 30/12", "\n".join(lines))
 
     def test_without_the_sheet_the_gap_stays(self):
         lines = []
