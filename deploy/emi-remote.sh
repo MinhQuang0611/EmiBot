@@ -31,7 +31,7 @@ done < <(grep -E '^OPENCLAW_GATEWAY_(URL|TOKEN)=' "$ENV_FILE" || true)
 HTTPS="${URL/#wss:/https:}"
 COOKIE="" STATUS=""
 for attempt in 1 2 3; do  # the access page now and then answers without a cookie; a retry gets one
-  HEADERS="$(curl -s -m 30 -o /dev/null -D - -X POST --data-urlencode "token=$TOKEN" --data-urlencode "next=/" \
+  HEADERS="$(curl -4 -s -m 30 -o /dev/null -D - -X POST --data-urlencode "token=$TOKEN" --data-urlencode "next=/" \
     "$HTTPS/login" | tr -d '\r' || true)"
   COOKIE="$(printf '%s\n' "$HEADERS" | sed -nE 's/^[Ss]et-[Cc]ookie: (u4s-openclaw-session=[^;]+).*/\1/p' | head -1)"
   [ -n "$COOKIE" ] && break
@@ -41,5 +41,10 @@ done
 [ -n "$COOKIE" ] || { echo "Hostinger login gave no session cookie after 3 tries (last: ${STATUS:-no answer})" >&2; exit 2; }
 
 export OPENCLAW_GATEWAY_TOKEN="$TOKEN" HOSTINGER_OPENCLAW_COOKIE="$COOKIE"
+# 2026-10-27: the dev machine has no working IPv6 route to hostingersite.com and Node tried the AAAA
+# addresses first ("Opening handshake has timed out"); curl above already uses -4 for the same reason.
+PRELOAD="$(cd "$(dirname "$0")" && pwd)/ipv4-only.cjs"
+command -v cygpath >/dev/null && PRELOAD="$(cygpath -m "$PRELOAD")"  # Git Bash: Node wants C:/..., not /c/...
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require \"$PRELOAD\""  # quoted: the path has spaces
 unset OPENCLAW_GATEWAY_URL  # an explicit URL would skip the profile's edgeAuth cookie
 exec openclaw --profile hotpink "$@"

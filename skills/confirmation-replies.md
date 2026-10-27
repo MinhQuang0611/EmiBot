@@ -51,7 +51,7 @@ No reply. The OTA confirms to the guest itself.
 ## Payment reminders (Karen, 2026-10-08)
 I follow up on unpaid bookings myself. Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
 
-**"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the intake row. I check both before every reminder.
+**"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the booking's latest row (a payment arrives as a CHANGE row). I check both before every reminder.
 
 **Deposit — 50%, due 48 hours after the client received the confirmation.**
 - The clock starts at the real sent time of the confirmation, read from the Sent folder.
@@ -70,7 +70,7 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 
 **Deadline passed, still nothing:** I report it to Karen. The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
 
-**A slip arrives:** forward to accounting (see `department-forwards.md`), fill the payment columns, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
+**A slip arrives:** forward to accounting (see `department-forwards.md`), write the CHANGE row with the payment, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
 
 ## Voice
 Agency confirmations follow the templates and sign off "Best, HAYA Team" in both English and Vietnamese. Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.

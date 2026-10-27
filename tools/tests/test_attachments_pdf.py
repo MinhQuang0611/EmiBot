@@ -103,7 +103,7 @@ class ScannedPdfTest(unittest.TestCase):
 DIRECT = {"action": "NEW", "received_at": "21/10/2026 09:30", "source_email": "Đặt phòng 2 đêm",
           "property": "HAYA", "channel_type": "Direct", "contact_person": "Quang Nguyễn Minh",
           "guest_names": "Quang Nguyễn Minh", "nationality": "Vietnam", "arrival": "20/11/2026",
-          "departure": "22/11/2026", "nights": "2", "room_code": "DLX-SV", "rooms": "1",
+          "departure": "22/11/2026", "nights": "2", "room_code": "DLX-SV", "rooms": "1", "adults": "2", "meal_plan": "BB",
           "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000",
           "status": "Tentative", "priority": "Normal", "missing_info": ""}
 

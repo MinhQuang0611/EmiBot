@@ -16,23 +16,27 @@ The voucher, rooming list or booking form is usually an attachment, and it is wh
 
 ## Steps
 1. **Classify** the email as NEW, CHANGE, or CANCEL (see `inbox-triage.md`).
-2. **Check for an existing row.** `sheet-find` each reference number on its own (the OTA's number and the SynXis number, if the email has both) and the lead guest's surname. If the booking is already there (from an earlier email, the other half of an Agoda/SynXis pair, or written by Sunny from Zalo), update that row — don't add a second one. A SynXis notice whose OTA number is already on a row: add the SynXis number to that row's `booking_ref` with `sheet-update` (every row of the booking), don't append.
+2. **Check for an existing row.** `sheet-find` each reference number on its own (the OTA's number and the SynXis number, if the email has both) and the lead guest's surname. If the booking is already there (from an earlier email, the other half of an Agoda/SynXis pair, or written by Sunny from Zalo), it is not NEW: anything the new email adds or changes is a CHANGE row (see "One email, one set of rows" below). The one exception: a SynXis notice whose OTA number is already on a row, saying nothing new — add the SynXis number to that row's `booking_ref` with `sheet-update` (every row of the booking), don't append.
    - **Every email for the booking, not just this one.** Read the whole thread, then `mail-find <ref>` for each reference number and read those emails too (an MG voucher, the RezLive or VCC email for the same booking, an earlier version). Room type, pax, nationality or a rate missing from one email is often in another. A field is blank only when none of them has it.
-3. **CHANGE / CANCEL:** find the original row and carry over its `ezfolio_group_code` and `confirmation_no`. If the booking was never in the sheet, say so in `missing_info` — Tracy has to find it in EZFOLIO.
+3. **CHANGE / CANCEL:** the rows repeat the whole booking as it stands after this email (Rules tab), not only what changed. `sheet-append` copies every column I leave blank from the booking's latest rows — company, channel, group code, confirmation number, guests, dates, payments, and per room type the pax and the rate block — and prints what it copied; check those lines. So on a CHANGE I fill only what this email changes, plus `what_changed`. Also look in the thread for the group code or confirmation number (HAYA's own confirmation, the PDF name): the sheet may not have it. If the booking was never in the sheet, the email still decides the action — "amendment", "revised", "update", "Re:" on a booking → CHANGE, never NEW — and `missing_info` says "original booking not on the sheet" so Tracy finds it in EZFOLIO.
 4. **Fill one row per room type**, same `booking_ref` on every row of one booking:
    - `action`, `received_at` (DD/MM/YYYY HH:MM, when the email carrying the booking or the change arrived — see "Follow-ups" below), `source_email` (that email's subject only, no links or IDs), `property` (HAYA), `channel_type` (TA / OTA / Direct / Tour operator — see "Channel type" below).
    - `company` exactly as named in EZFOLIO — see "Company" below (not in EZFOLIO yet: write the name and put "new company" in `missing_info`; never for a named OTA or tour operator — Booking.com, Agoda, MG, Anex… are already there, and `sheet-check` refuses it), `contact_person`, `company_email` (the address of whoever actually wrote the booking: for an email a colleague forwarded in, the original From in the quoted header, never haya@ or another @haya-hotels.com address; the confirmation is sent there), `booking_ref` (see "booking_ref" below). **Direct:** never the guest's own name in `company` (the column is for an agency/OTA as named in EZFOLIO), and never "new company". Leave `company` blank and write `REQUIRED blank: company – direct guest, EZFOLIO account for direct bookings not known` in `missing_info` (Karen hasn't said which EZFOLIO account direct guests go under). The guest's name goes in `contact_person`, their email in `company_email`, and `booking_ref` stays blank unless the guest gave one.
    - `ezfolio_group_code`, `confirmation_no`: carried over for CHANGE / CANCEL, blank for NEW. `what_changed`: CHANGE only, e.g. "Dates 12–15 Nov → 13–16 Nov"; for CANCEL, the reason.
    - `guest_names` separated by ";", lead guest first, TBA if not given. `nationality`: see "Nationality" below.
    - `arrival`, `departure` (DD/MM/YYYY), `nights`, `room_code` (see "Room code" below), `rooms`, `adults`, `children` (0 if none), `child_ages` ("9; 2"), `meal_plan` (BB / RO / other).
-   - `rate_source` (TA card / Anex contract / Odeon contract / Pegas contract / Crystal Bay contract / Selfie contract / OTA net / Special (Karen) / Other — exactly one of these; how the rate was worked out goes in notes item 6, never in brackets here), `rate_per_night_vnd` (the rate before surcharge, number only), `discount_promo`, `Average rate per night after discount`, `surcharge` (text, e.g. "+20% Indian guests", "Child 350k x 3 nights") and `Surcharge amount`, `total_vnd`.
-   - `status` (Definite / Tentative / Cancelled), `hold_until` (DD/MM/YYYY, or DD/MM/YYYY HH:MM when the agency gives a time), `prepaid`, `invoice_details`, `arrival_time`, `transfer`, `special_requests`.
+   - **A date with no year** ("12 Nov") is the next one after the email: an email of 24/10/2026 asking for 12 Nov means 12/11/2026. `sheet-check` refuses a NEW or CHANGE arriving before the email's date.
+   - **`adults`**: the pax the voucher or rooming list gives for that room type, never 2 per room by habit. A single (1 adult, one name) stays 1. Not stated anywhere → `REQUIRED blank: adults – <reason>`.
+   - **Children** go on the row of the room type they sleep in (the rooming list says which), and the child surcharge goes on that same row. Rooming list silent → the children and their surcharge on the first row, and `missing_info` "which room the children (ages) share – not in the rooming list", so the agency is asked.
+   - **`meal_plan`**: HAYA's TA and contract rates include breakfast, so BB unless the email says room only. OTA notices (Booking.com, Expedia, Trip.com…) → BB unless the notice says "room only" / "no meal". Never blank.
+   - `rate_source` (TA card / Anex contract / Odeon contract / Pegas contract / Crystal Bay contract / Selfie contract / Booking.com guest total / OTA net / Special (Karen) / Other — exactly one of these; how the rate was worked out goes in notes item 6, never in brackets here). Booking.com → `Booking.com guest total`; every other OTA → `OTA net`; `sheet-check` refuses the mix-up. `rate_per_night_vnd` (number only; Indian guests: the rate **with** the +20% in it, e.g. 1,700,000 → 2,040,000, and the surcharge column says "+20% Indian guests (incl. in rate)"), `discount_promo`, `Average rate per night after discount`, `surcharge` (text, e.g. "+20% Indian guests", "Child 350k x 3 nights") and `Surcharge amount`, `total_vnd`.
+   - `status` (Definite / Tentative / Cancelled): **Definite** for a booking request, a voucher, a tour operator's booking, and every CHANGE of a Definite booking. **Tentative** only when the sender asks to hold or put rooms on option, with a time limit → `hold_until`. `hold_until` (DD/MM/YYYY, or DD/MM/YYYY HH:MM when the agency gives a time), `prepaid`, `invoice_details`, `arrival_time`, `transfer`, `special_requests`.
    - `notes` in the 7-line EZFOLIO format — see "Notes" below. Never mention an upgrade.
    - `missing_info`: everything the email didn't say.
    - **OTA rate floor:** an OTA row with `rate_per_night_vnd` or the average under 1,000,000 VND gets `rate floor: <rate> VND/night under 1,000,000 – likely promotion mistake` in `missing_info` (inbox-triage.md §3); `sheet-check` refuses the row without it, and the report names it to Karen.
    - `priority`. Leave `tracy_status` as Pending and `pdf_link` blank — those are Tracy's.
    - `COD` (deposit deadline): 48 hours from when the client receives the confirmation, unless the email or contract states another deadline.
-   - `Payment 1`, `Payment 1 date + time`, `Payment 2`, `Payment 2 date + time` from slips in the thread. `Remaining amount` = total − Payment 1 − Payment 2 (equal to the total until a payment arrives).
+   - `Payment 1`, `Payment 1 date + time`, `Payment 2`, `Payment 2 date + time` from slips in the thread. `Remaining amount` = total − Payment 1 − Payment 2 (equal to the total until a payment arrives). A slip that arrives after the booking was written is a CHANGE row (`what_changed`: "Payment 1 received 4,000,000"), never an edit of the NEW row: `sheet-update` refuses payment columns.
    - Column names above are the sheet's exact headers (`test/fixtures/intake-columns.csv`). Filled examples: `test/fixtures/intake-examples.csv`.
 5. **Required, never blank:** `company` (Direct: blank + named in `missing_info`, see above), `arrival`, `departure`, rate, `room_code`, `rooms`. If I can't fill one, the row is not ready and the gap goes in `missing_info` and to Karen.
 
@@ -51,10 +55,14 @@ The reference number(s) only, exactly as the sender prints them. The channel goe
 |---|---|
 | Booking.com | BOOKING.COM BV, Booking.com B.V. |
 | Agoda | Agoda Company Pte Ltd |
-| Expedia, Trip.com, Traveloka, MG, Ohmyhotel, MakeMyTrip, Dida Travel, Mytour, VNTrip | upper-case or legal-name versions |
+| Expedia, Trip.com, Traveloka, MG, MakeMyTrip, Dida Travel, Mytour, VNTrip | upper-case or legal-name versions |
 | Anex | ANEX KHABAROVSK, Anex Tour |
 | Odeon, Pegas, Crystal Bay, Selfie, Fun and Sun | Odeon Tours, Pegas Touristik, FUN&SUN |
+| Odeon | Coral Travel (any country), Sunmar, Odeonbeds — Odeon's contract covers them; the brand goes in notes item 1: `1. Odeon (Coral Travel Ukraine) – Ref …` |
+| Oh My Hotel | Ohmyhotel, OHMYHOTEL. RezLive only relays it: a RezLive email for an Oh My Hotel booking is `company` Oh My Hotel |
+| Wyndham | Wyndham Rewards free nights: `rate_per_night_vnd` 0, `rate_source` Other, notes item 6 "Wyndham Rewards free night" |
 
+- A TA's name is its full trading name as it signs and as on its earlier rows ("Vietnam Travel Concierge (KOMPAS Touroperator)", not "Travel Concierge"). Footprint Travel, Travel Source and the like are TA even when the guest or a colleague forwards their email: `channel_type` comes from the booking, not from who sent this email.
 - A legal suffix (BV, Ltd, Pte, JSC) is dropped.
 - An office or city in the name ("ANEX KHABAROVSK") goes in notes item 1: `1. Anex (Khabarovsk) – Ref 112921433`. Not in `contact_person`, which is a person's name.
 - SynXis is the channel manager, not the seller: `company` is the OTA the SynXis notice names (Booking.com, Expedia…); SynXis only when it names none.
@@ -70,7 +78,9 @@ A full English country name: "Vietnam", "India", "United Kingdom". Never a code 
 ## Room code
 - `sheet-schema` lists each code with its EZFOLIO name and the name agencies use (the TA table's): STD = Standard Double, SUP-DBL = Superior Double, SUP-TWN = Superior Twin, DLX-SV = Deluxe Double Seaview, and SUITE-SV, TPL, QPL, TPL-SV.
 - A voucher name that is a shortened form of exactly one of these is that code: "DELUXE DOUBLE" → DLX-SV (the only deluxe double; TW-DLX is a twin and never sold to agencies), "STANDARD GARDEN" → STD. Write the voucher's own name in notes item 4: `4. 1 Deluxe Double Seaview (voucher: DELUXE DOUBLE) – 2 adults, 0 children`.
-- A name that fits two codes ("Superior" with no bed type, "Deluxe Twin") or none: blank, with `REQUIRED blank: room_code – voucher says <name>` in `missing_info`. Only after reading every email for the booking (step 2).
+- OTA listing names (`sheet-schema` prints them as "OTAs call it"): "Deluxe Twin Sea View" / "Deluxe Twin" → **TW-DLX**, "Triple City View" → **TPL**, "Deluxe Double Sea View" → DLX-SV. TW-DLX is never sold to agencies (TA, tour operator), but an OTA guest who booked it gets it: don't move them to DLX-SV.
+- A TA writing just "Twin" → SUP-TWN (the twin on the TA table; Standard Twin is quoted at the same rate). A group asking for "3 twin + 8 double" is two room types: two rows (SUP-TWN or STD-TWN as the agency names it, and STD).
+- A name that fits two codes ("Superior" with no bed type) or none: blank, with `REQUIRED blank: room_code – voucher says <name>` in `missing_info`. Only after reading every email for the booking (step 2).
 
 ## Notes
 Exactly 7 lines, one item each, numbered `1. ` to `7. `, parts joined with ` – `. Nothing after line 7. `sheet-check` warns on anything else.
@@ -100,16 +110,30 @@ Example:
 ## Channel type
 Exactly one of `TA`, `OTA`, `Direct`, `Tour operator` — never "Tour operator (Anex)" (the sheet's row 2 shows that as an example); the operator's name goes in `company`. Decided by who the booking comes from, checked in this order (2026-10-09):
 1. **Tour operator** — Odeon, Crystal Bay, Pegas, Anex, Selfie, Fun and Sun.
-2. **OTA** — online travel sites: SynXis, Agoda, Expedia, Trip.com, Ohmyhotel, MG, MakeMyTrip, Traveloka, Dida Travel, Mytour, VNTrip, Booking.com.
+2. **OTA** — online travel sites: SynXis, Agoda, Expedia, Trip.com, Oh My Hotel, MG, MakeMyTrip, Traveloka, Dida Travel, Mytour, VNTrip, Booking.com, Wyndham (Rewards nights).
 3. **TA** — any other travel company (công ty du lịch).
 4. **Direct** — an individual booking for themselves, not through any company. No company name on the row (`sheet-check` refuses a Direct row with `company` filled or "new company" in `missing_info`); the blank is named in `missing_info`.
 
 If the email doesn't make clear whether the sender is a travel company or a private person, leave `channel_type` blank and put it in `missing_info`.
 
-## Follow-ups
-The new email is sometimes a follow-up on a booking, not the booking itself — e.g. an OTA writing "Could you please reconfirm and share the hotel confirmation number for this booking?" under its voucher.
-- Booking already on the sheet → nothing to write; the follow-up goes in the report.
-- Booking not on the sheet yet → write the NEW row from the original voucher in the thread. `received_at` and `source_email` are the voucher email's, not the follow-up's.
+## One email, one set of rows
+Each row is the record of one email. A later email about a booking already on the sheet never edits the earlier rows (live sheet, 2026-10-27: 27 follow-ups were folded into old rows or skipped). It gets its own rows:
+
+| The email | Rows |
+|---|---|
+| Anything that changes or adds to the booking: dates, rooms, pax, names (Omar's name update), flight or arrival time, pick-up asked or withdrawn, a meal (Jain meal), a request, a payment slip, a fee or surcharge waiver asked for or agreed | **CHANGE**, one row per room type, `what_changed` = what this email changed |
+| The hotel declined an on-request booking ("cannot be accommodated", "no availability", "fully booked" from HAYA in the thread) | **CANCEL**, `status` Cancelled, `what_changed` "On request booking cannot be accommodated". Not NEW |
+| The operator's own cancel notice for a booking already CANCEL on the sheet | no row; `sheet-append` refuses a second CANCEL. `done <id> "already cancelled"` |
+| Cancel and rebuild (agency cancels the group and sends it again under the same code) | CANCEL rows for the old booking + NEW rows for the new one, both from this email, in **one file** (a JSON list of rows) |
+| A chaser or reminder with nothing new ("please reconfirm", an MG reminder, "any update?") | no row; a report line |
+| A forward of a booking that already reached sales@ (a colleague's Fw:) | no row; the original email is the record (`inbox-triage.md` §1) |
+
+A follow-up on a booking that isn't on the sheet yet → write the NEW rows from the original voucher in the thread. `received_at` and `source_email` are the voucher email's, not the follow-up's; then the follow-up's own CHANGE rows if it adds something.
+
+`received_at` is always the time `show` prints for that email (Vietnam time), never a time written inside a quoted or forwarded header or a PDF's "Reservation date" (2789404: received 15:39, PDF 13:06).
+
+## Follow-ups asking for the confirmation number
+An OTA writing "Could you please reconfirm and share the hotel confirmation number for this booking?" under its voucher adds nothing to the booking: no row (above).
 - The ask itself is not drafted: there is no confirmation number until EZFOLIO has the booking. Report line: "OTA asks for the hotel confirmation number, waiting on EZFOLIO". The answer goes with the confirmation once the row has its `pdf_link` (`confirmation-replies.md`).
 
 ## Rates
@@ -122,7 +146,8 @@ The new email is sometimes a follow-up on a booking, not the booking itself — 
 - TA rate file: `docs/RATE TABLES/BẢNG GIÁ CHO TA HAYA HOTEL.pdf`.
 - Tour operators: each one's own contract in `docs/RATE TABLES/`, never the TA card (dev, 2026-10-09). Anex = `Haya - Anex 2026 - 2027.pdf` (81/26-27/PQ-HAYA/AL); Crystal Bay, Odeon, Pegas (`W26 S27 ...`), Selfie = their named files. `rate_source` = "<operator> contract": Anex / Odeon / Pegas / Crystal Bay / Selfie contract.
 - Fun and Sun: no contract this season. Leave `rate_source` and the rate blank unless the email states one, put "no Fun and Sun contract this season" in `missing_info`, and flag it to Karen.
-- OTA: the amount that reaches the hotel's bank. Booking.com = full guest total (commission settled monthly). Expedia/SynXis = the net payment amount.
+- OTA: the amount that reaches the hotel's bank. Booking.com = full guest total (commission settled monthly). Expedia/SynXis = the net payment amount: the **"Remittance amount"** line, ÷ nights ÷ rooms for the rate — never "Total Cost with Tax" or the "Expedia Net Rate" per night shown above it (Choong, 2026-10: 5,561,400 = 1,853,800 × 3, not 6,045,000).
+- TA booking whose rate field says "Promotion", "as contract", "TA rate" or has no number: the TA card rate for that room and season (`quote`), `rate_source` TA card, the voucher's word in notes item 6. Not blank (Viet Ban Mai SI781659A: Superior Double Pool View, November → 1,900,000).
 - Average rate = total after promos ÷ nights.
 - **If the rate in the email and the rate table disagree, I don't pick one. I flag it to Karen.**
 

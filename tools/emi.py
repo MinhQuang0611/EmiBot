@@ -256,25 +256,106 @@ def sheet_audit(sheet, first_row=3, out=print):
     return bad
 
 
+def _parts(ref):
+    return {p.lower() for p in schema.ref_parts(ref or "")}
+
+
+def booking_state(rows, ref):
+    """The booking as it stands: the rows of the last email written for this ref (one per room type).
+    Each number counts on its own: '1783017402' finds '1783017402 / 92777EF002717'."""
+    mine = _parts(ref)
+    hits = [r for r in rows if mine and _parts(r.get("booking_ref")) & mine]
+    if not hits:
+        return []
+    key = (hits[-1].get("action"), hits[-1].get("received_at"))
+    state = []
+    for r in reversed(hits):
+        if (r.get("action"), r.get("received_at")) != key:
+            break
+        state.insert(0, r)
+    return state
+
+
+# Copied from the booking's current rows onto a CHANGE / CANCEL row where left blank (Rules tab: "repeat the
+# full new booking details for CHANGE"). Live sheet 2026-10-27: CHANGE rows with no company, channel, rates or
+# adults; CANCEL rows with no group code and without the Indian or child surcharge. Not copied: what the new
+# email itself says (transfer, requests, status, notes).
+CARRY_BOOKING = ("channel_type", "company", "contact_person", "company_email", "ezfolio_group_code",
+                 "confirmation_no", "guest_names", "nationality", "arrival", "departure", "nights", "prepaid",
+                 "invoice_details", "COD", "Payment 1", "Payment 1 date + time", "Payment 2",
+                 "Payment 2 date + time")
+CARRY_ROOM = ("room_code", "rooms", "meal_plan")
+# Copied as a block, only when its first column is blank: a change that sets a new rate (a surcharge waived)
+# must not get the old surcharge back.
+CARRY_BLOCKS = (("adults", "children", "child_ages"),
+                ("rate_per_night_vnd", "rate_source", "discount_promo", "Average rate per night after discount",
+                 "surcharge", "Surcharge amount", "total_vnd"))
+
+
+def _blank(v):
+    return not str(v if v is not None else "").strip()
+
+
+def carry_over(records, state, out=print):
+    """Fill the blanks of CHANGE / CANCEL rows from the booking's current rows; returns the rows to write.
+    A CANCEL given as one line with no room_code becomes one CANCEL row per room line of the booking."""
+    if not state:
+        return records
+    if (len(records) == 1 and records[0].get("action") == "CANCEL" and _blank(records[0].get("room_code"))
+            and len(state) > 1):
+        records = [dict(records[0], room_code=r.get("room_code", "")) for r in state]
+    for rec in records:
+        if rec.get("action") not in ("CHANGE", "CANCEL"):
+            continue
+        same = [r for r in state if r.get("room_code") == rec.get("room_code")]
+        if not same and _blank(rec.get("room_code")) and len(state) == 1:
+            same = state
+        cols = [k for k in CARRY_BOOKING if _blank(rec.get(k))]
+        if same:
+            cols += [k for k in CARRY_ROOM if _blank(rec.get(k))]
+            for block in CARRY_BLOCKS:
+                if _blank(rec.get(block[0])):
+                    cols += [k for k in block if _blank(rec.get(k))]
+        src = (same or state)[0]
+        filled = [k for k in cols if not _blank(src.get(k))]
+        for k in filled:
+            rec[k] = src[k]
+        if filled:
+            out(f"{rec['action']} {rec.get('room_code') or ''}: blanks copied from row {src['_row']}: "
+                f"{', '.join(filled)}")
+    return records
+
+
 def sheet_append(sheet, data, out=print):
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
-    on_sheet = None
+    rows = None
+    cancelled_here = {p for rec in records if rec.get("action") == "CANCEL" for p in _parts(rec.get("booking_ref"))}
     for rec in records:
-        # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
-        # Each number counts on its own: '1783017402' is already there if '1783017402 / 92777EF002717' is.
-        if rec.get("action") != "NEW" or not str(rec.get("booking_ref", "")).strip():
+        ref = str(rec.get("booking_ref", "")).strip()
+        if not ref:
             continue
-        if on_sheet is None:
-            on_sheet = [(r["_row"], {p.lower() for p in schema.ref_parts(r.get("booking_ref", ""))})
-                        for r in sheet.rows()]
-        mine = {p.lower() for p in schema.ref_parts(rec["booking_ref"])}
-        hit = next(((row, parts & mine) for row, parts in on_sheet if parts & mine), None)
-        if hit:
-            raise Refused(f"booking_ref {rec['booking_ref']!r}: {', '.join(sorted(hit[1]))} is already on the sheet "
-                          f"(row {hit[0]}): this is not a NEW booking. Use action CHANGE (new rows, what_changed "
-                          f"filled), or sheet-update row {hit[0]} to add the other number")
+        if rows is None:
+            rows = sheet.rows()
+        state = booking_state(rows, ref)
+        if rec.get("action") == "NEW" and state:
+            # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
+            # Except a cancel-and-rebuild (GD0512, 26/10): CANCEL rows and NEW rows from the same email.
+            rebuild = bool(_parts(ref) & cancelled_here) or (
+                state[0].get("action") == "CANCEL" and state[0].get("received_at") == rec.get("received_at"))
+            if not rebuild:
+                hit = next(r for r in rows if _parts(r.get("booking_ref")) & _parts(ref))
+                raise Refused(f"booking_ref {ref!r}: {', '.join(sorted(_parts(hit['booking_ref']) & _parts(ref)))} "
+                              f"is already on the sheet (row {hit['_row']}): this is not a NEW booking. Use action "
+                              f"CHANGE (new rows, what_changed filled), or sheet-update row {hit['_row']} to add "
+                              f"the other number. A cancel-and-rebuild: the CANCEL rows and the NEW rows in one file")
+        if rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL":
+            # 2026-10-27: operators' cancel notices for bookings already closed as declined on request
+            raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
+                          f"{state[0].get('received_at', '')}): no second CANCEL row; mark the email done")
+    if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
+        records = carry_over(records, booking_state(rows, records[0].get("booking_ref")), out=out)
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     out(f"appended {len(records)} row(s). Check them below; fix a wrong cell with sheet-update <row> by column name.")
@@ -285,11 +366,20 @@ def sheet_append(sheet, data, out=print):
 
 
 def sheet_update(sheet, row, fields, out=print):
+    """Correct a cell on a row not yet built. News about the booking (a payment, a pick-up, a name) is a
+    CHANGE row instead: each row is the record of one email (live sheet 2026-10-27)."""
     if not fields:
         raise Refused("no fields given")
     current = next((r for r in sheet.rows() if r["_row"] == int(row)), None)
     if current is None:
         raise Refused(f"row {row} is empty or not a data row")
+    pay = sorted(set(fields) & {"Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time"})
+    if pay:
+        raise Refused(f"{pay}: a payment is a CHANGE row (sheet-template CHANGE, what_changed 'Payment 1 "
+                      f"received …'), not an edit of row {row}")
+    if current.get("tracy_status") in ("Entered", "Problem"):
+        raise Refused(f"row {row} is already built in EZFOLIO ({current['tracy_status']}): write a CHANGE row, "
+                      f"or report the wrong cell to Karen")
     merged = {k: v for k, v in {**current, **fields}.items() if k != "_row"}
     errors, warnings = check_rows(sheet, [merged])
     for w in warnings:
@@ -318,9 +408,12 @@ def sheet_schema(sheet, out=print):
     # Agencies write the TA table's names ("Standard Double"), EZFOLIO's names differ ("STANDARD GARDEN").
     ta_names = {r["code"]: r["name_en"] for r in quoting.load()["rooms"]}
     ta_names.setdefault("STD-TWN", "Standard Twin (quoted at the Superior Twin rate)")
+    # OTA listings use their own names; the live sheet maps them like this (2026-10-27).
+    ota_names = {"TW-DLX": "Deluxe Twin Sea View", "TPL": "Triple City View", "DLX-SV": "Deluxe Double Sea View"}
     out("\nROOM CODES (room_code). Match the name in the email against the 'agencies call it' name:")
     for code, (name, note) in codes.items():
         alias = f" — agencies call it \"{ta_names[code]}\"" if code in ta_names else ""
+        alias += f" — OTAs call it \"{ota_names[code]}\"" if code in ota_names else ""
         out(f"- {code} = {name}{alias}" + (f" — {note}" if note else ""))
     out("A room name in the email that matches none of these → leave room_code blank and name it in missing_info.")
     out("\nRULES (Rules tab):")

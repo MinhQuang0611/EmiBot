@@ -12,7 +12,7 @@ ROW = {"action": "NEW", "received_at": "22/10/2026 13:40", "property": "HAYA", "
        "source_email": "SynXis Res Confirmed (92777EF002985 )", "company": "Booking.com",
        "booking_ref": "92777EF002985", "guest_names": "AbdolAziz Yary", "nationality": "Uzbekistan",
        "arrival": "22/10/2026", "departure": "24/10/2026", "nights": "2", "room_code": "STD", "rooms": "1",
-       "adults": "1", "children": "0", "rate_source": "OTA net", "rate_per_night_vnd": "1408000",
+       "adults": "1", "children": "0", "meal_plan": "BB", "rate_source": "Booking.com guest total", "rate_per_night_vnd": "1408000",
        "Average rate per night after discount": "1408000", "total_vnd": "2816000", "status": "Definite",
        "notes": NOTES, "missing_info": "meal plan not stated", "priority": "Urgent", "tracy_status": "Pending"}
 
@@ -60,9 +60,10 @@ class CompanyTest(unittest.TestCase):
     def test_known_variants_map_to_one_name(self):
         for raw, canon in (("BOOKING.COM BV", "Booking.com"), ("ANEX KHABAROVSK", "Anex"), ("Anex Tour", "Anex"),
                            ("Agoda Company Pte Ltd", "Agoda"), ("FUN & SUN", "Fun and Sun"), ("MG Bedbank", "MG"),
-                           ("Pegas Touristik", "Pegas"), ("crystal bay", "Crystal Bay")):
+                           ("Pegas Touristik", "Pegas"), ("crystal bay", "Crystal Bay"),
+                           ("Coral Travel", "Odeon"), ("Oh My Hotel", "Oh My Hotel"), ("Ohmyhotel", "Oh My Hotel")):
             self.assertEqual(schema.canonical_company(raw), canon, raw)
-        for raw in ("Viet Ban Mai Travel", "Phú Minh Quang Travel", "Coral Travel", "Bookings Travel Co"):
+        for raw in ("Viet Ban Mai Travel", "Phú Minh Quang Travel", "Bookings Travel Co"):
             self.assertIsNone(schema.canonical_company(raw), raw)
 
     def test_variant_is_a_warning_with_the_office_for_notes(self):
@@ -157,6 +158,35 @@ class PartialRowTest(unittest.TestCase):
         self.assertTrue(errors[0].startswith("row: only 1 cell(s) filled (source_email)"))
         self.assertTrue(schema.check_row({"action": "NEW", "booking_ref": "X", "tracy_status": "Pending"})[0][0]
                         .startswith("row: only 2 cell(s)"))
+
+
+class LiveSheetDiffTest(unittest.TestCase):
+    """Sandbox vs live sheet, 2026-10-27."""
+    def test_booking_com_is_the_guest_total(self):
+        self.assertTrue(has(check(rate_source="OTA net")[0], "rate_source: 'OTA net' on a Booking.com row"))
+        self.assertFalse(has(check(company="Expedia", rate_source="OTA net", notes="")[0], "rate_source"))
+        self.assertTrue(has(check(company="Expedia", rate_source="Booking.com guest total", notes="")[0],
+                            "rate_source"))
+
+    def test_meal_plan_and_adults_required(self):
+        self.assertTrue(has(check(meal_plan="")[0], "meal_plan: required"))
+        self.assertTrue(has(check(adults="")[0], "adults: required"))
+
+    def test_arrival_before_the_email_is_a_wrong_year(self):
+        errors, _ = check(arrival="12/11/2025", departure="14/11/2025", received_at="24/10/2026 18:28")
+        self.assertTrue(has(errors, "arrival: 12/11/2025 is before the email"))
+        self.assertFalse(has(check(action="CANCEL", what_changed="x", ezfolio_group_code="1",
+                                   arrival="12/11/2025", departure="14/11/2025")[0], "arrival"))
+
+    def test_wyndham_points_night_is_not_a_promotion_mistake(self):
+        zero = {"company": "Wyndham", "rate_per_night_vnd": "0", "Average rate per night after discount": "0",
+                "total_vnd": "0", "rate_source": "Other", "notes": ""}
+        self.assertFalse(has(check(**zero)[0], "missing_info: OTA rate"))
+        self.assertTrue(has(check(**dict(zero, company="Expedia"))[0], "missing_info: OTA rate"))
+
+    def test_tentative_without_hold_is_warned(self):
+        self.assertTrue(has(check(status="Tentative")[1], "status: Tentative"))
+        self.assertFalse(has(check(status="Tentative", hold_until="28/10/2026")[1], "status"))
 
 
 class OldRowRulesTest(unittest.TestCase):

@@ -17,7 +17,7 @@ Every forward is saved to the Drafts folder for a person to send. I never send i
 
 - Prepare the forward as soon as the slip arrives. If the booking isn't in EZFOLIO yet and there's no group code, say so to Karen and hold the forward until Tracy has entered it.
 - Never state an amount I can't read on the slip. Unreadable = say unreadable.
-- Fill the payment columns on the intake row at the same time.
+- Write the payment as a CHANGE row at the same time (`booking-intake.md`, "One email, one set of rows"); the NEW row is never edited.
 
 ## Front office — `haya@haya-hotels.com`
 | Forward | Note on top must include |

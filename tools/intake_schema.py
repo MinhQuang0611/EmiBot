@@ -20,7 +20,7 @@ PAYMENT = ("COD", "Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 
 
 # Rules tab: "on every booking row (NEW or CHANGE) ... must NEVER be blank", else named in missing_info.
 REQUIRED_BOOKING_ROW = ("company", "arrival", "departure", "room_code", "rooms", "rate_per_night_vnd",
-                        "Average rate per night after discount")
+                        "Average rate per night after discount", "adults", "meal_plan")
 ALWAYS = ("action", "received_at", "source_email", "property", "channel_type", "booking_ref",
           "guest_names", "nationality", "status", "priority")
 
@@ -30,8 +30,9 @@ ENUMS = {
     "channel_type": ("TA", "OTA", "Direct", "Tour operator"),
     # "<operator> contract" for every tour operator with a contract this season (booking-intake.md, Rates).
     # Fun and Sun has none. The sheet's own instruction still lists only "Anex contract".
+    # Booking.com: the guest total (commission settled monthly); every other OTA: the net (live sheet, 2026-10-27).
     "rate_source": ("TA card", "Anex contract", "Odeon contract", "Pegas contract", "Crystal Bay contract",
-                    "Selfie contract", "OTA net", "Special (Karen)", "Other"),
+                    "Selfie contract", "Booking.com guest total", "OTA net", "Special (Karen)", "Other"),
     "status": ("Definite", "Tentative", "Cancelled"),
     "priority": ("Normal", "Urgent"),
 }
@@ -53,7 +54,9 @@ ENUM_HINTS = {"channel_type": "; the operator's or OTA's name goes in company",
 # Values: other spellings seen or likely, written the way _norm() leaves them.
 CANONICAL_COMPANIES = {
     "Anex": ("anex tour", "anextour"),
-    "Odeon": ("odeon tours",),
+    # Odeon's contract also covers Coral Travel, Sunmar and Odeonbeds (docs/rate-knowledge/odeon.md);
+    # the live sheet writes those bookings under Odeon (12169345 Vitkup, 2026-10-26), the brand in notes item 1.
+    "Odeon": ("odeon tours", "odeonbeds", "coral travel", "sunmar"),
     "Pegas": ("pegas touristik", "pegast"),
     "Crystal Bay": ("crystalbay",),
     "Selfie": ("selfie travel",),
@@ -64,12 +67,14 @@ CANONICAL_COMPANIES = {
     "Trip.com": ("trip com", "ctrip"),
     "Traveloka": (),
     "MG": ("mg bedbank", "mgbedbank", "mg holiday", "mg holidays"),
-    "Ohmyhotel": ("oh my hotel",),
+    "Oh My Hotel": ("ohmyhotel",),  # the live sheet's spelling; RezLive only relays its bookings
     "MakeMyTrip": ("make my trip",),
     "Dida Travel": ("dida",),
     "Mytour": ("my tour",),
     "VNTrip": ("vn trip",),
     "SynXis": ("sabre synxis",),
+    # Wyndham Rewards free nights: company Wyndham, rate 0 (Monteiro, live sheet 2026-10-27).
+    "Wyndham": ("wyndham rewards", "wyndham hotels and resorts"),
 }
 # Dropped from the end of a company name before matching: "BOOKING.COM BV", "Agoda Company Pte Ltd".
 LEGAL_SUFFIXES = {"bv", "ltd", "llc", "inc", "pte", "co", "company", "limited", "jsc", "gmbh", "corp",
@@ -287,12 +292,26 @@ def check_row(rec, room_codes=None):
     # (2026-10-22, rows 58 and 76: MG at 935,000 and 841,500, not flagged).
     if g("channel_type") == "OTA" and action in ("NEW", "CHANGE"):
         low = sorted({int(g(k)) for k in ("rate_per_night_vnd", "Average rate per night after discount")
-                      if g(k).isdigit() and int(g(k)) < RATE_FLOOR})
+                      if g(k).isdigit() and int(g(k)) < RATE_FLOOR
+                      and not (int(g(k)) == 0 and canon == "Wyndham")})  # a points night is 0 on purpose
         if low and "rate floor" not in note.lower():
             msg = (f"missing_info: OTA rate {' / '.join(f'{x:,}' for x in low)} VND/night is under the "
                    f"{RATE_FLOOR:,} floor; add 'rate floor: <rate> VND/night under 1,000,000 – likely "
                    f"promotion mistake' to missing_info so it reaches Karen")
             (warnings if built else errors).append(msg)
+    if action in ("NEW", "CHANGE") and g("rate_source") in ("OTA net", "Booking.com guest total"):
+        want = "Booking.com guest total" if canon == "Booking.com" else "OTA net"
+        if g("rate_source") != want:
+            errors.append(f"rate_source: {g('rate_source')!r} on a {g('company') or 'non-Booking.com'} row; write "
+                          f"{want!r} (Booking.com pays the guest total, every other OTA the net)")
+    received = _date(g("received_at"), "%d/%m/%Y %H:%M")
+    if action in ("NEW", "CHANGE") and a and received and a.date() < received.date():
+        # 2026-10-24, Footprint 211Q1126Y: "12 Nov" written as 12/11/2025
+        errors.append(f"arrival: {g('arrival')} is before the email ({g('received_at')[:10]}). A date with no "
+                      f"year is the next one after the email: check the year")
+    if action in ("NEW", "CHANGE") and g("status") == "Tentative" and not g("hold_until"):
+        warnings.append("status: Tentative is only for a hold the sender asked for, with its time limit in "
+                        "hold_until; a booking request or voucher is Definite")
     for part in re.split(r"\s*[;,/]\s*", g("nationality")):
         if re.fullmatch(r"[A-Za-z]{2,3}", part):
             name = COUNTRY_CODES.get(part.upper())

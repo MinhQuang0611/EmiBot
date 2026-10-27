@@ -141,7 +141,7 @@ BOOKING = {"action": "NEW", "received_at": "15/10/2026 11:56", "source_email": "
            "guest_names": "Nguyễn Văn Test; TBA", "nationality": "Vietnam", "arrival": "20/11/2026",
            "departure": "22/11/2026", "nights": "2", "status": "Tentative", "priority": "Normal",
            "missing_info": "Full guest names; adults per room"}
-DLX = {"room_code": "DLX-SV", "rooms": "2", "meal_plan": "BB", "rate_source": "TA card",
+DLX = {"room_code": "DLX-SV", "rooms": "2", "adults": "4", "meal_plan": "BB", "rate_source": "TA card",
        "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000", "total_vnd": "8000000"}
 TPL = dict(DLX, room_code="TPL", rooms="1", rate_per_night_vnd="2300000",
            **{"Average rate per night after discount": "2300000", "total_vnd": "4600000"})
@@ -253,6 +253,79 @@ class SheetCommandsTest(unittest.TestCase):
         sh, _ = sheet_with([["NEW", "SB-2", "Nguyen An"], ["NEW", "AN-9", "Ivan Petrov"]])
         self.assertEqual(len(emi.sheet_find(sh, "petrov", out=lambda *_: None)), 1)
         self.assertEqual(len(emi.sheet_find(sh, "sb-2", out=lambda *_: None)), 1)
+
+
+def sheet_row(**cells):
+    return [cells.get(h, "") for h in REAL_HEADER]
+
+
+BUILT = dict(BOOKING, status="Definite", ezfolio_group_code="30255", confirmation_no="C-1", **DLX)
+TPL_BUILT = dict(BUILT, **TPL)
+
+
+class FollowUpRowsTest(unittest.TestCase):
+    """Live sheet vs sandbox, 2026-10-27: follow-ups folded into old rows, CHANGE / CANCEL rows missing the
+    group code, company, rates and pax, declined bookings cancelled twice, a cancel-and-rebuild refused."""
+    CHANGE = dict(action="CHANGE", received_at="25/10/2026 13:56", source_email="Re: TEST-1510",
+                  booking_ref="TEST-1510", what_changed="Payment 1 received", property="HAYA", status="Definite",
+                  priority="Normal", **{"Payment 1": "4000000", "Payment 1 date + time": "25/10/2026 13:50"})
+
+    def test_change_row_gets_the_bookings_details(self):
+        sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**TPL_BUILT)])
+        lines = []
+        emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [{"room_code": "DLX-SV"}, {"room_code": "TPL"}]},
+                         out=lines.append)
+        rows = appended(http)
+        self.assertEqual([(r["company"], r["channel_type"], r["ezfolio_group_code"], r["adults"],
+                           r["rate_per_night_vnd"], r["Payment 1"]) for r in rows],
+                         [("Công ty TEST Travel", "TA", "30255", "4", "2000000", "4000000"),
+                          ("Công ty TEST Travel", "TA", "30255", "4", "2300000", "4000000")])
+        self.assertTrue(any("blanks copied from row 3" in x for x in lines))
+
+    def test_a_new_rate_keeps_its_own_surcharge(self):
+        # Indian surcharge waived: the old "+20%" must not come back with the copied columns
+        sh, http = real_sheet([sheet_row(**dict(BUILT, surcharge="+20% Indian guests"))])
+        line = {"room_code": "DLX-SV", "rate_per_night_vnd": "2000000",
+                "Average rate per night after discount": "2000000", "total_vnd": "8000000"}
+        emi.sheet_append(sh, {"booking": dict(self.CHANGE, what_changed="Indian surcharge waived"),
+                              "room_lines": [line]}, out=lambda *_: None)
+        self.assertEqual(appended(http)[0]["surcharge"], "")
+
+    def test_cancel_without_room_becomes_one_row_per_room_type(self):
+        sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**TPL_BUILT)])
+        cancel = dict(self.CHANGE, action="CANCEL", what_changed="Cancelled by agency", status="Cancelled")
+        emi.sheet_append(sh, {"booking": cancel, "room_lines": [{}]}, out=lambda *_: None)
+        self.assertEqual([(r["action"], r["room_code"], r["total_vnd"], r["ezfolio_group_code"])
+                          for r in appended(http)],
+                         [("CANCEL", "DLX-SV", "8000000", "30255"), ("CANCEL", "TPL", "4600000", "30255")])
+
+    def test_second_cancel_refused(self):
+        closed = dict(BUILT, action="CANCEL", received_at="24/10/2026 09:00", status="Cancelled",
+                      what_changed="On request booking cannot be accommodated")
+        sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**closed)])
+        cancel = dict(self.CHANGE, action="CANCEL", what_changed="Cancelled by operator", status="Cancelled")
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": cancel, "room_lines": [{}]}, out=lambda *_: None)
+        self.assertIn("already cancelled (row 4", str(e.exception))
+        self.assertIsNone(appended(http))
+
+    def test_cancel_and_rebuild_in_one_file(self):
+        sh, http = real_sheet([sheet_row(**BUILT)])
+        cancel = dict(BUILT, action="CANCEL", received_at="26/10/2026 20:15", status="Cancelled",
+                      what_changed="Cancelled and rebuilt as a new group", source_email="GD0512")
+        new = dict(BOOKING, received_at="26/10/2026 20:15", status="Definite", **TPL)
+        emi.sheet_append(sh, [cancel, new], out=lambda *_: None)
+        self.assertEqual([r["action"] for r in appended(http)], ["CANCEL", "NEW"])
+
+    def test_payment_and_built_rows_are_not_edited(self):
+        sh, _ = real_sheet([sheet_row(**BUILT)])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_update(sh, 3, {"Payment 1": "4000000"}, out=lambda *_: None)
+        self.assertIn("a payment is a CHANGE row", str(e.exception))
+        sh, _ = real_sheet([sheet_row(**dict(BUILT, tracy_status="Entered", pdf_link="x.pdf"))])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_update(sh, 3, {"guest_names": "Omar"}, out=lambda *_: None)
+        self.assertIn("already built in EZFOLIO", str(e.exception))
 
 
 def chip(uri):

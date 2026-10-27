@@ -17,7 +17,7 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 1. Read every email in sales@haya-hotels.com received since the last scan, whole thread and attachments.
 2. Classify each one.
 3. New / change / cancellation → write or update intake sheet rows. Cancellations are flagged to Karen.
-4. Payment slips → fill the payment columns; draft the forward to accountant@palmahotel.vn with the group code.
+4. Payment slips → a CHANGE row with the payment columns filled; draft the forward to accountant@palmahotel.vn with the group code.
 5. Arrival details, special requests, rooming lists, changes within 3 days of arrival → draft the forward to haya@haya-hotels.com.
 6. Inquiries and quote requests → draft the reply.
 7. Read the Sent folder: for any draft of mine that was sent, record the real sent time and note any edits as corrections.
@@ -35,10 +35,10 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
    2. Classify it (`skills/inbox-triage.md`).
    3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`.
       - Not there (new booking) → `py -m tools.emi sheet-template NEW emi-work/out/<ref>.json`. Fill the values: shared columns in `booking`, one `room_lines` entry per room type (copy the entry for each extra type). Don't add or rename keys. Unknown → leave blank; a blank REQUIRED column goes in `missing_info` as `REQUIRED blank: <column> – <reason>`.
-      - Change or cancellation of a booking already there → `sheet-template CHANGE` (or `CANCEL`) the same way; per the Rules tab it becomes new rows with the same `booking_ref` and `what_changed` filled.
+      - Change, payment, follow-up that adds something, or cancellation of a booking already there → `sheet-template CHANGE` (or `CANCEL`): new rows with the same `booking_ref` and `what_changed` filled. Fill only what this email changes; `sheet-append` copies the rest from the booking's latest rows and prints what it copied. A CANCEL with one empty room line becomes one row per room type. Cancel-and-rebuild: CANCEL and NEW rows in one file. Never `sheet-update` an older row for news about the booking (`skills/booking-intake.md`, "One email, one set of rows").
       - `py -m tools.emi sheet-check emi-work/out/<ref>.json` → fix every line it lists, run it again until `OK`. Warnings: fix them or say why in `notes`.
       - `py -m tools.emi sheet-append emi-work/out/<ref>.json` → prints the rows as written: compare with the email.
-      - A wrong cell on an existing row → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row.
+      - A wrong cell I wrote on a row not yet built → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row. It refuses payment columns and rows already built (Entered/Problem): those are CHANGE rows.
       - If a command refuses, read the reason and fix the JSON. Never write to the sheet any other way.
    4. Inquiry or quote request (no booking yet) → `py -m tools.emi quote …` as in `skills/inquiries-and-quotes.md`, write the reply from its template with the command's numbers, `py -m tools.emi draft-reply <id> emi-work/out/<sender>-inquiry.txt --kind inquiry`. List every `GAP:` line in the report.
    5. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind <kind>`. Kind (`skills/inbox-triage.md` "Draft kind"): `request` for a question or special request on an existing booking (then also the front-office forward), `inquiry` only for a price or availability question with no booking yet, `reply` for anything else. An email forwarded in by a colleague (@haya-hotels.com, @palmahotel.vn): reply to the original writer with `--to <their address> --cc <colleague>` (`skills/email-templates.md` "Who the reply goes to"); `draft-reply` refuses to answer a colleague by mistake.

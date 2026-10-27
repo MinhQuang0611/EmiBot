@@ -15,12 +15,13 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | Type | What it looks like | Goes to |
 |---|---|---|
 | New booking | Agency/guest/OTA asks to book or sends a booking notice | `booking-intake.md` → action NEW |
-| Change | Dates, rooms, names, pax, or requests changed on an existing booking | `booking-intake.md` → action CHANGE |
+| Change | Dates, rooms, names, pax, flight, pick-up, meals or requests changed or added on an existing booking | `booking-intake.md` → action CHANGE: new rows, never an edit of the old ones ("One email, one set of rows") |
+| Declined on request | HAYA answered an on-request booking "cannot be accommodated" | `booking-intake.md` → action CANCEL, not NEW |
 | Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → action CANCEL, and flag to Karen |
-| Payment slip | Bank transfer proof for a deposit or balance | `booking-intake.md` payment columns + `department-forwards.md` (accounting) |
+| Payment slip | Bank transfer proof for a deposit or balance | `booking-intake.md` → a CHANGE row with the payment columns filled + `department-forwards.md` (accounting) |
 | Inquiry / quote request | Availability, price, hotel questions, **no booking yet** | `inquiries-and-quotes.md` |
 | Money ask | Discount, upgrade, waived fee, free extra | Flag to Karen as a request. Never resolved by me. |
-| Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | Update the row if it changes the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts. Front office forwarded it in → the reply only, cc front office |
+| Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | A CHANGE row if it changes or adds to the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts. Front office forwarded it in → the reply only, cc front office |
 | Chaser on a booking request | "Kindly resend", "any update?", "pls confirm" on a request we haven't confirmed (e.g. first sent to the wrong address, like `sales@palmahotel.vn`, or never answered) | It's the **booking request itself**: New booking → `booking-intake.md` (check the sheet first, the row may exist). Not an operational request, no front-office forward. No holding reply (`confirmation-replies.md`): top of the scan report for Karen, with how long they've waited. The confirmation later goes to the agency, `--to` if it was forwarded in |
 | Decline / thanks | "Not interested", "booked elsewhere", "thank you", "received" | Decline → a one- or two-line reply (`email-templates.md` section 6). Plain thanks with nothing to answer → no draft, one report line |
 | Palma | Anything about Palma Resort | Flag to Karen. Not mine. |
