@@ -59,6 +59,7 @@ from . import attachments, config, drive
 from .graph_mail import is_internal
 from . import quote as quoting
 from . import cancel_fee as cancelling
+from . import availability as avail
 from . import review, sim
 from . import intake_schema as schema
 from .state import now_iso
@@ -586,7 +587,34 @@ OTHER_CHANNELS = {
 }
 
 
-def run_quote(args, out=print):
+def _today_vn():
+    return datetime.now(VN).date()
+
+
+def load_availability(out=print):
+    """The availability sheet, or None with a GAP line when it can't be read."""
+    try:
+        return config.availability()
+    except Exception as e:  # sheet not shared, network, layout changed: the quote still prints its prices
+        out(f"GAP: availability sheet not readable ({e}) — availability and stop-sale NOT checked; "
+            f"a person must check before sending")
+        return None
+
+
+def run_availability(args, data, out=print):
+    try:
+        result = avail.check(data, quoting.parse_date(args.arrival), quoting.parse_date(args.departure), _today_vn())
+    except (avail.AvailabilityError, quoting.QuoteError) as e:
+        raise Refused(str(e)) from None
+    out(avail.render(data, result))
+    if args.alloc:
+        alloc = {k.strip(): int(v) for k, v in (part.split(":") for part in args.alloc.split(","))}
+        problems = avail.fits(result, alloc)
+        out("FITS: " + args.alloc if not problems else "DOES NOT FIT: " + "; ".join(problems))
+    return result
+
+
+def run_quote(args, out=print, availability=None):
     if args.channel not in quoting.TABLES:
         raise Refused(f"quote covers the TA and direct-guest tables only. "
                       f"{args.channel}: {OTHER_CHANNELS.get(args.channel, 'Karen')}")
@@ -606,7 +634,21 @@ def run_quote(args, out=print):
                           data=quoting.load_channel(args.channel))
     except quoting.QuoteError as e:
         raise Refused(str(e)) from None
+    result = None
+    if availability is not None:
+        try:
+            result = avail.check(availability, q["arrival"], q["departure"], _today_vn())
+        except avail.AvailabilityError as e:
+            q["gaps"] = [g for g in q["gaps"] if not g.startswith("availability")] + [str(e)]
+        else:
+            q["gaps"] = [g for g in q["gaps"] if not g.startswith("availability")]
     out(quoting.render(q))
+    if result is not None:
+        out("\n" + avail.render(availability, result))
+        for label, o in q["options"]:
+            problems = avail.fits(result, o["alloc"])
+            out(f"OPTION {label}: " + ("AVAILABLE" if not problems else "NOT AVAILABLE — " + "; ".join(problems)))
+    q["availability"] = result
     return q
 
 
@@ -884,6 +926,10 @@ def parser():
     s.add_argument("--twin", action="store_true", help="two separate beds wanted")
     s.add_argument("--indian", action="store_true", help="Indian guests: +20%% on room rate")
     s.add_argument("--channel", default="TA", choices=["TA", "Tour operator", "OTA", "Direct"])
+    s = sub.add_parser("availability", help="rooms free per room type for a stay (Future Availability sheet)")
+    s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
+    s.add_argument("--departure", required=True, help="DD/MM/YYYY")
+    s.add_argument("--alloc", help="check this allocation fits, e.g. 'STD:3,TPL:1'")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -970,7 +1016,12 @@ def main(argv=None):
             st.save()
             print(f"forgot the confirmation draft for {args.ref} row {args.row}; delete the draft itself in Outlook")
         elif c == "quote":
-            run_quote(args)
+            run_quote(args, availability=load_availability())
+        elif c == "availability":
+            data = load_availability()
+            if data is None:
+                return 2
+            run_availability(args, data)
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args)
         elif c == "pdf-fetch":

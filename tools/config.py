@@ -63,6 +63,16 @@ def sheet():
     return IntakeSheet(SHEET_ID, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), tab=SHEET_TAB)
 
 
+# HAYA's Future Availability sheet: rooms free per room type per night (dev, 2026-10-27).
+AVAILABILITY_SHEET_ID = os.environ.get("EMI_AVAILABILITY_SHEET_ID", "1X-k9uonws8uVh-HEixnemaocKFqc4Mg4Gh5PuuutB-0")
+
+
+def availability():
+    from .availability import load
+    from .intake_sheet import google_service_account_transport
+    return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_SHEET_ID)
+
+
 def telegram():
     """Draft notices to the reviewer's Telegram chat; None when EMI_TELEGRAM_CHAT_ID isn't set.
     In a SIM run they go to <sim dir>/telegram/ (and to Telegram only with EMI_SIM_TELEGRAM=1)."""

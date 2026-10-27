@@ -65,7 +65,7 @@ Emi: 2 mail mới (12:13–12:40)
 2. Hỏi giá 15–18/11 (ABC Travel)
 - Loại: hỏi giá, TA
 - Draft: #2, xem tin draft ở trên
-- Cần kiểm tra: tình trạng phòng (chưa nối file FUTURE AVAILABILITY)
+- Phòng: STD hết 16/11, đã chào DLX-SV (còn đủ 3 đêm)
 
 3. Hỏi về hồ bơi (Zion)
 - Loại: hỏi thông tin khách sạn

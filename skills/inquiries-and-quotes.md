@@ -7,12 +7,14 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 **Hotel facts** (check-in/out times, breakfast, pool, wifi, in-room water/tea/coffee, early check-in / late check-out charges, contact, transfer) come from `docs/rate-knowledge/hotel-info.md`. Its "Chưa biết" list is what I don't know: the email gets no draft yet. I ask Karen with `ask-karen <message_id> "<question>" --ref <ref>`, then `done <message_id> "waiting on Karen E-…"`, and write the reply once `karen-answer` has every answer (dev, 2026-10-22).
 
 ## Availability and rates — where they come from
-- The **"FUTURE AVAILABILITY"** folder on Google Drive: the daily future availability file and the price PDF. Always use the newest file. Never save a fixed file ID.
-- If the newest file looks stale or won't open: wait 2 minutes, retry, up to 3 times, then take it to Karen. Don't answer from an old file as if it were current.
+- **Availability: the "Future Availability — HAYA" Google Sheet** (dev, 2026-10-27; ID in `tools/config.py`, `EMI_AVAILABILITY_SHEET_ID`). One row per room type, one column per night; each cell is the rooms of that type still free that night. **0 = none left**; below 0 = overbooked, also none left. Its title gives the window it covers (e.g. 27/10/2026–23/02/2027).
+- I read it only through the commands: `quote` checks every option it prints against it, and `availability --arrival … --departure … [--alloc "STD:2,TPL:1"]` shows every room type for a stay. Never from memory, never from an older run: it changes every day.
+- A stay outside the sheet's window, or the sheet not readable → the command prints it; availability is unknown, and the question goes to Karen (`ask-karen`), no draft until she answers.
 - **Direct guests** (an individual, no company): `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf`, transcribed in `docs/rate-knowledge/direct.md`, priced with `quote --channel Direct`. The table is printed valid **01/03/2026–31/05/2026**. For any stay after that, `quote` prints `GAP: RATES OUT OF DATE`. Until Karen confirms the table still applies, there is no draft: the price question goes to Karen with `ask-karen`, and the reply is written after her answer. Walk-in rates: none.
 
 ## What to offer
-- The **cheapest room type available** for the full period, unless the client names a room type.
+- The **cheapest room type available** for the full period, unless the client names a room type. "Available" = `quote` prints `OPTION …: AVAILABLE`, i.e. free on **every** night of the stay.
+- The option or the named type is `NOT AVAILABLE` → don't offer it. Re-run `quote --room-type <code>` (or `--alloc`) with the next cheapest type that `availability` shows free every night, and offer that, saying plainly the asked type is full on those dates ("Phòng Standard đã hết vào đêm 11–12/11, HAYA xin gợi ý …"). Nothing free for the whole stay → say so and give the nearest dates or types that are free; never "we'll check and get back to you".
 - **One allocation**, matching the number of rooms asked for. If one type can't cover the whole request, offer a combination (e.g. 1 Standard + 5 Superior Double).
 - Give only the number of rooms they asked about. Don't tell an agency how many rooms are left — except when it's the last one: "còn 1 phòng".
 - **Stop-sale:** if a date is over 50% occupancy and check-in is more than 14 days away, don't offer it. Say the hotel is not accepting bookings for that date. Never say "sold out" when it isn't.
@@ -46,7 +48,7 @@ Never price a stay by hand. Run, from `/data/emi`:
 - The sender said how to split the rooms ("3 rooms for 2 adults, 1 room 2 adults + extra bed") → price exactly that: `--alloc "STD:3,TPL:1"` (extra bed = Triple). They gave a room count only → `--rooms N`. They named a type → `--room-type DLX-SV`. Two separate beds → `--twin`. Indian guests → `--indian`.
 - Nothing said about rooms → the command lists options (cheapest, fewest rooms, only doubles, sea-view upgrade). Offer **one** allocation — the cheapest unless the guests' make-up says otherwise (4 adult friends ≠ one Quadruple; a family of 4 = Quadruple) — and at most one alternative line.
 - Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
-- `GAP:` lines are things the data can't answer. Availability is always one (not connected yet): the draft is still written, and the scan report lists it as "check availability before sending". A 2027-holiday gap → the night's rate goes to Karen with `ask-karen`; the reply waits for her answer.
+- `GAP:` lines are things the data can't answer. Availability is read from the sheet (above): `GAP: availability sheet not readable` → no draft, the scan report says so. A 2027-holiday gap → the night's rate goes to Karen with `ask-karen`; the reply waits for her answer.
 - Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
 - Tour operator or OTA → the command refuses and says where to look (tour operator contract file, or Karen for OTA).
 
@@ -92,7 +94,7 @@ HAYA Team
 Scan report lines for it:
 ```
 - Draft: #5
-- Cần kiểm tra: còn 35 phòng cuối 01/2027 không (chưa nối file FUTURE AVAILABILITY)
+- Phòng: 27–30/01/2027 còn đủ 35 phòng (availability, STD/SUP-DBL/DLX-SV)
 - Quốc tịch chưa rõ: nếu khách Ấn Độ, giá 2.040.000/phòng/đêm, cả đoàn 214.200.000 — sửa draft trước khi gửi
 ```
 
