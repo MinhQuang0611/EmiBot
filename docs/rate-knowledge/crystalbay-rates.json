@@ -1,0 +1,78 @@
+{
+  "_source": "docs/rate-knowledge/crystalbay.md (from 'Haya - Crystal Bay 2026-2027.pdf', contract 00145/26-27/PQC-HAYAHOTEL/ALLOT). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/operator_rates.py (python -m tools.emi to-price --operator \"Crystal Bay\"). Shape in that file's docstring.",
+  "operator": "Crystal Bay",
+  "label": "Crystal Bay contract 00145/26-27 (2026–2027)",
+  "rate_source": "Crystal Bay contract",
+  "includes": "incl. 5% service charge, VAT and all taxes",
+  "valid_from": "2026-10-01",
+  "valid_to": "2027-09-30",
+  "periods": [
+    {"from": "2026-10-01", "to": "2026-10-31", "season": "normal"},
+    {"from": "2026-11-01", "to": "2027-02-28", "season": "high"},
+    {"from": "2027-03-01", "to": "2027-09-30", "season": "normal"}
+  ],
+  "holiday_season": "holiday",
+  "holidays": [
+    {"from": "2026-12-24", "to": "2026-12-26", "name": "Christmas"},
+    {"from": "2026-12-31", "to": "2027-01-02", "name": "New Year"},
+    {"from": "2027-02-01", "to": "2027-02-15", "name": "Tết"},
+    {"from": "2027-04-16", "to": "2027-04-17", "name": "Hùng Kings"},
+    {"from": "2027-04-30", "to": "2027-05-01", "name": "30/4–1/5"},
+    {"from": "2027-09-02", "to": "2027-09-02", "name": "National Day"}
+  ],
+  "release_days": {"normal": 10, "high": 21, "holiday": 21},
+  "rooms": {
+    "STD": {"name": "Standard Garden", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 1,
+            "rates": {"normal": 1250000, "high": 1900000, "holiday": 2450000}},
+    "SUP-DBL": {"name": "Superior Double", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 2,
+                "rates": {"normal": 1400000, "high": 2100000, "holiday": 2700000}},
+    "SUP-TWN": {"name": "Superior Twin", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 2,
+                "rates": {"normal": 1400000, "high": 2100000, "holiday": 2700000}},
+    "DLX-SV": {"name": "Deluxe Sea View", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": "on request",
+               "rates": {"normal": 1750000, "high": 2200000, "holiday": 2900000}},
+    "TPL": {"name": "Triple", "persons": 3, "capacity": [[3, 1], [2, 2]], "allotment": 2,
+            "rates": {"normal": 2050000, "high": 2650000, "holiday": 3450000}},
+    "QPL": {"name": "Quadruple", "persons": 4, "capacity": [[4, 1], [3, 2]], "allotment": 1,
+            "rates": {"normal": 2600000, "high": 3150000, "holiday": 4100000}},
+    "SUITE-SV": {"name": "Suite Sea View", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": "on request",
+                 "rates": {"normal": 2100000, "high": 3150000, "holiday": 4100000}}
+  },
+  "children": {
+    "_note": "Room free for the child; only a breakfast surcharge. Combination table: 1A+1C, 1A+2C, 2A+1C (0–2.99) = plain double rate; a 3–11.99 child sharing with 2 adults (or the 2nd child with 1 adult) pays the breakfast surcharge. Age on arrival day. The capacity table says 2A+1C, the combination table also allows 1A+2C: both are listed.",
+    "infant_under": 3,
+    "adult_from": 12,
+    "free_if_spare_bed": true,
+    "bands": [
+      {"from": 0, "to": 3, "per_night": 0},
+      {"from": 3, "to": 6, "per_night": {"normal": 150000, "high": 150000, "holiday": 250000}},
+      {"from": 6, "to": 12, "per_night": {"normal": 300000, "high": 300000, "holiday": 450000}}
+    ]
+  },
+  "meals": {
+    "_note": "Set menu, per person per meal: HB = lunch or dinner, FB = lunch + dinner. 0–2.99 free (max 1 per room).",
+    "base": "BB",
+    "supplements": {
+      "HB": [{"from": 0, "to": 3, "per_night": 0}, {"from": 3, "to": 6, "per_night": 150000}, {"from": 6, "to": 12, "per_night": 300000}, {"from": 12, "to": 200, "per_night": 600000}],
+      "FB": [{"from": 0, "to": 3, "per_night": 0}, {"from": 3, "to": 6, "per_night": 250000}, {"from": 6, "to": 12, "per_night": 600000}, {"from": 12, "to": 200, "per_night": 1200000}]
+    }
+  },
+  "early_bird": {
+    "_note": "Art. 7, stays 01.10.26–30.09.27, BB/HB/FB, holidays included. Room (with breakfast) only: not child breakfast surcharge, extra bed, HB/FB. Cumulative with bonus nite.",
+    "tiers": [{"min_days": 30, "pct": 10}, {"min_days": 60, "pct": 15}],
+    "on": ["room"],
+    "stay_windows": [["2026-10-01", "2027-09-30"]],
+    "except_seasons": []
+  },
+  "free_nights": {
+    "_note": "Bonus nite: stay 10 pay 9, 11 pay 10…, multiplied (20 pay 18). The free night includes every booked service of that night (breakfast, child breakfast surcharge, HB, FB). The contract doesn't say which night is free.",
+    "every": 10,
+    "multiply": true,
+    "which": "unspecified",
+    "on": ["room", "child", "meal"],
+    "stay_windows": [["2026-10-01", "2027-09-30"]]
+  },
+  "combine": "cumulative",
+  "payment": "100% by bank transfer at least 3 days before check-in; invoice with the confirmation to payment.acc@crystalbaytours.com; no 50% / 48-hour deposit",
+  "gaps": []
+}

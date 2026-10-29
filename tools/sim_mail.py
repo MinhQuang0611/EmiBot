@@ -126,6 +126,9 @@ class SimMail:
     def forward_draft_with_text(self, message_id, to, text):
         return self._write_draft("forward", message_id, list(to), text)
 
+    def create_new_draft(self, to, subject, body_text, cc=()):
+        return self._write_draft("new", None, list(to), body_text, cc=list(cc), subject=subject)
+
     def _meta(self, draft_id):
         path = os.path.join(self.drafts, draft_id + ".json")
         if not os.path.exists(path):

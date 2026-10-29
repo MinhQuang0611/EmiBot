@@ -36,6 +36,7 @@
 - **Payment reminders** (in `skills/confirmation-replies.md`) — deposit reminder at 40 hours, balance reminder before the 7-days-before-check-in deadline, both asking for the payment slip.
 - **Email templates** (`skills/email-templates.md`) — the wording for new, changed, and cancelled bookings, built from HAYA's own sent emails.
 - **Inquiries and quotes** (`skills/inquiries-and-quotes.md`) — email inquiries taken over from Sunny.
+- **Tour operators** (`skills/tour-operators.md`) — Anex, Odeon, Crystal Bay, Pegas, Selfie: contract pricing (`to-price`), the on-request rule, Odeon's voucher/invoice/new-email confirmation, Anex robot replies, operator accounting (dev, 2026-10-29).
 - **Anti AI Slop** (project skill `anti-ai-slop`) — applied to every outgoing draft.
 - **Telegram review** (`skills/telegram-review.md`) — every draft gets a #number and a Telegram notice. The reviewer answers Accept (tag only, never send), Deny, or Rewrite (with their comments). On Telegram I answer with the result only: no greeting, no self-introduction.
 

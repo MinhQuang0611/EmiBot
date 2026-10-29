@@ -62,7 +62,7 @@ Internal forward: `Trân trọng,` / `Reservations team / HAYA Hotel Phu Quoc` /
 ## Who the reply goes to (dev, 2026-10-22)
 A reply goes to the person who wrote the email, not to whoever put it in our inbox.
 - **Forwarded in by our own staff** (`@haya-hotels.com`, `@palmahotel.vn`, usually `haya@`): the writer is the From: of the quoted block. `mail-find` the original first; if it also reached sales@, reply on that and mark the forward `done` as a duplicate. Otherwise `draft-reply <forward id> <body> --kind <kind> --to <writer> --cc <colleague>`: To the writer, **cc haya@haya-hotels.com** (HAYA does this on every reconfirmation and guest reply that came through front office). `draft-reply` refuses an internal sender. Never `--internal` for a guest or agency.
-- No usable address, or a no-reply robot (OTA notice, `noreply@`): no reply, a report line. **Exception:** the Anex and Selfie robots (`vn.robot@ms.anextour.com`, `mailrobot@selfietravel.asia`) — HAYA answers them, cc `reservation@anexvietnam.com` / `vietnam@selfietravel.asia`.
+- No usable address, or a no-reply robot (OTA notice, `noreply@`): no reply, a report line. **Exception:** the Anex and Selfie robots. Anex (`vn.robot@ms.anextour.com`): every email gets a reply, and it goes **to** `reservation@anexvietnam.com` — `draft-reply` sets that by itself (dev, 2026-10-29, `tour-operators.md`). Selfie (`mailrobot@selfietravel.asia`): HAYA answers it, cc `vietnam@selfietravel.asia`.
 - Confirmation on a request forwarded in: `draft-confirmation <id> <row> <body> --to <agency> --cc <colleague>`.
 - Reply-all (`--all`) when the sender cc'd their own colleagues (accounts, managers) — HAYA keeps them on.
 
@@ -424,9 +424,11 @@ Reservations Team
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
-`draft-confirmation` only replies on a thread; a new email to Odeon has no command yet → the reply on Odeon's own email (wait-list / booking request) with this text, or report it.
+Both PDFs go with it: the build tool's confirmation and our proforma invoice (`tour-operators.md` Odeon). `draft-confirmation <voucher email id> <row> <body> --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation [ref]" --attach Invoice_[ref].pdf` — it refuses an Odeon row without them.
 
-**Decline on request** — only when Karen has decided the hotel can't take it. Reply on the operator's email; subject `Booking [no.] – Declined (on request)`:
+**Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
+
+**Decline on request** — when `on-request` says REJECT (no availability, or occupancy over 60% with check-in more than 30 days away; dev, 2026-10-29), or Karen has said no. `--kind decline`. Reply on the operator's email (Anex: to reservation@anexvietnam.com); subject `Booking [no.] – Declined (on request)`:
 ```
 Dear [Pegas / Selfie Travel] team,
 
@@ -439,7 +441,26 @@ Guests: [names]
 Room: 1 [room], [n] adults[, BB]
 Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
 
-Kindly decline [this request / these requests] in your system. We apologise for the inconvenience and look forward to your next booking.
+This booking falls outside our allotment, and we are unable to accept on-request bookings at the moment. Kindly decline [this request / these requests] in your system. We apologise for the inconvenience and look forward to your next booking.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+**Odeon decline** — a new email, not a reply (the voucher came through front office), to both Odeon addresses: `draft-new <voucher email id> vietnamreservations@odeontours.com,vietnamaccounts@odeontours.com "Voucher [no.] – Declined (on request)" <body> --kind decline --ref [no.]`:
+```
+Dear Odeon Tours Vietnam Reservations Team,
+
+Thank you for your reservation request.
+
+Voucher no. [no.] is declined: it falls outside our allotment, and we are unable to accept on-request bookings at the moment.
+
+Guests: [names]
+Room: 1 [room], [n] adults, [meal plan]
+Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+
+Kindly decline this request in your system. We apologise for the inconvenience and look forward to your next booking.
 
 Best regards,
 Reservations Team

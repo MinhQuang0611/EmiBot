@@ -28,7 +28,7 @@ PENDING = "pending-"  # draft id of a draft that exists only on Telegram so far
 KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
     "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
-    "balance_reminder": "Nhắc thanh toán",
+    "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking on request",
 }
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
@@ -131,7 +131,7 @@ def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, re
 
 
 def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-            cc=None, files=(), mailbox=""):
+            cc=None, files=(), mailbox="", new_subject=""):
     """Telegram mode: nothing goes to Outlook. The draft (text + files under store/<n>/) waits for Accept.
     files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'.
     A reply with to=[...] goes to exactly to / cc (the real sender of a mail our staff forwarded in), and its
@@ -142,7 +142,9 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
     if not subject.upper().startswith(prefix.strip()):
         subject = prefix + subject
     override = how == "reply" and bool(to)
-    if how == "forward":
+    if how == "new":  # a new email, e.g. Odeon's confirmation: the subject and recipients given
+        subject, recipients = new_subject, list(to or [])
+    elif how == "forward":
         recipients = list(to or [])
     elif override:
         recipients = list(to)
@@ -153,7 +155,7 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
             others = _addresses(src.get("toRecipients")) + _addresses(src.get("ccRecipients"))
             recipients += [a for a in others if a.lower() != mailbox.lower() and a not in recipients]
     n = st.open_review(None, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
-                       to=recipients, cc=list(cc or []) if override else [], to_override=override,
+                       to=recipients, cc=list(cc or []) if override or how == "new" else [], to_override=override,
                        subject=subject, text=text, attachments=[], files=[])
     r = st.data["reviews"][n]
     r["draft_id"] = PENDING + n
@@ -197,10 +199,12 @@ def _repoint(st, old, new):
 
 
 def _write(mail, r, text):
-    """The draft for review r, written into Outlook: a forward, a reply to whoever sent the source, or a reply
-    to the addresses --to gave."""
+    """The draft for review r, written into Outlook: a forward, a new email, a reply to whoever sent the
+    source, or a reply to the addresses --to gave."""
     if r["how"] == "forward":
         return mail.forward_draft_with_text(r["source"], r["to"], text)
+    if r["how"] == "new":
+        return mail.create_new_draft(r["to"], r["subject"], text, cc=r.get("cc") or [])
     if r.get("to_override"):
         return mail.reply_draft_with_text(r["source"], text, to=r["to"], cc=r.get("cc") or [])
     return mail.reply_draft_with_text(r["source"], text, reply_all=r.get("reply_all", False))

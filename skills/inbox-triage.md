@@ -14,7 +14,7 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 ## 2. Classify
 | Type | What it looks like | Goes to |
 |---|---|---|
-| New booking | Agency/guest/OTA asks to book or sends a booking notice | `booking-intake.md` → action NEW |
+| New booking | Agency/guest/OTA asks to book or sends a booking notice | `booking-intake.md` → action NEW. Tour operator (Anex, Odeon, Crystal Bay, Pegas, Selfie, Fun and Sun): `tour-operators.md` first — contract price, allotment or on request, Anex robot replies |
 | Change | Dates, rooms, names, pax, flight, pick-up, meals or requests changed or added on an existing booking | `booking-intake.md` → action CHANGE: new rows, never an edit of the old ones ("One email, one set of rows") |
 | Declined on request | HAYA answered an on-request booking "cannot be accommodated" | `booking-intake.md` → action CANCEL, not NEW |
 | Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → action CANCEL, and flag to Karen |
@@ -34,6 +34,7 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `request` — question or special request on an existing booking: arrival time, same floor, late check-out, luggage (`email-templates.md` section 5).
 - `confirmation`, `deposit_reminder`, `balance_reminder` — `confirmation-replies.md`.
 - `forward` — every forward to accounting or front office.
+- `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
 
 **Rates another agency gets** ("same rate as Aurora Travel", "as our partner X"): never quoted or compared (`inquiries-and-quotes.md`). The row's rate waits in `missing_info` and the question goes to Karen.

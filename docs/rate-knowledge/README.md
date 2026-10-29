@@ -17,6 +17,8 @@ Bản chép tay (text + OCR đọc từ ảnh) của 7 file trong `docs/RATE TAB
 | Tour operator khác, OTA | — không có file. Chuyển Karen. | |
 | Mọi bên — câu hỏi về khách sạn (giờ nhận/trả phòng, tiện ích, liên hệ, gửi hành lý…) | [hotel-info.md](hotel-info.md) — kèm danh sách "Chưa biết — hỏi Karen" | lấy từ file TA, Direct và FAQ khách lẻ (`docs/FAQ/HAYA PALMA - FAQ.xlsx`, cột HAYA) |
 
+**Giá tour operator tính bằng máy (dev, 2026-10-29):** `anex-rates.json`, `crystalbay-rates.json`, `odeon-rates.json`, `pegas-rates.json`, `selfie-rates.json` là bản số của các file .md trên, dùng cho `python -m tools.emi to-price` (`tools/operator_rates.py`). Sửa một con số thì sửa cả .md và .json.
+
 ## Luật dùng
 1. **Mỗi bên chỉ được nghe giá và điều khoản của chính mình.** Mọi hợp đồng tour operator đều có điều khoản bảo mật. Không đưa giá Anex cho Pegas, không đưa giá hợp đồng cho TA, không nói "bên khác được giảm nhiều hơn".
 2. Trả lời đúng những gì file ghi. Ưu đãi nào file không có thì nói thẳng là không có trong bảng giá / hợp đồng — không hứa, không "để em hỏi". Muốn hơn mức đó là một yêu cầu gửi Karen (và cần bố mẹ Karen duyệt).

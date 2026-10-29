@@ -21,7 +21,16 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
-    python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]]  # reply + EZFOLIO PDF
+    python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]] [--subject S] [--attach F]
+                                                          # reply + EZFOLIO PDF; --subject: a new email (Odeon)
+    python -m tools.emi draft-new <message_id> <to> <subject> <body.txt> [--cc C] [--kind K --ref R --row N] [--attach F]
+                                                          # a new email, not a reply (Odeon decline)
+    python -m tools.emi to-info <operator>                # tour operator: the steps and what differs for this one
+    python -m tools.emi to-price --operator X --arrival D --departure D --room CODE --adults N [--children "7;1"]
+                                 [--rooms N] [--meal BB|HB|FB] --booked D [--spo "EB,FS001"]  # contract price
+    python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
+    python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
+    python -m tools.emi invoice-data <booking_ref>        # proforma figures: number, due date, lines
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # a fact is missing: ask, no draft yet
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
@@ -59,6 +68,8 @@ from . import attachments, config, drive
 from .graph_mail import is_internal
 from . import quote as quoting
 from . import cancel_fee as cancelling
+from . import operator_rates as op_rates
+from . import operators
 from . import availability as avail
 from . import review, sim
 from . import intake_schema as schema
@@ -320,6 +331,9 @@ CARRY_BLOCKS = (("adults", "children", "child_ages"),
                  "surcharge", "Surcharge amount", "total_vnd"))
 
 
+TO_CHANGE_OWN = ("notes", "rate_source", "rate_per_night_vnd", "Average rate per night after discount", "total_vnd")
+
+
 def _blank(v):
     return not str(v if v is not None else "").strip()
 
@@ -378,6 +392,13 @@ def sheet_append(sheet, data, out=print):
                               f"is already on the sheet (row {hit['_row']}): this is not a NEW booking. Use action "
                               f"CHANGE (new rows, what_changed filled), or sheet-update row {hit['_row']} to add "
                               f"the other number. A cancel-and-rebuild: the CANCEL rows and the NEW rows in one file")
+        channel = rec.get("channel_type") or (state[0].get("channel_type", "") if state else "")
+        if rec.get("action") == "CHANGE" and channel == "Tour operator":
+            # tour-operators.md: every CHANGE row has a fully rewritten notes and its rate fields filled
+            missing = [k for k in TO_CHANGE_OWN if _blank(rec.get(k))]
+            if missing:
+                raise Refused(f"tour operator CHANGE {rec.get('room_code') or ''}: fill {', '.join(missing)} on this "
+                              f"row (notes rewritten in full, rate from to-price), not copied from the old rows")
         if rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL":
             # 2026-10-27: operators' cancel notices for bookings already closed as declined on request
             raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
@@ -512,6 +533,10 @@ def reply_recipients(mail, args, kind):
                           f"(the 'From:' of the forwarded mail) and our colleague in --cc")
         return to, cc
     sender = _sender_of(mail, args.message_id)
+    robot = operators.robot_operator(sender)
+    if robot:
+        # tour-operators.md: Anex mails from a no-reply robot; replies go to its reservations desk
+        return list(operators.OPERATORS[robot]["reply_to"]), []
     if is_internal(sender) and not internal:
         raise Refused(FORWARDED_IN.format(sender=sender))
     return None, None
@@ -608,8 +633,8 @@ def _review_n(text):
 # --- inquiries (no booking yet) ---
 
 OTHER_CHANNELS = {
-    "Tour operator": "quote from that operator's own contract in docs/rate-knowledge/<name>.md (anex, crystalbay, "
-                     "odeon, pegas, selfie); Fun and Sun has no contract — Karen",
+    "Tour operator": "to-price --operator <Anex|Crystal Bay|Odeon|Pegas|Selfie> prices from that operator's own "
+                     "contract; Fun and Sun has no contract — Karen",
     "OTA": "OTAs book through their own systems; an OTA inquiry by email goes to Karen",
 }
 
@@ -764,35 +789,208 @@ def check_confirmation_text(body):
                           + " | ".join(lone))
 
 
+def check_operator_confirmation(body, ref="", group=""):
+    """A tour operator's confirmation (tour-operators.md step 7): the group code and the operator's ref, the
+    sign-off. No deposit or bank block: operators pay under their contract."""
+    need = [("Reservations Team", "the sign-off 'Best regards, / Reservations Team / HAYA Hotel Phu Quoc…'")]
+    if group:
+        need.append((f"#{group.lstrip('#')}", f"the group code #{group.lstrip('#')}"))
+    if ref:
+        need.append((ref.split("/")[0].strip(), f"the operator's ref {ref.split('/')[0].strip()}"))
+    missing = [what for needle, what in need if needle not in body]
+    if missing:
+        raise Refused("the confirmation text doesn't follow skills/email-templates.md section 6: missing "
+                      f"{', '.join(missing)}. No draft made.")
+
+
+def confirmation_check(row):
+    """The text check for this row's confirmation: tour operator or agency/guest."""
+    if row.get("channel_type") == "Tour operator":
+        return lambda body: check_operator_confirmation(body, row.get("booking_ref", ""),
+                                                        row.get("ezfolio_group_code", ""))
+    return check_confirmation_text
+
+
+def read_pdfs(paths):
+    """[(name, bytes, 'application/pdf')] for --attach: our own invoice PDFs, never a confirmation Emi made."""
+    files = []
+    for p in paths or ():
+        with open(p, "rb") as f:
+            data = f.read()
+        if not data.startswith(b"%PDF"):
+            raise Refused(f"--attach {p} is not a PDF")
+        files.append((os.path.basename(p), data, "application/pdf"))
+    return files
+
+
+def new_recipients(args):
+    to, cc = _addresses(args.to), _addresses(args.cc)
+    if not to:
+        raise Refused("a new email needs --to (or the <to> argument)")
+    ours = [a for a in to + cc if is_internal(a)]
+    if ours:
+        raise Refused(f"{', '.join(ours)} is our own address: a new email from Emi goes to the operator or agency")
+    return to, cc
+
+
 def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
-    """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made."""
+    """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made.
+    --subject: a new email instead of a reply (Odeon, tour-operators.md); --attach: our proforma invoice too."""
     r = _row(sheet, args.row)
     ref = r.get("booking_ref", "")
     if (ref, int(args.row)) in st.confirmation_drafted():
         raise Refused(f"{ref} row {args.row} already has a confirmation draft")
     body = read_text(args.body)
     check_no_gaps(body, args.message_id)
-    check_confirmation_text(body)
+    confirmation_check(r)(body)
+    company = r.get("company", "")
+    subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
+    if company == "Odeon":
+        odeon = operators.OPERATORS["Odeon"]
+        missing = [a for a in odeon["confirm_to"] if a not in _addresses(args.to) + _addresses(args.cc)]
+        if not subject or missing or not attach:
+            raise Refused(f"Odeon's confirmation is a new email to {' and '.join(odeon['confirm_to'])} with both "
+                          f"PDFs: --to {','.join(odeon['confirm_to'])} --subject "
+                          f"\"{odeon['confirm_subject'].format(ref=ref.split('/')[0].strip())}\" "
+                          f"--attach Invoice_<ref>.pdf (invoice-data {ref})")
+    extra = read_pdfs(attach)
     _, name, mime, data = pdf_fetch(sheet, args.row, out=out)
     if mime != "application/pdf":
         raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                       f"exported from EZFOLIO. No draft made.")
-    to, cc = reply_recipients(mail, args, "confirmation")
+    files = [(name, data, "application/pdf")] + extra
+    if subject:
+        to, cc = new_recipients(args)
+        how = "new"
+    else:
+        to, cc = reply_recipients(mail, args, "confirmation")
+        how = "reply"
+    # kept on the review so a Rewrite is checked the same way
+    meta = {"operator": company if r.get("channel_type") == "Tour operator" else "",
+            "group": r.get("ezfolio_group_code", "")}
     if telegram_first(tg):
-        n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind="confirmation",
+        n = review.propose(mail, st, tg, pending_store(), how=how, source=args.message_id, kind="confirmation",
                            ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
-                           to=to, cc=cc, files=[(name, data, "application/pdf")])
+                           to=to, cc=cc, files=files, new_subject=subject or "")
+        st.data["reviews"][n].update(meta)
         st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation")
-        out(f"confirmation draft #{n} sent to Telegram for review with the PDF, not in Outlook until Accept: "
-            f"{review.PENDING}{n}")
+        out(f"confirmation draft #{n} sent to Telegram for review with {len(files)} PDF(s), not in Outlook until "
+            f"Accept: {review.PENDING}{n}")
         return {"id": review.PENDING + n}
-    d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all, to=to, cc=cc)
-    mail.add_attachment(d["id"], name, data, content_type="application/pdf")
+    if how == "new":
+        d = mail.create_new_draft(to, subject, body, cc=cc)
+    else:
+        d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all, to=to, cc=cc)
+    for fname, fdata, ctype in files:
+        mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
     st.record_draft(d["id"], ref, int(args.row), "confirmation")
-    n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind="confirmation", ref=ref,
+    n = review.opened(mail, st, tg, d["id"], how=how, source=args.message_id, kind="confirmation", ref=ref,
                       row=int(args.row), text=body, reply_all=args.all, to=to, cc=cc, override=bool(to),
-                      attachments=[name])
-    out(f"confirmation draft #{n} saved in Drafts with the PDF attached: {d['id']}" + _to_line(to, cc))
+                      attachments=[f[0] for f in files])
+    st.data["reviews"][n].update(meta)
+    out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc))
+    return d
+
+
+def draft_new(mail, st, args, tg=None, out=print):
+    """A new email, not a reply: Odeon's on-request decline goes to both Odeon addresses (tour-operators.md)."""
+    if args.kind == "confirmation":
+        raise Refused("a confirmation goes through draft-confirmation (it checks the EZFOLIO PDF): "
+                      "draft-confirmation <message_id> <row> <body> --to … --subject … --attach …")
+    text = read_text(args.body)
+    check_no_gaps(text, args.message_id)
+    to, cc = new_recipients(args)
+    files = read_pdfs(args.attach)
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="new", source=args.message_id, kind=args.kind,
+                           ref=args.ref, row=int(args.row or 0), text=text, to=to, cc=cc, files=files,
+                           new_subject=args.subject)
+        st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
+        out(f"new email draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
+            + _to_line(to, cc))
+        return {"id": review.PENDING + n}
+    d = mail.create_new_draft(to, args.subject, text, cc=cc)
+    for fname, fdata, ctype in files:
+        mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
+    _record(st, d, args)
+    n = review.opened(mail, st, tg, d["id"], how="new", source=args.message_id, kind=args.kind, ref=args.ref,
+                      row=int(args.row or 0), text=text, to=to, cc=cc, attachments=[f[0] for f in files])
+    out(f"new email draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    return d
+
+
+# --- tour operators (skills/tour-operators.md) ---
+
+def _ages(text):
+    try:
+        return [int(x) for x in re.split(r"[;,\s]+", text.strip()) if x] if text else []
+    except ValueError:
+        raise Refused(f"--children takes ages separated by ';', e.g. '7;1' — got {text!r}") from None
+
+
+def to_price(args, out=print):
+    try:
+        q = op_rates.price(args.operator, op_rates.parse_date(args.arrival), op_rates.parse_date(args.departure),
+                           args.room, args.adults, _ages(args.children), rooms=args.rooms, meal=args.meal,
+                           booked=op_rates.parse_date(args.booked),
+                           spo=re.split(r"[,;]", args.spo) if args.spo is not None else None)
+    except op_rates.RateError as e:
+        raise Refused(str(e)) from None
+    out(op_rates.render(q))
+    if not q["inside_release"]:
+        out(f"\nAFTER RELEASE: treat it as on request — on-request --arrival {args.arrival} --departure "
+            f"{args.departure} --alloc \"{args.room}:{args.rooms}\"")
+    return q
+
+
+def run_on_request(args, data, out=print):
+    if not args.alloc:
+        raise Refused("--alloc names the rooms asked for, e.g. 'DLX-SV:1'")
+    result = run_availability(args, data, out=out)
+    alloc = {k.strip(): int(v) for k, v in (part.split(":") for part in args.alloc.split(","))}
+    verdict, why = operators.on_request(result, avail.fits(result, alloc), quoting.parse_date(args.arrival),
+                                        _today_vn())
+    out(f"\nON REQUEST: {verdict} — {'; '.join(why)}")
+    if verdict == "REJECT":
+        out(f"Next: CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\"), then the decline "
+            f"draft (email-templates.md section 6): Odeon -> draft-new to "
+            f"{','.join(operators.OPERATORS['Odeon']['confirm_to'])} --kind decline; others -> draft-reply "
+            f"--kind decline on the operator's email.")
+    else:
+        out("Next: no row yet. ask-karen <message_id> \"<booking, dates, rooms: can we accept it?>\" --ref <ref>, "
+            "then done <message_id> \"waiting on Karen E-…\". Her yes -> NEW rows; her no -> the REJECT path.")
+    return verdict
+
+
+def _monday_last_week(today):
+    return today - timedelta(days=today.weekday() + 7)
+
+
+def run_checkouts(sheet, args, out=print):
+    if args.last_week:
+        first = _monday_last_week(_today_vn())
+        last = first + timedelta(days=6)
+    elif args.from_:
+        first = quoting.parse_date(args.from_)
+        last = quoting.parse_date(args.to) if args.to else first
+    else:
+        raise Refused("--from DD/MM/YYYY [--to DD/MM/YYYY], or --last-week (Monday to Sunday)")
+    hits = operators.checkouts(sheet.rows(), booking_state, args.company, first, last)
+    out(operators.render_checkouts(hits, args.company, first, last))
+    return hits
+
+
+def run_invoice_data(sheet, ref, out=print):
+    state = booking_state(sheet.rows(), ref)
+    if not state:
+        raise Refused(f"no rows for booking_ref {ref!r} on the sheet")
+    if operators.cancelled(state):
+        raise Refused(f"{ref} is cancelled on the sheet: no invoice")
+    try:
+        d = operators.invoice_data(state)
+    except KeyError as e:
+        raise Refused(str(e).strip("'\"")) from None
+    out(operators.render_invoice(d))
     return d
 
 
@@ -819,7 +1017,10 @@ def run_review(mail, st, tg, args, out=print):
             _, r = st.review(n)
             text = read_text(args.body)
             check_no_gaps(text, r.get("source") or "<message_id>")
-            check = check_confirmation_text if r["kind"] == "confirmation" else None
+            check = None
+            if r["kind"] == "confirmation":
+                check = (check_confirmation_text if not r.get("operator") else
+                         lambda body: check_operator_confirmation(body, r.get("ref", ""), r.get("group", "")))
             review.rewrite(mail, st, tg, n, text, feedback=args.feedback, check=check, out=out)
         elif args.cmd == "review-notify":  # put the notice and its buttons back (Telegram down, buttons gone)
             n, r = st.review(n)
@@ -974,6 +1175,40 @@ def parser():
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all")
     _recipient_args(s)
+    s.add_argument("--subject", default="", help="a new email with this subject instead of a reply (Odeon)")
+    s.add_argument("--attach", action="append", default=[], help="another PDF to attach, e.g. our proforma invoice")
+    s = sub.add_parser("draft-new", help="a new email, not a reply (Odeon decline)")
+    s.add_argument("message_id", help="the email this is about")
+    s.add_argument("to", help="comma-separated addresses")
+    s.add_argument("subject"); s.add_argument("body", help="UTF-8 text file with the message")
+    s.add_argument("--cc", default="")
+    s.add_argument("--kind", default="reply", help="decline, reply, forward …")
+    s.add_argument("--ref", default=""); s.add_argument("--row", default="")
+    s.add_argument("--attach", action="append", default=[], help="a PDF to attach")
+    s = sub.add_parser("to-info", help="a tour operator's steps and what differs for it")
+    s.add_argument("operator")
+    s = sub.add_parser("to-price", help="price a tour operator booking from its own contract")
+    s.add_argument("--operator", required=True, choices=sorted(op_rates.FILES) + sorted(op_rates.NO_CONTRACT))
+    s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
+    s.add_argument("--departure", required=True, help="DD/MM/YYYY")
+    s.add_argument("--room", required=True, help="room code, e.g. DLX-SV")
+    s.add_argument("--rooms", type=int, default=1)
+    s.add_argument("--adults", type=int, required=True, help="per room")
+    s.add_argument("--children", default="", help="ages per room separated by ';', e.g. '7;1'")
+    s.add_argument("--meal", default="BB", help="BB, HB or FB")
+    s.add_argument("--booked", required=True, help="DD/MM/YYYY the operator made the booking (voucher date)")
+    s.add_argument("--spo", help="Odeon: the voucher's SPO code(s), e.g. 'EB,FS001', 'SCO', or 'none'")
+    s = sub.add_parser("on-request", help="tour operator on-request booking: reject or ask Karen")
+    s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
+    s.add_argument("--departure", required=True, help="DD/MM/YYYY")
+    s.add_argument("--alloc", required=True, help="rooms asked for, e.g. 'DLX-SV:1,STD:2'")
+    s = sub.add_parser("checkouts", help="an operator's bookings checking out in a date range (not cancelled)")
+    s.add_argument("--company", required=True, help="as in the sheet's company column, e.g. Anex")
+    s.add_argument("--from", dest="from_", help="DD/MM/YYYY")
+    s.add_argument("--to", help="DD/MM/YYYY, default = --from")
+    s.add_argument("--last-week", action="store_true", help="last Monday to Sunday")
+    s = sub.add_parser("invoice-data", help="proforma invoice figures for a tour operator booking")
+    s.add_argument("booking_ref")
     s = sub.add_parser("ask-karen", help="a fact for the reply is missing: ask Karen, write no draft yet")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
     s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
@@ -1065,6 +1300,26 @@ def main(argv=None):
         elif c == "draft-confirmation":
             draft_confirmation(config.mail(), config.sheet(), st, args, tg=config.telegram())
             st.save()
+        elif c == "draft-new":
+            draft_new(config.mail(), st, args, tg=config.telegram())
+            st.save()
+        elif c == "to-info":
+            try:
+                print(operators.info(args.operator))
+            except KeyError as e:
+                raise Refused(str(e).strip("'\"")) from None
+        elif c == "to-price":
+            to_price(args)
+        elif c == "on-request":
+            data = load_availability()
+            if data is None:
+                print("ON REQUEST: can't decide without the availability sheet — ask Karen")
+                return 2
+            run_on_request(args, data)
+        elif c == "checkouts":
+            run_checkouts(config.sheet(), args)
+        elif c == "invoice-data":
+            run_invoice_data(config.sheet(), args.booking_ref)
         elif c == "draft-attach":
             draft_attach(config.mail(), st, args.draft_id, args.file)
             st.save()

@@ -50,7 +50,7 @@ Never price a stay by hand. Run, from `/data/emi`:
 - Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
 - `GAP:` lines are things the data can't answer. Availability is read from the sheet (above): `GAP: availability sheet not readable` → no draft, the scan report says so. A 2027-holiday gap → the night's rate goes to Karen with `ask-karen`; the reply waits for her answer.
 - Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
-- Tour operator or OTA → the command refuses and says where to look (tour operator contract file, or Karen for OTA).
+- Tour operator or OTA → the command refuses and says where to look: `to-price --operator <name>` prices from that operator's own contract (`tour-operators.md`); OTA → Karen.
 
 ## Group enquiries and vague dates: answer with rates now (dev, 2026-10-22)
 "End of January", "mid-March", "around Tết", "70 pax, 3 nights": a vague date or a big group is **not** a reason to answer with questions only. That is a holding reply (AGENTS.md rule 9), and it is what the first live run did: the draft only asked for exact dates. An agency asking for "availability and best possible rates" gets rates in the first reply.
