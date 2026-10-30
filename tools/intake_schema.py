@@ -203,8 +203,10 @@ def _date(v, fmt):
         return None
 
 
-def check_row(rec, room_codes=None):
-    """(errors, warnings) for one row. Errors block the write; warnings are printed."""
+def check_row(rec, room_codes=None, earlier_arrivals=None):
+    """(errors, warnings) for one row. Errors block the write; warnings are printed.
+    earlier_arrivals: the arrival dates on the booking's rows already on the sheet (a CHANGE's past arrival is
+    fine when it is one of them: a guest in house, a payment after the stay); None = not looked up."""
     errors, warnings = [], []
     g = lambda k: str(rec.get(k, "") if rec.get(k) is not None else "").strip()
     action = g("action")
@@ -331,11 +333,31 @@ def check_row(rec, room_codes=None):
     received = _date(g("received_at"), "%d/%m/%Y %H:%M")
     if action in ("NEW", "CHANGE") and a and received and a.date() < received.date():
         # 2026-10-24, Footprint 211Q1126Y: "12 Nov" written as 12/11/2025
-        errors.append(f"arrival: {g('arrival')} is before the email ({g('received_at')[:10]}). A date with no "
+        wrong_year = (f"arrival: {g('arrival')} is before the email ({g('received_at')[:10]}). A date with no "
                       f"year is the next one after the email: check the year")
+        if action == "NEW":
+            errors.append(wrong_year)
+        elif earlier_arrivals and g("arrival") not in earlier_arrivals:
+            # audit 30/10 (F-04): an in-house guest's update or a payment after the stay keeps the booking's own
+            # arrival; only a CHANGE that brings a new arrival in the past is a typo
+            errors.append(wrong_year + f"; the booking's earlier rows arrive {', '.join(sorted(earlier_arrivals))}")
+        elif not earlier_arrivals:
+            warnings.append(wrong_year + " (fine for a guest in house or a payment after the stay)")
     if action in ("NEW", "CHANGE") and g("status") == "Tentative" and not g("hold_until"):
         warnings.append("status: Tentative is only for a hold the sender asked for, with its time limit in "
                         "hold_until; a booking request or voucher is Definite")
+    # audit 30/10 (F-05, rows 302-303, 374): Indian guests on the TA card without the +20%
+    if (action in ("NEW", "CHANGE") and not built and g("channel_type") == "TA" and g("rate_source") == "TA card"
+            and g("nationality").upper() in ("IND", "INDIA", "INDIAN") and "20%" not in g("surcharge")
+            and not re.search(r"indian|ấn độ|\+20%", note, re.I)):
+        errors.append("rate_per_night_vnd: Indian guest on the TA card — the rate is the card rate +20% "
+                      "(1,700,000 → 2,040,000) and surcharge says '+20% Indian guests (incl. in rate)'. If the "
+                      "agency's rate or total leaves the +20% out, don't pick one: name it in missing_info "
+                      "('rate: Indian +20% not in the agency's rate') for Karen (AGENTS rule 4)")
+    # audit 30/10 (F-13, rows 373, 375): a non-blank missing_info stops the build; an inferred code is not missing
+    if action in ("NEW", "CHANGE") and not built and re.search(r"nationality inferred", note, re.I):
+        errors.append("missing_info: 'nationality inferred …' is not missing info (inferring from the name is step "
+                      "3 of the rule) and it stops the build: take it out; say it in the scan report if needed")
     nat = nationality_problem(g("nationality")) if g("nationality") else None
     if nat:
         # rows written before 29/10 carry the full name: a CHANGE copying it is not blocked
@@ -405,5 +427,8 @@ def template(sheet, action="NEW"):
     booking.update(action=action, property="HAYA", priority="Normal")
     if action in ("CHANGE", "CANCEL"):
         booking.update(ezfolio_group_code="", what_changed="")
+    if action == "CHANGE":
+        # audit 30/10 (F-08): a payment slip is a CHANGE row with the payment columns filled (schedule.md step 4)
+        booking.update({h: "" for h in sheet.header if h in PAYMENT})
     line = {h: "" for h in cols if level(h) == "room_lines"}
     return {"booking": booking, "room_lines": [line]}

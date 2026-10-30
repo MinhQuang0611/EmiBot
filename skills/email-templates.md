@@ -165,6 +165,23 @@ sales@haya-hotels.com
 - Cancellation lines are the TA policy (`docs/rate-knowledge/ta.md`). A tour operator: its contract's own lines, or leave the line out.
 - Tour operators (Anex, Odeon…): section 6. OTA bookings: no confirmation email.
 
+### 1b. New booking, payment slip already sent (`draft-confirmation`)
+The agency sent a UNC with the booking or before the confirmation went out, and the row has its `pdf_link`. Same form as section 1, except (dev, 2026-10-30):
+- Opening: `…xin chân thành cảm ơn Quý Đối tác đã gửi booking và ủy nhiệm chi cho khách sạn. Khách sạn xin xác nhận đặt phòng như sau:` / `Thank you for choosing HAYA Hotel Phu Quoc, Trademark Collection by Wyndham, and for sending the payment slip.`
+- Payment block — the deadline stays (rule 6), the slip follows it, and it is not called money received until accounting says so:
+  ```
+  Thanh toán:
+  – Đặt cọc 50% = [số tiền] VND trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7). Khách sạn đã nhận ủy nhiệm chi [số tiền] VND ([ngân hàng], [HH:MM] ngày [DD/MM/YYYY]) và đã chuyển bộ phận Kế toán đối chiếu.
+  – Thanh toán 50% còn lại = [số tiền] VND trước ngày [DD/MM/YYYY] (07 ngày trước ngày đến).
+  ```
+  English: `– 50% deposit (VND [amount]) by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7). We have received your payment slip for VND [amount] ([bank], [HH:MM] on [DD/MM/YYYY]) and passed it to our accounting team to reconcile.`
+- No "Booking sẽ tự động hủy…" / "automatically released" line.
+- Bank details stay; the slip ask is for the balance only: `Sau khi chuyển khoản 50% còn lại, chị vui lòng gửi ủy nhiệm chi qua email để khách sạn đối chiếu.` / `Please email us the payment slip after transferring the remaining 50%.`
+- **Slip short of 50%:** after the slip: `; số cọc còn thiếu: [số tiền] VND, chị vui lòng chuyển trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7).` / `; the remaining VND [amount] of the deposit is due by the same deadline.`
+- **Slip for 100%:** one line, `– Thanh toán 100% = [tổng] VND: khách sạn đã nhận ủy nhiệm chi [số tiền] VND (…) và đã chuyển bộ phận Kế toán đối chiếu.` No balance line, no slip ask.
+- **Accounting already confirmed the money arrived:** `Đã nhận cọc 50%: [số tiền] VND (tiền về tài khoản khách sạn ngày [DD/MM/YYYY]).` / `Deposit received: VND [amount] (credited on [DD/MM/YYYY]).`
+- Also drafted: the slip forward to accounting (4c), and the CHANGE row with the payment.
+
 ## 2. Changed booking (`draft-confirmation`)
 Sources: PZL06270114X (22/10, VI), Victoria NPKM00130000016 (15/10, VI).
 

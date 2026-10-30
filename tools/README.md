@@ -13,7 +13,7 @@ Python 3.10+. Graph uses only the standard library. Google needs `pip install -r
 | `graph_mail.py` | Outlook for sales@ via Microsoft Graph: read inbox, thread, attachments, Sent, Drafts; create reply / forward / new **drafts**, attach a PDF, tag drafts `Emi`. No send method; `_call` refuses `send`, `sendMail`, `reply`, `replyAll`, `forward`. |
 | `intake_sheet.py` | Intake sheet: read rows by header name, find by `booking_ref`, append rows, update single cells. Refuses unknown columns and refuses to write `pdf_link`, `ez_*` and columns 51–55 (the EZFOLIO status columns), and `tracy_status` (except `Pending` on a new row). Deletes only `TEST-` rows. |
 | `state.py` | JSON state between runs: last scan, Telegram questions `E-001`…, drafts, confirmations, reminders. |
-| `precheck.py` | Cheap check before cron jobs 1 and 2. Exit 0 = work, 1 = quiet, 2 = check failed. |
+| `precheck.py` | Cheap check before cron jobs 1 and 2. Exit 0 = work, 1 = quiet, 2 = check failed. `--agent` (job 1's own first step): exit 0 for quiet too, since the OpenClaw gateway logs exit 1 as a failed run. |
 | `acceptance.py` | Acceptance tests 2–7 from `openclaw-setup-brief.md` against the real systems. |
 | `config.py` | Settings from environment variables, loaded from `.env` if present (copy `.env.example`). |
 

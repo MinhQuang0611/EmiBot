@@ -76,7 +76,7 @@ from . import operators
 from . import availability as avail
 from . import review, sim
 from . import intake_schema as schema
-from .state import now_iso
+from .state import REVIEW_OPEN, now_iso
 
 VN = timezone(timedelta(hours=7))
 WORK_DIR = os.environ.get("EMI_WORK_DIR", "emi-work")
@@ -247,16 +247,39 @@ def expand_booking(data):
     return [data] if isinstance(data, dict) else list(data)
 
 
-def check_rows(sheet, records):
-    """Check every row against tools/intake_schema.py; all problems at once, so one fix covers them."""
+BACKDATED_DAYS = 2
+
+
+def _earlier_arrivals(sheet, records):
+    """{booking_ref: arrivals on its rows already on the sheet}, read only when a CHANGE needs it (F-04)."""
+    refs = {rec.get("booking_ref") for rec in records if rec.get("action") == "CHANGE" and rec.get("booking_ref")}
+    if not refs:
+        return {}
+    rows = sheet.rows()
+    return {ref: {str(r.get("arrival", "")).strip() for r in rows if _parts(r.get("booking_ref")) & _parts(ref)
+                  and str(r.get("arrival", "")).strip()} for ref in refs}
+
+
+def check_rows(sheet, records, fresh=True):
+    """Check every row against tools/intake_schema.py; all problems at once, so one fix covers them.
+    fresh=True: rows about to be written (not sheet-update of a row already there)."""
     codes = schema.room_codes(sheet)
     errors, warnings = [], []
+    earlier = _earlier_arrivals(sheet, records)
     for i, rec in enumerate(records, 1):
         unknown = sorted(set(rec) - set(sheet.header) - {"_row"})
         label = f"row {i} ({rec.get('room_code') or 'no room_code'})"
         if unknown:
             errors.append(f"{label}: not sheet columns {unknown} — run sheet-schema for the exact names")
-        e, w = schema.check_row(rec, codes)
+        e, w = schema.check_row(rec, codes, earlier_arrivals=earlier.get(rec.get("booking_ref")))
+        received = schema._date(rec.get("received_at") or "", "%d/%m/%Y %H:%M")
+        if fresh and rec.get("action") == "NEW" and received and (
+                (_today_vn() - received.date()).days > BACKDATED_DAYS):
+            # audit 30/10 (F-03): NEW rows dated back to the original email for bookings HAYA already had
+            w.append(f"received_at: {rec['received_at']} — a NEW dated {(_today_vn() - received.date()).days} days "
+                     f"back. If the thread shows HAYA already has this booking (its confirmation, a confirmation "
+                     f"number or group code, a modification, a payment, the guest in house), it is in EZFOLIO: "
+                     f"CHANGE rows with 'original booking not on the sheet', not NEW (booking-intake.md)")
         errors += [f"{label}: {x}" for x in e]
         warnings += [f"{label}: {x}" for x in w]
     if len({r.get("booking_ref", "") for r in records}) > 1:
@@ -483,7 +506,7 @@ def sheet_update(sheet, row, fields, work_dir=None, out=print):
         raise Refused(f"{group}: the group code is written only on CHANGE / CANCEL rows (sheet-append carries it), "
                       f"or when Karen asks")
     merged = {k: v for k, v in {**current, **fields}.items() if k != "_row"}
-    errors, warnings = check_rows(sheet, [merged])
+    errors, warnings = check_rows(sheet, [merged], fresh=False)
     for w in warnings:
         out(f"WARNING {w}")
     if errors:
@@ -653,6 +676,7 @@ def draft_reply(mail, st, args, tg=None, out=print):
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
+    note_pending_same(st, "reply", args.kind, args.ref, to, out=out)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
@@ -669,10 +693,40 @@ def draft_reply(mail, st, args, tg=None, out=print):
     return d
 
 
+FRONT_OFFICE = "haya@haya-hotels.com"
+# Only the intake sheet itself: a guest's "bed sheet" or "extra sheets" is a real request.
+SHEET_WORDS = re.compile(r"sheet\s+intake|intake\s+sheet|trên\s+sheet|\bintake\s+row", re.I)
+
+
+def check_front_office_note(text, to):
+    """dev 30/10 (F-01): front office doesn't know the intake sheet."""
+    if FRONT_OFFICE in {a.lower() for a in to or []} and SHEET_WORDS.search(text):
+        raise Refused("the front-office note mentions the intake sheet, which front office doesn't use. First line: "
+                      "'**Mã đoàn:** #<code>', or '**Booking:** <ref> (<OTA> qua <channel>) — chưa có mã đoàn' "
+                      "(department-forwards.md)")
+
+
+def note_pending_same(st, how, kind, ref, to, out=print):
+    """Audit 30/10 (F-10): an older draft of the same kind for the same booking and recipient still waits on
+    Telegram. Nothing is changed; the report tells the reviewer which one to deny."""
+    if not ref:
+        return []
+    lower = {a.lower() for a in to or []}
+    older = [n for n, r in st.data["reviews"].items()
+             if r.get("status") == REVIEW_OPEN and r.get("how") == how and r.get("kind") == kind
+             and (r.get("ref") or "") == ref and (not lower or lower & {a.lower() for a in r.get("to") or []})]
+    if older:
+        out(f"NOTE: {', '.join('#' + n for n in older)} still pending for {ref} ({how}, {kind}). If this draft "
+            f"replaces it, say in the report: 'deny {', '.join('#' + n for n in older)}, replaced by the new one'")
+    return older
+
+
 def draft_forward(mail, st, args, tg=None, out=print):
     to = _addresses(args.to)
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
+    check_front_office_note(text, to)
+    note_pending_same(st, "forward", args.kind, args.ref, to, out=out)
     sender = _sender_of(mail, args.message_id)
     if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
         raise Refused(f"{sender} forwarded this email to us: it already has it. Don't forward it back. Answer the "
@@ -742,6 +796,11 @@ def load_availability(out=print):
         out(f"GAP: availability sheet not readable ({e}) — availability and stop-sale NOT checked; "
             f"a person must check before sending")
         return None
+
+
+AVAILABILITY_GAP_NEXT = ("AVAILABILITY NOT CHECKED: write the row as the email asks, with 'availability: not checked "
+                         "– Future Availability sheet not readable' in missing_info, and carry on with the run "
+                         "(mark-scanned as usual); one line for Karen at the top of the report")
 
 
 def run_availability(args, data, out=print):
@@ -1122,6 +1181,8 @@ def run_review(mail, st, tg, args, out=print):
             _, r = st.review(n)
             text = read_text(args.body)
             check_no_gaps(text, r.get("source") or "<message_id>")
+            if r.get("how") == "forward":
+                check_front_office_note(text, r.get("to"))
             check = None
             if r["kind"] == "confirmation":
                 check = (check_confirmation_text if not r.get("operator") else
@@ -1401,12 +1462,15 @@ def main(argv=None):
         elif c == "availability":
             data = load_availability()
             if data is None:
-                return 2
+                # audit 30/10 (F-02): an unreadable sheet is a gap, not a failed run — the row is still written
+                print(AVAILABILITY_GAP_NEXT)
+                return 0
             run_availability(args, data)
         elif c == "stop-sales":
             data = load_availability()
             if data is None:
-                return 2
+                print("STOP SALES NOT CHECKED: one line in the report; carry on with the run")
+                return 0
             run_stop_sales(data)
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args)

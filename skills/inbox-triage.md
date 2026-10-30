@@ -48,6 +48,8 @@ One email can be two types (a change request with a payment slip attached). Hand
 ## 3. OTA emails
 OTA booking, change, and cancellation notices (SynXis, Agoda, Booking.com, Expedia, Trip.com, Traveloka, Ohmyhotel, MG, MakeMyTrip, Dida Travel, Mytour, VNTrip) go through intake like any other booking. They get no reply — the sender is a no-reply address. An Agoda email usually has a matching SynXis email: enter the booking once.
 
+**A request inside an OTA notice** (non-smoking, bed type, early check-in, arrival time, a note from the guest): no reply, but the front-office forward like any other special request (`department-forwards.md`), every time (audit 30/10: row 377, arriving the same day, got none while the same request at 10:17 got #190/#191). Whether to forward only arrivals within some number of days is open with Karen; until she picks one, every request goes.
+
 A guest who booked through an OTA and writes to us from their own address (questions, requests on that booking) is not an OTA notice: it's Operational, with a reply and a front-office forward, even when the OTA ref isn't on the sheet yet. That includes the OTA's relay addresses that pass mail to the guest (`…@guest.trip.com`, `…@guest.booking.com`): those are the guest, reply to them.
 
 B2B reservation systems and bedbanks (RezLive, Hotelbeds, WebBeds and the like) writing about a booking they hold — reconfirmations, special requests — are agencies, not OTA robots: they get a reply, unless the address says no-reply.
@@ -81,6 +83,6 @@ Emi: 2 mail mới (12:13–12:40)
 Chờ Karen: …
 ```
 
-- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram) or "không có" plus the reason in a few words. A draft with a CHECK BEFORE SENDING line: say so and the E-0nn asked.
+- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram), exactly as the `draft-*` command printed it for this email (never another email's: 29/10 23:34 named #182 for two bookings), or "không có" plus the reason in a few words. A draft with a CHECK BEFORE SENDING line: say so and the E-0nn asked.
 - No line about the steps that have no command yet (Sent folder, flags, 40-hour reminders). They go in the daily report, not in every scan report.
 - Under 25 lines. Several emails of the same kind (OTA notices, noise): one line with the count.

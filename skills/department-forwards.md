@@ -40,9 +40,13 @@ The reply alone is not enough: front office hears it from me, not from the guest
 
 **Exception:** front office forwarded the email to us. Then the reply goes to the original writer with `--cc haya@haya-hotels.com`, and that cc is front office's copy. No forward.
 
-**Booking not on the sheet yet** (no group code — OTA bookings often arrive this way): forward anyway, unlike accounting. The note says so, and the scan report lists the refs to check. Note on top, in Vietnamese:
+**Order: row first, forward after.** The intake row for the email is written (job 1 step 4.3, `sheet-append`) before its forward is drafted (step 4.5). A guest's question on a ref that has no row still gets its forward; the note doesn't say whether a row exists.
+
+**The note never mentions the intake sheet** (dev, 2026-10-30): front office doesn't use it and doesn't know what it is. Before the audit of 30/10, 48 forwards told front office the booking wasn't on the intake sheet, for rows the same run had just written. `draft-forward` refuses "sheet" or "intake" in a note to haya@.
+
+**No group code yet** (OTA bookings usually arrive this way): forward anyway, unlike accounting. The first line says there is no group code, and the scan report lists the refs. Note on top, in Vietnamese:
 ```
-**Booking:** [mã đặt phòng của khách / OTA] — chưa có trên sheet intake, chưa có mã đoàn
+**Booking:** [mã đặt phòng] ([OTA] qua [kênh]) — chưa có mã đoàn
 **Khách:** [tên như khách ký]
 **Lưu trú:** [DD/MM/YYYY] – [DD/MM/YYYY]
 **Yêu cầu:**
@@ -50,11 +54,11 @@ The reply alone is not enough: front office hears it from me, not from the guest
 • [2 phòng cùng tầng]
 • [Hỏi trả phòng muộn và gửi hành lý sau khi trả phòng]
 ```
-With a group code: `**Mã đoàn:** #[mã đoàn]` in place of the first line.
+With a group code: `**Mã đoàn:** #[mã đoàn]` in place of the first line. A booking not through an OTA (TA, direct): the agency's or guest's name in the brackets, `(<company>)`.
 
 Example, a SynXis notice for a Booking.com guest arriving the same day who asked for a non-smoking room (live run 2026-10-22, guest name replaced):
 ```
-**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có trên sheet intake, chưa có mã đoàn
+**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có mã đoàn
 **Khách:** [tên khách], 1 người lớn
 **Lưu trú:** 22/10/2026 – 24/10/2026 (đến hôm nay)
 **Phòng:** 1 Standard Garden View (1 Queen Bed)

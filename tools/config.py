@@ -64,7 +64,7 @@ def sheet():
 
 
 # HAYA's Future Availability sheet: rooms free per room type per night (dev, 2026-10-27).
-AVAILABILITY_SHEET_ID = os.environ.get("EMI_AVAILABILITY_SHEET_ID", "1X-k9uonws8uVh-HEixnemaocKFqc4Mg4Gh5PuuutB-0")
+AVAILABILITY_SHEET_ID = os.environ.get("EMI_AVAILABILITY_SHEET_ID", "1PxW_60FveCEcOjwQ4u6gj9pEszHlVYkoJrCQMtzMN_U")
 
 
 def availability():

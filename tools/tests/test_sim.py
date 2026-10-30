@@ -67,7 +67,7 @@ CHECK_REPLY = ("[CHECK BEFORE SENDING: late check-out % basis and luggage storag
                "check-out is subject to availability and charged by the hour of departure. You are welcome to leave "
                "your luggage with us after check-out.\n\nWe look forward to welcoming you.\n\nBest regards,\n"
                "Reservations Team")
-FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có trên sheet intake\n"
+FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có mã đoàn\n"
            "**Yêu cầu:**\n• 2 phòng cùng tầng")
 
 
