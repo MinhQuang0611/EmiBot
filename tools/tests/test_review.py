@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 from tools import emi, review, sim
@@ -90,6 +91,17 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(len(self.http.sent("editMessageReplyMarkup")), 1)  # buttons removed
         with self.assertRaises(review.ReviewError):  # decided once
             review.deny(self.mail, self.st, self.tg, "1")
+
+    def test_only_the_approvers_can_accept(self):
+        d = self.reply()
+        with mock.patch.dict(os.environ, {"EMI_APPROVERS": "Karen Nguyen, @karen_haya"}):
+            for by in ("", "Quang"):
+                with self.assertRaises(review.ReviewError):
+                    review.accept(self.mail, self.st, self.tg, "1", by=by)
+            self.assertEqual(self.st.data["reviews"]["1"]["status"], "pending")
+            review.accept(self.mail, self.st, self.tg, "1", by="karen_haya", out=self.lines.append)
+        self.assertEqual(self.st.data["reviews"]["1"]["status"], "approved")
+        self.assertIn("Emi approved", self.mail.get_draft(d["id"])["categories"])
 
     def test_deny_removes_draft_and_keeps_the_confirmation_blocked(self):
         d = self.reply(CONFIRMATION, kind="confirmation")

@@ -256,7 +256,17 @@ def _done_waiting(st, n):
         st.data["awaiting_feedback"] = None
 
 
+def _approvers():
+    """EMI_APPROVERS: who may Accept, comma-separated Telegram names / @usernames / user ids (dev, 2026-10-30:
+    Karen confirms). Unset = anyone in the chat."""
+    return [a.strip().lstrip("@").lower() for a in os.environ.get("EMI_APPROVERS", "").split(",") if a.strip()]
+
+
 def accept(mail, st, tg, n, by="", out=print):
+    allowed = _approvers()
+    if allowed and (by or "").strip().lstrip("@").lower() not in allowed:
+        raise ReviewError(f"#{str(n).lstrip('#')}: only {', '.join(allowed)} can Accept"
+                          + (f", not {by}" if by else " (no --by given)") + ". The draft stays pending.")
     n, r = _pending(mail, st, n)
     new = not in_outlook(r)
     if new:

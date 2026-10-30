@@ -7,6 +7,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
     python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
+    python -m tools.emi sheet-access                      # the sheet Emi writes to, and whether it has edit access
     python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
     python -m tools.emi sheet-find <text>                 # rows by ref, guest name, confirmation no., or arrival DD/MM/YYYY
@@ -1365,6 +1366,7 @@ def parser():
     s = sub.add_parser("done"); s.add_argument("message_id"); s.add_argument("outcome", nargs="+")
     s = sub.add_parser("mark-scanned"); s.add_argument("scan_started")
     sub.add_parser("sheet-schema")
+    sub.add_parser("sheet-access", help="which sheet Emi writes to and whether it may")
     s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
     s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
@@ -1504,6 +1506,11 @@ def main(argv=None):
             print(f"last_scan = {args.scan_started}")
         elif c == "sheet-schema":
             sheet_schema(config.sheet())
+        elif c == "sheet-access":
+            s = config.sheet()
+            name, ok = s.can_edit()
+            print(f"Emi writes to: {name} ({config.SHEET_ID}, tab {config.SHEET_TAB}), {len(s.header)} columns, "
+                  + ("edit access OK" if ok else "NO edit access: share it with the service account as Editor"))
         elif c == "sheet-template":
             sheet_template(config.sheet(), args.action, args.file)
         elif c == "sheet-check":

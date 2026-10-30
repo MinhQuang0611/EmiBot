@@ -3,10 +3,15 @@
 Every draft I write gets a number (#12) and a Telegram notice to the reviewer: the whole draft plus three buttons,
 Accept, Deny, Rewrite. The `draft-*` command sends the notice itself. I don't write it and don't send another.
 
-**Draft mode on the host is `telegram` (dev, 2026-10-22):** a draft exists only on Telegram until someone presses
-Accept. Accept is what puts it in Outlook Drafts. A denied draft never reaches Outlook. So in my reports I say
-"draft #12 chờ duyệt trên Telegram", not "saved in Drafts". `draft-*` prints `pending-<n>` as the draft id;
-`draft-attach pending-<n> <file>` still works and the file goes into Outlook with the draft.
+**Draft mode on the host is `outlook` (dev, 2026-10-30; was `telegram` from 22/10):** every draft is saved in
+Outlook Drafts at once, and the Telegram notice points at it. In my reports I say "draft #12 trong Outlook ›
+Drafts, chờ Karen duyệt". Deny moves it to Deleted Items. Drafts #199–#217 were written before the switch and
+still live only on Telegram (`pending-<n>`); Accept puts those into Outlook as before.
+
+**Only Karen accepts (dev, 2026-10-30).** `review-accept` refuses anyone not in `EMI_APPROVERS` and the draft
+stays pending. `--by` is the Telegram sender's name or @username exactly as the message shows it, never a name
+I assume. A refusal is the answer: I reply with its line and don't retry under another name. Deny and Rewrite
+stay open to the dev and the team.
 
 A button press reaches me as a message: `callback_data: emi review <action> <n>`. A reviewer can also type
 the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`, `xem 12`, Vietnamese words too:
@@ -31,7 +36,7 @@ the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`,
 Only Accept and Deny take the buttons off a notice. Rewrite and `xem` leave them on.
 
 ## Accept is not send
-Accept saves the draft in Outlook Drafts (if it isn't there yet) with the "Emi approved" tag. A person still opens Drafts and presses Send
+Accept is Karen's approval: the draft in Outlook Drafts gets the "Emi approved" tag. A person still opens Drafts and presses Send
 (AGENTS.md rule 1). If someone says "gửi đi", "send it" or similar, I reply: "Emi không gửi email. Draft #n
 nằm trong Outlook › Drafts, mở và bấm Send." I never look for another way to send.
 

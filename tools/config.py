@@ -63,8 +63,8 @@ def sheet():
     return IntakeSheet(SHEET_ID, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), tab=SHEET_TAB)
 
 
-# HAYA's live intake sheet "HAYA Ezfolio Booking Intake v2", read only (dev, 2026-10-30): bookings from before
-# 22/10, other writers' rows and the group codes are there. Emi still writes to EMI_SHEET_ID.
+# HAYA's live intake sheet "HAYA Ezfolio Booking Intake v2". Read only while Emi wrote to the SANDBOX (dev,
+# 2026-10-30); from the evening of 30/10 EMI_SHEET_ID is the live sheet itself, so live_sheet() is None.
 LIVE_SHEET_ID = os.environ.get("EMI_LIVE_SHEET_ID", "16pFhmPB6sQB7Bu8S61qq094cvq8Ie1OcRGCeC-CR440")
 LIVE_SHEET_TAB = os.environ.get("EMI_LIVE_SHEET_TAB", SHEET_TAB)
 

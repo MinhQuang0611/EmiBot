@@ -82,6 +82,13 @@ class IntakeSheet:
         """The live sheet carries the group code in two columns (Tracy audit 29/10); the SANDBOX in one."""
         return [h for h in self.header if "group" in h.lower() and "code" in h.lower()]
 
+    def can_edit(self):
+        """Whether the service account may write this sheet (Drive capabilities; Viewer -> False)."""
+        sheet_id = self.base.rsplit("/", 1)[-1]
+        resp = self.call("GET", f"https://www.googleapis.com/drive/v3/files/{sheet_id}"
+                                "?fields=name,capabilities(canEdit)&supportsAllDrives=true")
+        return resp.get("name", ""), bool(resp.get("capabilities", {}).get("canEdit"))
+
     def check_header(self, expected):
         """Return (missing, extra) column names versus an expected list."""
         have = set(self.header)
