@@ -252,15 +252,21 @@ def is_internal(address):
     return any(a.endswith("@" + d) or a.endswith("." + d) for d in INTERNAL_DOMAINS)
 
 
-def reply_subject(subject):
-    """'Fw: RE: SI781659A - …' -> 'RE: SI781659A - …': one RE, no forward marks. Used when a reply goes to the
-    original sender of a mail our own staff forwarded in, so the agency sees its own subject back."""
+def clean_subject(subject):
+    """The subject with no RE/FW marks and single spaces: Expedia's '  Tin nhắn từ X, khách của Hotels.com '
+    -> 'Tin nhắn từ X, khách của Hotels.com'."""
     s = subject or ""
     while True:
         t = _PREFIX.sub("", s)
         if t == s:
-            return "RE: " + s.strip()
+            return " ".join(s.split())
         s = t
+
+
+def reply_subject(subject):
+    """'Fw: RE: SI781659A - …' -> 'RE: SI781659A - …': one RE, no forward marks, no stray spaces, the way the
+    sales@ Sent folder has it ('RE: Tin nhắn từ Robert Pupp, khách của Hotels.com')."""
+    return "RE: " + clean_subject(subject)
 
 
 class GraphMail:
@@ -399,10 +405,10 @@ class GraphMail:
         mail forwarded in by our own front office is front office): To and Cc become exactly to / cc, and the
         subject becomes 'RE: <original subject>' without the 'Fw:'."""
         draft = self.create_reply_draft(message_id, "", reply_all=reply_all)
-        if to:
-            fields = {"toRecipients": _recipients(to), "ccRecipients": _recipients(cc or [])}
-            if draft.get("subject"):
-                fields["subject"] = reply_subject(draft["subject"])
+        fields = {"toRecipients": _recipients(to), "ccRecipients": _recipients(cc or [])} if to else {}
+        if draft.get("subject") and reply_subject(draft["subject"]) != draft["subject"]:
+            fields["subject"] = reply_subject(draft["subject"])
+        if fields:
             self._call("PATCH", f"/messages/{draft['id']}", body=fields)
         self._prepend_text(draft["id"], text)
         return draft

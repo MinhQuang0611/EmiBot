@@ -84,6 +84,8 @@ class HelpersTest(unittest.TestCase):
                          "RE: REZ6AD9A3A2: Hotel Booking Special Service Request")
         self.assertEqual(reply_subject("RE: Fw: RE: SI781659A - HAYA HOTEL PHU QUOC"), "RE: SI781659A - HAYA HOTEL PHU QUOC")
         self.assertEqual(reply_subject("TR: Chuyển tiếp: Đặt phòng"), "RE: Đặt phòng")
+        self.assertEqual(reply_subject("  Tin nhắn từ Robert Pupp,  khách của Hotels.com "),
+                         "RE: Tin nhắn từ Robert Pupp, khách của Hotels.com")
 
 
 class RecipientGuardTest(Base):

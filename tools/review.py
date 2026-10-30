@@ -18,7 +18,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from .graph_mail import reply_subject
+from .graph_mail import clean_subject, reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -137,10 +137,7 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
     A reply with to=[...] goes to exactly to / cc (the real sender of a mail our staff forwarded in), and its
     subject is 'RE: <original subject>' without the 'Fw:'; Accept writes it into Outlook the same way."""
     src = mail.get_message_text(source)
-    subject = src.get("subject", "")
-    prefix = "FW: " if how == "forward" else "RE: "
-    if not subject.upper().startswith(prefix.strip()):
-        subject = prefix + subject
+    subject = ("FW: " + clean_subject(src.get("subject", ""))) if how == "forward" else reply_subject(src.get("subject", ""))
     override = how == "reply" and bool(to)
     if how == "new":  # a new email, e.g. Odeon's confirmation: the subject and recipients given
         subject, recipients = new_subject, list(to or [])
@@ -148,7 +145,6 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
         recipients = list(to or [])
     elif override:
         recipients = list(to)
-        subject = reply_subject(src.get("subject", ""))
     else:
         recipients = _addresses([src.get("from")])
         if reply_all:
