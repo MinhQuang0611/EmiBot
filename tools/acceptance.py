@@ -1,6 +1,6 @@
 """Acceptance tests from openclaw-setup-brief.md, run against the real mailbox and sheet.
 
-    python -m tools.acceptance mail-login-start          # EMI_AUTH=delegated: print a sign-in code for sales@
+    python -m tools.acceptance mail-login-start [--send] # EMI_AUTH=delegated: print a sign-in code for sales@ (--send: + Mail.Send)
     python -m tools.acceptance mail-login-finish         # after signing in: save the token, then mail-read
     python -m tools.acceptance mail-read                 # test 2: 5 newest inbox emails
     python -m tools.acceptance attachments <message_id>  # test 3: list attachments of one email
@@ -38,15 +38,18 @@ def mail_read():
         print(m["receivedDateTime"], m["from"]["emailAddress"]["address"], "|", m["subject"])
 
 
-def mail_login_start():
-    config.mail().token.start()
-    print("Sign in as", config.MAILBOX, "then run: python -m tools.acceptance mail-login-finish")
+def mail_login_start(*flags):
+    # --send: also asks for Mail.Send, for Karen's Accept-sends (EMI_SEND_ON_ACCEPT=1). Karen signs in herself.
+    send = "--send" in flags
+    config.mail().token.start(send=send)
+    print("Sign in as", config.MAILBOX, "(with Mail.Send)" * send, "then run: python -m tools.acceptance mail-login-finish")
 
 
 def mail_login_finish():
     if not config.mail().token.finish():
         sys.exit("NOT YET: sign-in not finished in the browser. Finish it, then run this again.")
-    print("PASS: signed in, refresh token saved")
+    token = config.mail().token
+    print("PASS: signed in, refresh token saved; Mail.Send:", "yes" if token.can_send() else "no")
     mail_read()
 
 

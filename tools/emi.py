@@ -1345,6 +1345,8 @@ def status(st, out=print):
     out("telegram notices: " + ("on" if os.environ.get("EMI_TELEGRAM_CHAT_ID") else "off (EMI_TELEGRAM_CHAT_ID not set)"))
     out("draft mode: " + ("telegram (Outlook only on Accept)" if os.environ.get("EMI_DRAFT_MODE", "").lower() == "telegram"
                           else "outlook (saved in Drafts at once)"))
+    out("accept: " + ("SENDS the draft" if os.environ.get("EMI_SEND_ON_ACCEPT") == "1" else "tags 'Emi approved', a person sends")
+        + " — approvers: " + (os.environ.get("EMI_APPROVERS") or "anyone (EMI_APPROVERS not set)"))
 
 
 def _recipient_args(s):

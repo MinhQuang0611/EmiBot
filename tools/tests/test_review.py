@@ -103,6 +103,35 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(self.st.data["reviews"]["1"]["status"], "approved")
         self.assertIn("Emi approved", self.mail.get_draft(d["id"])["categories"])
 
+    def test_send_on_accept_sends_only_for_karen(self):
+        d = self.reply()
+        with mock.patch.dict(os.environ, {"EMI_SEND_ON_ACCEPT": "1", "EMI_APPROVERS": "Karen Nguyen"}):
+            with self.assertRaises(review.ReviewError):
+                review.accept(self.mail, self.st, self.tg, "1", by="Quang")
+            self.assertIsNotNone(self.mail.get_draft(d["id"]))  # still a draft
+            review.accept(self.mail, self.st, self.tg, "1", by="Karen Nguyen", out=self.lines.append)
+        self.assertEqual(self.st.data["reviews"]["1"]["status"], "sent")
+        self.assertIsNone(self.mail.get_draft(d["id"]))
+        self.assertTrue(self.mail._meta(d["id"])["sent"])
+        self.assertIn("đã gửi", self.lines[-1])
+
+    def test_send_on_accept_needs_approvers(self):
+        d = self.reply()
+        with mock.patch.dict(os.environ, {"EMI_SEND_ON_ACCEPT": "1", "EMI_APPROVERS": ""}):
+            with self.assertRaises(review.ReviewError):
+                review.accept(self.mail, self.st, self.tg, "1", by="anyone")
+        self.assertIsNotNone(self.mail.get_draft(d["id"]))
+        self.assertEqual(self.st.data["reviews"]["1"]["status"], "pending")
+
+    def test_send_on_accept_never_sends_a_check_line(self):
+        d = self.reply("[CHECK BEFORE SENDING: giá phòng]\n\nDear Guest,\n\nNoted.\n\nBest regards,\nReservations Team")
+        with mock.patch.dict(os.environ, {"EMI_SEND_ON_ACCEPT": "1", "EMI_APPROVERS": "Karen Nguyen"}):
+            with self.assertRaises(review.ReviewError) as e:
+                review.accept(self.mail, self.st, self.tg, "1", by="Karen Nguyen")
+        self.assertIn("Rewrite", str(e.exception))
+        self.assertIsNotNone(self.mail.get_draft(d["id"]))
+        self.assertEqual(self.st.data["reviews"]["1"]["status"], "pending")
+
     def test_deny_removes_draft_and_keeps_the_confirmation_blocked(self):
         d = self.reply(CONFIRMATION, kind="confirmation")
         self.assertIn(("TEST-1512", 52), self.st.confirmation_drafted())

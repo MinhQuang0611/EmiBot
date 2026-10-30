@@ -1,8 +1,9 @@
-"""Outlook access for sales@haya-hotels.com through Microsoft Graph. Draft-only.
+"""Outlook access for sales@haya-hotels.com through Microsoft Graph.
 
-Emi never sends (AGENTS.md rule 1). This module has no send method, and `_call` refuses any
-Graph endpoint that sends, so a prompt can't talk its way into sending. The app registration
-must also be granted Mail.Read + Mail.ReadWrite only, never Mail.Send (openclaw-setup-brief.md step 3).
+Emi drafts; `_call` refuses any Graph endpoint that sends, so a prompt can't talk its way into sending.
+The one exception is `send_draft`: an Emi draft Karen accepted on Telegram, with EMI_SEND_ON_ACCEPT=1
+(dev, 2026-10-30). It works only once Karen has signed sales@ in again with Mail.Send
+(`tools.acceptance mail-login-start --send`); the ordinary sign-in is Mail.ReadWrite only.
 """
 import base64
 import html
@@ -17,6 +18,8 @@ from . import httpjson
 GRAPH = "https://graph.microsoft.com/v1.0"
 EMI_CATEGORY = "Emi"
 APPROVED_CATEGORY = "Emi approved"  # a person pressed Accept on Telegram; still a draft until someone sends it
+# A draft whose first line asks the sender to check something (AGENTS.md rule 9) is never sent by Emi.
+CHECK_LINE = "[CHECK BEFORE SENDING"
 
 # Graph actions that send mail immediately. The create* versions only make drafts.
 SEND_ACTIONS = {"send", "sendmail", "reply", "replyall", "forward"}
@@ -59,10 +62,12 @@ class DeviceCodeToken:
     EMI_AUTH=device: personal Outlook.com test mailbox (tenant "consumers").
     EMI_AUTH=delegated: the HAYA tenant, signed in as sales@ itself (same pattern as Sunny).
     First run prints a link and a code to sign in with; the refresh token is cached in
-    `cache_path` (mode 600) so later runs don't ask again. Scope is Mail.ReadWrite only, no Mail.Send.
+    `cache_path` (mode 600) so later runs don't ask again. Scope is Mail.ReadWrite; start(send=True) adds
+    Mail.Send, and the scope signed in with is kept in the cache so a refresh asks for the same.
     """
 
     SCOPE = "offline_access https://graph.microsoft.com/Mail.ReadWrite"
+    SEND_SCOPE = SCOPE + " https://graph.microsoft.com/Mail.Send"
 
     def __init__(self, client_id, cache_path, tenant="consumers", http=httpjson.request, out=print):
         self.base = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0"
@@ -80,16 +85,21 @@ class DeviceCodeToken:
         except (OSError, ValueError):
             return {}
 
-    def _save(self, resp):
+    def _save(self, resp, scope=None):
         self._token = resp["access_token"]
         self._expires = time.time() + int(resp.get("expires_in", 3600))
         # The access token is cached too (same 600 file), so a check every minute (tools.watch) reuses it for
         # its hour instead of redeeming the refresh token on every run.
-        rt = resp.get("refresh_token") or self._read_cache().get("refresh_token")
+        cache = self._read_cache()
+        rt = resp.get("refresh_token") or cache.get("refresh_token")
         if rt:
             fd = os.open(self.cache_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"refresh_token": rt, "access_token": self._token, "expires_at": self._expires}, f)
+                json.dump({"refresh_token": rt, "access_token": self._token, "expires_at": self._expires,
+                           "scope": scope or cache.get("scope") or self.SCOPE}, f)
+
+    def can_send(self):
+        return "mail.send" in str(jwt_claims(self()).get("scp", "")).lower().split()
 
     def _cached_access(self):
         c = self._read_cache()
@@ -104,15 +114,14 @@ class DeviceCodeToken:
         return (claims.get("upn") or claims.get("preferred_username") or "").lower()
 
     def _refresh(self):
-        try:
-            with open(self.cache_path, encoding="utf-8") as f:
-                rt = json.load(f)["refresh_token"]
-        except (OSError, ValueError, KeyError):
+        cache = self._read_cache()
+        rt = cache.get("refresh_token")
+        if not rt:
             return False
         try:
             self._save(self.http("POST", f"{self.base}/token", form={
                 "client_id": self.client_id, "grant_type": "refresh_token",
-                "refresh_token": rt, "scope": self.SCOPE}))
+                "refresh_token": rt, "scope": cache.get("scope") or self.SCOPE}))
             return True
         except httpjson.HttpError:
             return False
@@ -144,11 +153,13 @@ class DeviceCodeToken:
     def _pending_path(self):
         return self.cache_path + ".pending"
 
-    def start(self):
-        dc = self.http("POST", f"{self.base}/devicecode", form={"client_id": self.client_id, "scope": self.SCOPE})
+    def start(self, send=False):
+        scope = self.SEND_SCOPE if send else self.SCOPE
+        dc = self.http("POST", f"{self.base}/devicecode", form={"client_id": self.client_id, "scope": scope})
         fd = os.open(self._pending_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"device_code": dc["device_code"], "expires_at": time.time() + int(dc.get("expires_in", 900))}, f)
+            json.dump({"device_code": dc["device_code"], "scope": scope,
+                       "expires_at": time.time() + int(dc.get("expires_in", 900))}, f)
         self.out(dc["message"])
 
     def finish(self):
@@ -165,7 +176,7 @@ class DeviceCodeToken:
         try:
             self._save(self.http("POST", f"{self.base}/token", form={
                 "client_id": self.client_id, "device_code": pending["device_code"],
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}))
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}), scope=pending.get("scope"))
         except httpjson.HttpError as e:
             if "authorization_pending" in e.body or "slow_down" in e.body:
                 return False
@@ -462,6 +473,16 @@ class GraphMail:
         d = self._own_draft(draft_id)
         cats = [c for c in d.get("categories", []) if c != APPROVED_CATEGORY] + [APPROVED_CATEGORY]
         self._call("PATCH", f"/messages/{draft_id}", body={"categories": cats})
+
+    def send_draft(self, draft_id):
+        """Send one Emi draft: Karen pressed Accept and EMI_SEND_ON_ACCEPT=1 (tools.review.accept). The only
+        send in this module. Refused for a draft that isn't Emi's or still has its [CHECK BEFORE SENDING] line."""
+        self._own_draft(draft_id)
+        body = self._call("GET", f"/messages/{draft_id}?$select=body").get("body", {}).get("content", "")
+        if CHECK_LINE.lower() in html.unescape(body).lower():
+            raise SendBlocked(f"{draft_id} still has its {CHECK_LINE}] line; not sent")
+        self.http("POST", f"{self.base}/messages/{draft_id}/send",
+                  headers={"Authorization": f"Bearer {self.token()}"})
 
     def delete_draft(self, draft_id):
         """Remove an Emi draft from Drafts. Outlook keeps it in Deleted Items, so a person can get it back."""
