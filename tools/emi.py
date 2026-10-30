@@ -331,6 +331,20 @@ def check_rows(sheet, records, fresh=True):
         warnings += [f"{label}: {x}" for x in w]
     if len({r.get("booking_ref", "") for r in records}) > 1:
         errors.append("rows of one booking must share one booking_ref")
+    # 30/10: MG AGIN2194622610520001 went in as rows 857-858, two identical room_lines, each the whole booking
+    seen = {}
+    for i, rec in enumerate(records, 1):
+        key = json.dumps({k: str(v).strip() for k, v in rec.items() if k != "_row"}, sort_keys=True)
+        code = rec.get("room_code") or "no room_code"
+        if key in seen:
+            errors.append(f"row {i} ({code}): same as row {seen[key]} — one room_lines entry per room type, "
+                          f"'rooms' says how many; delete the copy")
+        else:
+            seen[key] = i
+    codes_seen = [rec.get("room_code") for rec in records if rec.get("room_code")]
+    for code in sorted({c for c in codes_seen if codes_seen.count(c) > 1}):
+        warnings.append(f"room_code {code} on {codes_seen.count(code)} rows — one room_lines entry per room type "
+                        f"with 'rooms' = how many; two entries only when the rate, dates or meal differ")
     return errors, warnings
 
 
@@ -1606,5 +1620,15 @@ def main(argv=None):
     return 0
 
 
+def run(argv=None):
+    """main() plus a last line 'END <command> rc=<n>': output without it was cut off (30/10: ten `show`s in one
+    shell call ran past the agent's 30 s wait, came back half, and the run stopped)."""
+    argv = sys.argv[1:] if argv is None else argv
+    rc = main(argv)
+    sys.stderr.flush()
+    print(f"END {argv[0] if argv else ''} rc={rc}", flush=True)
+    return rc
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

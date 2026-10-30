@@ -7,6 +7,7 @@ import tempfile
 import urllib.parse
 import unittest
 import zipfile
+from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest import mock
 
@@ -220,6 +221,22 @@ class SheetCommandsTest(unittest.TestCase):
             with self.assertRaises(emi.Refused, msg=expected) as e:
                 emi.sheet_check(sh, {"booking": booking, "room_lines": [line]}, out=lambda *_: None)
             self.assertIn(expected, str(e.exception))
+
+    def test_identical_room_lines_refused(self):
+        # 30/10: MG AGIN2194622610520001 written twice (rows 857-858) from two identical room_lines
+        sh, http = real_sheet()
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": BOOKING, "room_lines": [DLX, dict(DLX)]}, out=lambda *_: None)
+        self.assertIn("row 2 (DLX-SV): same as row 1", str(e.exception))
+        self.assertIsNone(appended(http))
+
+    def test_same_room_code_with_other_rate_is_only_a_warning(self):
+        sh, _ = real_sheet()
+        lines = []
+        other = dict(DLX, rooms="1", rate_per_night_vnd="2100000",
+                     **{"Average rate per night after discount": "2100000", "total_vnd": "4200000"})
+        emi.sheet_check(sh, {"booking": BOOKING, "room_lines": [DLX, other]}, out=lines.append)
+        self.assertTrue(any(x.startswith("WARNING") and "room_code DLX-SV on 2 rows" in x for x in lines))
 
     def test_total_mismatch_is_only_a_warning(self):
         sh, _ = real_sheet()
@@ -586,6 +603,12 @@ class StateProcessedTest(unittest.TestCase):
 
     def test_mark_scanned_cli_rejects_non_timestamp(self):
         self.assertEqual(emi.main(["mark-scanned", "now"]), 2)
+
+    def test_every_command_ends_with_an_end_line(self):
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(io.StringIO()):
+            self.assertEqual(emi.run(["mark-scanned", "now"]), 2)
+        self.assertEqual(out.getvalue().splitlines()[-1], "END mark-scanned rc=2")
 
 
 class ExtractTextTest(unittest.TestCase):
