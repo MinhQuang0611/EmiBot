@@ -1,5 +1,7 @@
 """Acceptance tests from openclaw-setup-brief.md, run against the real mailbox and sheet.
 
+    python -m tools.acceptance mail-login-start          # EMI_AUTH=delegated: print a sign-in code for sales@
+    python -m tools.acceptance mail-login-finish         # after signing in: save the token, then mail-read
     python -m tools.acceptance mail-read                 # test 2: 5 newest inbox emails
     python -m tools.acceptance attachments <message_id>  # test 3: list attachments of one email
     python -m tools.acceptance send-blocked              # test 6: the tool refuses to send
@@ -25,9 +27,27 @@ FIXTURE = os.path.join(os.path.dirname(__file__), "..", "test", "fixtures", "int
 
 def mail_read():
     mail = config.mail()
+    if hasattr(mail.token, "signed_in_as"):
+        who = mail.token.signed_in_as()
+        print("signed in as:", who or "(unknown)")
+        if os.environ.get("EMI_AUTH") == "delegated" and who != config.MAILBOX.lower():
+            sys.exit(f"FAIL: signed in as {who}, expected {config.MAILBOX}. "
+                     f"Move {os.environ.get('EMI_TOKEN_CACHE', '.emi-token.json')} away and sign in as {config.MAILBOX}.")
     q = mail._query(select="subject,from,receivedDateTime", orderby="receivedDateTime desc", top="5")
     for m in mail._call("GET", f"/mailFolders/inbox/messages?{q}").get("value", []):
         print(m["receivedDateTime"], m["from"]["emailAddress"]["address"], "|", m["subject"])
+
+
+def mail_login_start():
+    config.mail().token.start()
+    print("Sign in as", config.MAILBOX, "then run: python -m tools.acceptance mail-login-finish")
+
+
+def mail_login_finish():
+    if not config.mail().token.finish():
+        sys.exit("NOT YET: sign-in not finished in the browser. Finish it, then run this again.")
+    print("PASS: signed in, refresh token saved")
+    mail_read()
 
 
 def attachments(message_id):
@@ -176,7 +196,8 @@ def sheet_email_smoke_write(path=None):
     print(f"PASS: kept email smoke-test row at row {row['_row']}; booking_ref={ref}; tracy_status={row.get('tracy_status')}")
 
 
-COMMANDS = {"mail-read": mail_read, "attachments": attachments, "send-blocked": send_blocked,
+COMMANDS = {"mail-read": mail_read, "mail-login-start": mail_login_start, "mail-login-finish": mail_login_finish,
+"attachments": attachments, "send-blocked": send_blocked,
             "draft-reply": draft_reply, "attach-pdf": attach_pdf,
             "sheet-header": sheet_header, "sheet-roundtrip": sheet_roundtrip,
             "sheet-smoke-write": sheet_smoke_write,

@@ -1,0 +1,297 @@
+{
+  "_source": "docs/rate-knowledge/anex.md (from 'Haya - Anex 2026 - 2027.pdf', contract 81/26-27/PQ-HAYA/AL, pages 3–6 checked 2026-10-29). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/operator_rates.py (python -m tools.emi to-price --operator Anex). Shape in that file's docstring.",
+  "operator": "Anex",
+  "label": "Anex contract 81/26-27/PQ-HAYA/AL (2026–2027)",
+  "rate_source": "Anex contract",
+  "includes": "incl. buffet breakfast, service charge and VAT",
+  "valid_from": "2026-11-01",
+  "valid_to": "2027-10-31",
+  "periods": [
+    {
+      "from": "2026-11-01",
+      "to": "2027-02-28",
+      "season": "high"
+    },
+    {
+      "from": "2027-03-01",
+      "to": "2027-10-31",
+      "season": "low"
+    }
+  ],
+  "holiday_season": "holiday",
+  "holidays": [
+    {
+      "from": "2026-12-24",
+      "to": "2026-12-26",
+      "name": "Christmas"
+    },
+    {
+      "from": "2026-12-31",
+      "to": "2027-01-02",
+      "name": "New Year"
+    },
+    {
+      "from": "2027-02-01",
+      "to": "2027-02-15",
+      "name": "Tet"
+    },
+    {
+      "from": "2027-04-26",
+      "to": "2027-04-27",
+      "name": "Hung Kings (as printed)"
+    },
+    {
+      "from": "2027-04-30",
+      "to": "2027-05-01",
+      "name": "30/4 + 1/5"
+    },
+    {
+      "from": "2027-09-02",
+      "to": "2027-09-02",
+      "name": "National Day"
+    }
+  ],
+  "release_days": {
+    "low": 10,
+    "high": 21,
+    "holiday": 21
+  },
+  "rooms": {
+    "STD": {
+      "name": "Standard Double",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "low": 1250000,
+        "high": 1900000,
+        "holiday": 2450000
+      }
+    },
+    "SUP-DBL": {
+      "name": "Superior Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": 2,
+      "rates": {
+        "low": 1400000,
+        "high": 2100000,
+        "holiday": 2700000
+      }
+    },
+    "SUP-TWN": {
+      "name": "Superior Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": 2,
+      "rates": {
+        "low": 1400000,
+        "high": 2100000,
+        "holiday": 2700000
+      }
+    },
+    "DLX-SV": {
+      "name": "Deluxe Seaview Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": 2,
+      "rates": {
+        "low": 1750000,
+        "high": 2200000,
+        "holiday": 2900000
+      }
+    },
+    "SUITE-SV": {
+      "name": "Suite Seaview",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "low": 2100000,
+        "high": 3150000,
+        "holiday": 4100000
+      }
+    },
+    "TPL": {
+      "name": "Triple",
+      "persons": 3,
+      "capacity": [
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "allotment": 1,
+      "rates": {
+        "low": 2050000,
+        "high": 2650000,
+        "holiday": 3450000
+      }
+    },
+    "QPL": {
+      "name": "Quadruple",
+      "persons": 4,
+      "capacity": [
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "low": 2600000,
+        "high": 3150000,
+        "holiday": 4100000
+      }
+    }
+  },
+  "children": {
+    "_note": "PDF p.5 table: the room is free for a child; a child takes a spare bed with no charge (1A+1C any age = double rate). Without a spare bed a child 6–11.99 pays the ABF surcharge (250,000); 2–5.99 pays nothing (2A+1C (2-5,99) = double rate). Infants (under 2) not counted. 12+ = adult.",
+    "infant_under": 2,
+    "adult_from": 12,
+    "free_if_spare_bed": true,
+    "bands": [
+      {
+        "from": 2,
+        "to": 6,
+        "per_night": 0
+      },
+      {
+        "from": 6,
+        "to": 12,
+        "per_night": 250000
+      }
+    ]
+  },
+  "meals": {
+    "base": "BB",
+    "_note": "Per person per meal; HB = 1 extra meal a day, FB = 2. 0–2.99 free. Charged on the total persons of the booking.",
+    "supplements": {
+      "HB": [
+        {
+          "from": 0,
+          "to": 3,
+          "per_night": 0
+        },
+        {
+          "from": 3,
+          "to": 6,
+          "per_night": 150000
+        },
+        {
+          "from": 6,
+          "to": 12,
+          "per_night": 300000
+        },
+        {
+          "from": 12,
+          "to": 200,
+          "per_night": 600000
+        }
+      ],
+      "FB": [
+        {
+          "from": 0,
+          "to": 3,
+          "per_night": 0
+        },
+        {
+          "from": 3,
+          "to": 6,
+          "per_night": 250000
+        },
+        {
+          "from": 6,
+          "to": 12,
+          "per_night": 600000
+        },
+        {
+          "from": 12,
+          "to": 200,
+          "per_night": 1200000
+        }
+      ]
+    }
+  },
+  "early_bird": {
+    "_note": "Art. 3: all room types, whole contract year, all meal plans. Off the room rate only; cumulative with the free night.",
+    "tiers": [
+      {
+        "min_days": 30,
+        "pct": 5
+      },
+      {
+        "min_days": 45,
+        "pct": 10
+      },
+      {
+        "min_days": 60,
+        "pct": 15
+      }
+    ],
+    "on": [
+      "room"
+    ]
+  },
+  "free_nights": {
+    "_note": "Stay 10 nights get 1 free, multiplied, the last night(s); meals, extra bed and child surcharge still charged.",
+    "every": 10,
+    "multiply": true,
+    "which": "last",
+    "on": [
+      "room"
+    ]
+  },
+  "combine": "cumulative",
+  "payment": "post-checkout credit: daily e-invoice for check-outs to hotelaccount.vn@anextour.com; Anex pays 2 weeks at a time on Friday of week 3; no 50% / 48-hour deposit",
+  "gaps": [
+    {
+      "text": "Anex child breakfast: the p.5 combination table charges no ABF for a child 2–5.99 sharing (priced that way), but term 1.5's meal table lists 100,000 for 3–5.99 — Karen to confirm when a 3–5 year old shares without a spare bed",
+      "child_ages": [
+        3,
+        6
+      ]
+    },
+    {
+      "text": "Anex Hung Kings holiday is printed 26.04–27.04.2027 with '01' night (Giỗ Tổ 2027 is 16/04): priced 26–27/04 as holiday as printed — Karen to confirm for stays in April",
+      "nights": [
+        "2027-04-16",
+        "2027-04-27"
+      ]
+    }
+  ]
+}

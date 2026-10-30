@@ -1,8 +1,10 @@
 """Offline tests: fake HTTP, no mailbox or sheet touched.  python -m unittest discover tools/tests"""
 import base64
+import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 import urllib.parse
 
 from tools.graph_mail import DeviceCodeToken, GraphMail, SendBlocked, MAX_INLINE_ATTACHMENT
@@ -255,3 +257,67 @@ class DeviceCodeTokenTest(unittest.TestCase):
             tok = DeviceCodeToken("cid", os.path.join(d, "none.json"), http=http, out=msgs.append)
             self.assertEqual(tok(), "AT2")
             self.assertEqual(msgs, ["go sign in"])
+
+    def test_delegated_uses_haya_tenant_and_reads_signed_in_account(self):
+        claims = base64.urlsafe_b64encode(json.dumps({"upn": "Sales@haya-hotels.com"}).encode()).decode().rstrip("=")
+        seen = []
+
+        def http(method, url, **kw):
+            seen.append(url)
+            return {"access_token": f"h.{claims}.s", "refresh_token": "r", "expires_in": 3600}
+        with tempfile.TemporaryDirectory() as d:
+            cache = os.path.join(d, "tok.json")
+            with open(cache, "w") as f:
+                f.write('{"refresh_token": "old"}')
+            tok = DeviceCodeToken("cid", cache, tenant="tenant-123", http=http, out=lambda m: self.fail("asked to sign in"))
+            self.assertEqual(tok.signed_in_as(), "sales@haya-hotels.com")
+            self.assertIn("/tenant-123/oauth2/v2.0/token", seen[0])
+
+    def test_config_delegated_targets_sales_mailbox_without_secret(self):
+        from tools import config
+        env = {"EMI_AUTH": "delegated", "EMI_TENANT_ID": "t", "EMI_CLIENT_ID": "c"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(config, "MAILBOX", "sales@haya-hotels.com"):
+            os.environ.pop("EMI_CLIENT_SECRET", None)
+            m = config.mail()
+        self.assertTrue(m.base.endswith("/users/sales%40haya-hotels.com"))
+        self.assertIn("/t/oauth2/", m.token.base)
+
+
+class SetEnvTest(unittest.TestCase):
+    def test_replaces_adds_keeps_comments_and_respects_if_missing(self):
+        from tools import setenv
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, ".env")
+            with open(p, "w") as f:
+                f.write("# note\nEMI_TENANT_ID=\nEMI_SHEET_ID=sandbox\n")
+            setenv.set_keys([("EMI_TENANT_ID", "t"), ("EMI_AUTH", "delegated")], path=p)
+            setenv.set_keys([("EMI_SHEET_ID", "live"), ("EMI_SHEET_TAB", "Intake")], path=p, if_missing=True)
+            with open(p) as f:
+                self.assertEqual(f.read(), "# note\nEMI_TENANT_ID=t\nEMI_SHEET_ID=sandbox\nEMI_AUTH=delegated\nEMI_SHEET_TAB=Intake\n")
+
+
+class TwoStepSignInTest(unittest.TestCase):
+    def test_start_then_finish_pending_then_done(self):
+        answers = iter([HttpError(400, "t", '{"error":"authorization_pending"}'),
+                        {"access_token": "AT", "refresh_token": "RT", "expires_in": 3600}])
+
+        def http(method, url, **kw):
+            if url.endswith("/devicecode"):
+                return {"message": "go sign in", "device_code": "dc", "expires_in": 900}
+            self.assertEqual(kw["form"]["device_code"], "dc")
+            a = next(answers)
+            if isinstance(a, Exception):
+                raise a
+            return a
+        with tempfile.TemporaryDirectory() as d:
+            cache = os.path.join(d, "tok.json")
+            msgs = []
+            tok = DeviceCodeToken("cid", cache, tenant="t", http=http, out=msgs.append)
+            tok.start()
+            self.assertEqual(msgs, ["go sign in"])
+            self.assertFalse(tok.finish())
+            self.assertTrue(tok.finish())
+            with open(cache) as f:
+                self.assertEqual(json.load(f)["refresh_token"], "RT")
+            with self.assertRaises(RuntimeError):
+                tok.finish()

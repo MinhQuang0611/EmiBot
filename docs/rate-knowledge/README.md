@@ -1,6 +1,6 @@
 # Rate knowledge — giá và điều khoản theo từng bên
 
-Bản chép tay (text + OCR đọc từ ảnh) của 6 file trong `docs/RATE TABLES/`, làm 2026-10-09. Đây là tri thức Emi dùng để trả lời câu hỏi về giá, ưu đãi, trẻ em, hủy phòng, thanh toán.
+Bản chép tay (text + OCR đọc từ ảnh) của 7 file trong `docs/RATE TABLES/`, làm 2026-10-09 (Direct thêm 2026-10-19; `hotel-info.md` gom thông tin khách sạn từ các file đó, 2026-10-22). Đây là tri thức Emi dùng để trả lời câu hỏi về giá, ưu đãi, trẻ em, hủy phòng, thanh toán.
 **PDF gốc là chuẩn.** Nếu file ở đây và PDF lệch nhau, PDF đúng — sửa file ở đây. Khi Karen đưa bảng giá / hợp đồng mới, chép lại file tương ứng.
 
 ## Chọn file theo người gửi
@@ -13,7 +13,11 @@ Bản chép tay (text + OCR đọc từ ảnh) của 6 file trong `docs/RATE TAB
 | Pegas | [pegas.md](pegas.md) | 01.10.2026–30.04.2027 |
 | Selfie | [selfie.md](selfie.md) | 01/10/2026–30/09/2027 |
 | Fun and Sun | — **không có hợp đồng mùa này.** Không báo giá; chuyển Karen. | |
-| Tour operator khác, OTA, khách lẻ | — không có file. Chuyển Karen. | |
+| Direct — khách lẻ | [direct.md](direct.md) | 01/03/2026–31/05/2026 ⚠ đã hết hạn; chờ Karen xác nhận còn dùng |
+| Tour operator khác, OTA | — không có file. Chuyển Karen. | |
+| Mọi bên — câu hỏi về khách sạn (giờ nhận/trả phòng, tiện ích, liên hệ, gửi hành lý…) | [hotel-info.md](hotel-info.md) — kèm danh sách "Chưa biết — hỏi Karen" | lấy từ file TA, Direct và FAQ khách lẻ (`docs/FAQ/HAYA PALMA - FAQ.xlsx`, cột HAYA) |
+
+**Giá tour operator tính bằng máy (dev, 2026-10-29):** `anex-rates.json`, `crystalbay-rates.json`, `odeon-rates.json`, `pegas-rates.json`, `selfie-rates.json` là bản số của các file .md trên, dùng cho `python -m tools.emi to-price` (`tools/operator_rates.py`). Sửa một con số thì sửa cả .md và .json.
 
 ## Luật dùng
 1. **Mỗi bên chỉ được nghe giá và điều khoản của chính mình.** Mọi hợp đồng tour operator đều có điều khoản bảo mật. Không đưa giá Anex cho Pegas, không đưa giá hợp đồng cho TA, không nói "bên khác được giảm nhiều hơn".
@@ -42,6 +46,7 @@ Early bird của mọi hãng chỉ giảm **tiền phòng**, không giảm giư�
 | Odeon | 100% 10 ngày trước check-in |
 | Pegas | 100% ít nhất 7 ngày trước check-in |
 | Selfie | 100% 7 ngày trước khi đến |
+| Direct | 100% trước khi nhận phòng |
 
 Nhắc cọc 40 giờ / nhắc số dư 7 ngày trong `skills/confirmation-replies.md` là luật của TA. Với tour operator, nhắc theo hạn trong hợp đồng của họ.
 

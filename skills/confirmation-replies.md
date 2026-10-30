@@ -6,12 +6,12 @@ The reply that tells an agency or guest their booking is confirmed, changed, or 
 The booking is built in EZFOLIO by a separate tool Karen is building, which reads the intake form and pastes the link to the PDF confirmation into the row once it's complete (Karen, 2026-10-08). Until that tool is live, Tracy does the same job.
 
 I draft a confirmation only when:
-- for NEW and CHANGE: the row has a `pdf_link`. The link appearing is the signal that the PMS is updated.
-- for CANCEL: Karen's OK on the cancellation is on record, and the row shows the cancellation was done in EZFOLIO. A cancellation has no PDF, so what marks it as done is not settled yet — until it is, I ask Karen before drafting.
+- for NEW and CHANGE: the row has a `pdf_link`. The link appearing is the signal that the PMS is updated (`tracy_status` was deleted from the live sheet on 12/10).
+- for CANCEL: as soon as the CANCEL row is written, when the cancellation clearly matches one booking (Karen, 29/10, via Tracy's audit). Something unclear (a possible fee, which booking) → Karen first, then the reply.
 
 A link is not proof the booking is right. I still open the PDF and check it against the row before drafting.
 
-If the sender chases before that, I don't draft a holding reply. I tell Karen the row is still Pending and what it's waiting on.
+If the sender chases before that, I never write "we'll check and get back to you". The scan report says the row is waiting on EZFOLIO and how long the sender has waited.
 
 ## Wording
 Use the templates in `email-templates.md`. They are built from confirmations already sent from this mailbox. This file says when to draft and what to check; that file says how the email reads.
@@ -24,7 +24,7 @@ Reply on the original thread, in the sender's language. Include:
 - Confirmation number and group code.
 - Guest name(s), stay dates, room type and number of rooms, pax.
 - Total, including breakfast, VAT, and service charge. Service charge is inside the room rate, never a separate line.
-- **Deposit:** 50% due within 48 hours of receiving the confirmation, written as an exact date and time, "Vietnam time (UTC+7)". Remaining 50% due 7 days before check-in, also as an exact date. Use the contract's terms instead if the agency has its own.
+- **Deposit:** 50% due within 48 hours of receiving the confirmation, written as an exact date and time, "Vietnam time (UTC+7)" (Vietnamese email: "giờ Việt Nam, UTC+7"). Remaining 50% due 7 days before check-in, also as an exact date. Use the contract's terms instead if the agency has its own.
 - Bank details for payment, exactly as in `email-templates.md` (taken from confirmations already sent).
 - The original confirmation PDF attached, unaltered.
 
@@ -34,10 +34,11 @@ Same thread. State what changed (old → new), the new total, and attach the new
 **Deposit check (Karen, 2026-10-08):** look up Payment 1 on the intake row. If no deposit has been received, the email reminds them to pay the deposit to the hotel's bank account within 48 hours of receiving this email, with the exact deadline in Vietnam time. If the deposit is in, no reminder — state what's been received and the balance. If I can't tell, I flag it to Karen and don't draft either version.
 
 ## Cancellation
-Same thread. Confirm the booking is cancelled, with confirmation number and group code, the date it was cancelled, and any charge that applies under the booking's cancellation terms. If a refund is involved, say only what Karen has approved.
+Same thread, `draft-reply … --kind cancellation --ref <ref> --row <CANCEL row>`. Confirm the booking is cancelled, with confirmation number and group code, the date it was cancelled, and any charge that applies under the booking's cancellation terms. If a refund is involved, say only what Karen has approved.
+- The charge in the email is the one on the CANCEL row's `notes` from `cancel-fee` — or, if it said UNCLEAR, the figure Karen chose. Template `email-templates.md` §3: "không tính phí" / "without charge" when it is 0, otherwise "phí hủy: [amount] VND" / "with a cancellation charge of VND [amount]".
 
 ## Where the draft goes
-I save the reply as a draft on the original thread in sales@haya-hotels.com and leave it in the Drafts folder. Karen or another staff member reads it and presses send. I never send it.
+I save the reply as a draft on the original thread in sales@haya-hotels.com and leave it in the Drafts folder. Karen or another staff member reads it and presses send. I never send it. Reply all, To and Cc kept (`draft-confirmation` does it unless `--to` is given). Every confirmation draft has the EZFOLIO PDF attached.
 
 - The deposit deadline in the draft is 48 hours from the time I draft it. I say that time in my scan report.
 - Each scan, I list every draft still unsent and how long it has been waiting. Once a confirmation draft is 24 hours old, I update the deadline in it so the person sending isn't sending a deadline that has partly run out.
@@ -50,7 +51,7 @@ No reply. The OTA confirms to the guest itself.
 ## Payment reminders (Karen, 2026-10-08)
 I follow up on unpaid bookings myself. Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
 
-**"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the intake row. I check both before every reminder.
+**"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the booking's latest row (a payment arrives as a CHANGE row). I check both before every reminder.
 
 **Deposit — 50%, due 48 hours after the client received the confirmation.**
 - The clock starts at the real sent time of the confirmation, read from the Sent folder.
@@ -69,7 +70,9 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 
 **Deadline passed, still nothing:** I report it to Karen. The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
 
-**A slip arrives:** forward to accounting (see `department-forwards.md`), fill the payment columns, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
+**A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): forward it to accounting (see `department-forwards.md`), write the CHANGE row with the payment, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
+
+**The accountant doesn't answer the forward:** the payment is fine. I draft the acknowledgement of receipt to the agency (Tracy's audit, 29/10).
 
 ## Voice
-Agency confirmations follow the templates and sign off "Best, HAYA Team" in both English and Vietnamese. Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.
+Agency confirmations follow the templates and sign off "Trân trọng," / "Best regards," + "Reservations Team / HAYA Hotel Phu Quoc, Trademark Collection by Wyndham / sales@haya-hotels.com" (dev, 2026-10-27, from the Sent folder). Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.

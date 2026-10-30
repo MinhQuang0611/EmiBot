@@ -1,0 +1,18 @@
+{
+  "about": "NEW TEST-1512 (2 STD, 19–21/10/2026), CHANGE TEST-1511 (dates 06–09/12, + 1 Triple), CANCEL TEST-1512 sent 15/10 15:00 = 4 days before check-in → 1 night × 2 rooms × 1,050,000 = 2,100,000.",
+  "needs": "TEST-1511 NEW rows (DLX-SV ×1, SUP-DBL ×2, 05–08/12/2026) already on the sandbox sheet.",
+  "cleanup": [
+    {"ref": "TEST-1512"},
+    {"ref": "TEST-1511", "actions": ["CHANGE", "CANCEL"]}
+  ],
+  "expect": [
+    {"ref": "TEST-1512", "action": "NEW", "rows": 1,
+     "fields": {"room_code": "STD", "rooms": "2", "arrival": "19/10/2026", "departure": "21/10/2026", "nights": "2",
+                "rate_per_night_vnd": "1050000", "channel_type": "TA"}},
+    {"ref": "TEST-1512", "action": "CANCEL", "rows_min": 1, "notes_contains": ["2.100.000"]},
+    {"ref": "TEST-1511", "action": "CHANGE", "rows": 3,
+     "fields": {"arrival": "06/12/2026", "departure": "09/12/2026", "nights": "3"},
+     "room_codes": ["DLX-SV", "SUP-DBL", "TPL"], "nonblank": ["what_changed"]}
+  ],
+  "drafts": {"max_confirmations": 0, "must_not_contain": ["đã hủy đặt phòng này trên hệ thống", "has been cancelled"]}
+}

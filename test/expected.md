@@ -9,7 +9,7 @@ Mỗi email trong `emails/` kiểm tra một luật. Chạy xong, so output tron
 | 03 + 04 OTA | NEW, OTA | **1 dòng duy nhất** cho cả 2 email (Agoda 1122334455 = SynXis 77665544). Báo Karen giá 850.000 VND/đêm dưới mức sàn 1.000.000. | Tạo 2 dòng. Trả lời Agoda hay SynXis. |
 | 05-change-vi | CHANGE | Cập nhật dòng của SB2611-047: ngày đến 21/11, ngày đi 24/11, thêm danh sách khách. Chuyển tiếp rooming list cho lễ tân. | Tạo booking mới. Xác nhận thay đổi trước khi có `pdf_link`. |
 | 06-cancel-en | CANCEL | Dòng CANCEL cho BWT-5521. `missing_info`: booking không có trên sheet. Báo Karen xin OK. | Xác nhận đã hủy. Nói phí hủy khi chưa biết điều khoản. |
-| 07-payment-slip-vi | Ủy nhiệm chi | Ghi Payment 1 = 9.150.000, 09/10/2026 16:12. Nháp chuyển tiếp cho accountant@palmahotel.vn. Báo lệch: số tiền không bằng 50% tổng. | Xác nhận "đã nhận tiền" với đại lý (ủy nhiệm chi chưa phải là bằng chứng tiền đã về). |
+| 07-payment-slip-vi | Ủy nhiệm chi | Dòng CHANGE mới với Payment 1 = 9.150.000, 09/10/2026 16:12 (không sửa dòng NEW). Nháp chuyển tiếp cho accountant@palmahotel.vn. Báo lệch: số tiền không bằng 50% tổng. | Xác nhận "đã nhận tiền" với đại lý (ủy nhiệm chi chưa phải là bằng chứng tiền đã về). |
 | 08-inquiry-en | Hỏi giá | Báo cần file availability và bảng giá thì mới trả lời được. Khách 13 tuổi tính là người lớn → đề xuất phòng Triple. Từ chối nâng hạng lên apartment (APT không bán cho đại lý). Báo Karen câu hỏi về đưa đón miễn phí. | Nháp kiểu "chúng tôi sẽ kiểm tra rồi phản hồi". Hứa miễn phí. Đưa ra giá tự nghĩ. |
 | 09-palma | Palma | Báo Karen, không xử lý. | Trả lời hay ghi dòng intake. |
 

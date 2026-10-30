@@ -2,10 +2,13 @@
 
     python -m tools.precheck inbox          # job 1
     python -m tools.precheck confirmations  # job 2
+    python -m tools.precheck inbox --agent  # the agent's own first step in job 1 (schedule.md)
 
 Exit 0 = there is work, start the agent. Exit 1 = nothing to do. Exit 2 = the check itself failed
 (bad token, sheet not shared); the message goes to stderr and the cron log.
 Cron line:  python -m tools.precheck inbox && <start Emi with job 1>
+--agent: exit 0 for both `work` and `quiet` (read the printed word). The OpenClaw gateway records a Bash call
+that exits 1 as a failed run (audit 30/10: every quiet safety-net run showed as "Bash failed").
 """
 import sys
 
@@ -23,6 +26,8 @@ def confirmations_have_work(sheet, state):
 
 
 def main(argv):
+    agent = "--agent" in argv
+    argv = [a for a in argv if a != "--agent"]
     if len(argv) != 1 or argv[0] not in ("inbox", "confirmations"):
         print(__doc__, file=sys.stderr)
         return 2
@@ -36,7 +41,7 @@ def main(argv):
         print(f"precheck {argv[0]} failed: {e}", file=sys.stderr)
         return 2
     print("work" if work else "quiet")
-    return 0 if work else 1
+    return 0 if work or agent else 1
 
 
 if __name__ == "__main__":

@@ -1,0 +1,85 @@
+{
+  "_source": "docs/rate-knowledge/odeon.md (from 'Haya - Odeon 2026-2027.pdf', contract ID 1033494). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/operator_rates.py (python -m tools.emi to-price --operator Odeon). Shape in that file's docstring.",
+  "operator": "Odeon",
+  "label": "Odeon contract 1033494 (2026–2027)",
+  "rate_source": "Odeon contract",
+  "includes": "incl. tax",
+  "valid_from": "2026-10-01",
+  "valid_to": "2027-10-31",
+  "periods": [
+    {"from": "2026-10-01", "to": "2026-10-31", "season": "A"},
+    {"from": "2026-11-01", "to": "2026-12-30", "season": "B"},
+    {"from": "2026-12-31", "to": "2027-01-02", "season": "C"},
+    {"from": "2027-01-03", "to": "2027-02-05", "season": "B"},
+    {"from": "2027-02-06", "to": "2027-02-13", "season": "C"},
+    {"from": "2027-02-14", "to": "2027-03-31", "season": "B"},
+    {"from": "2027-04-01", "to": "2027-04-29", "season": "A"},
+    {"from": "2027-04-30", "to": "2027-05-01", "season": "C"},
+    {"from": "2027-05-02", "to": "2027-10-31", "season": "B"}
+  ],
+  "holidays": [],
+  "release_days": {"A": 14, "B": 14, "C": 21},
+  "rooms": {
+    "STD": {"name": "Standard Double with window (RMSD)", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 2,
+            "rates": {"A": 1250000, "B": 1900000, "C": 2450000}},
+    "SUP-DBL": {"name": "Superior Double with balcony (RMSP)", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 2,
+                "rates": {"A": 1400000, "B": 2100000, "C": 2700000}},
+    "SUP-TWN": {"name": "Superior Twin with balcony", "persons": 2, "capacity": [[2, 0], [1, 1]], "allotment": 2,
+                "rates": {"A": 1400000, "B": 2100000, "C": 2700000}},
+    "DLX-SV": {"name": "Deluxe Sea View with balcony (RMDL)", "persons": 2, "capacity": [[2, 1], [1, 2]], "allotment": 1,
+               "rates": {"A": 1750000, "B": 2200000, "C": 2900000}},
+    "TPL": {"name": "Triple with balcony", "persons": 3, "capacity": [[3, 1], [2, 2]], "allotment": 2,
+            "rates": {"A": 2050000, "B": 2650000, "C": 3450000}},
+    "QPL": {"name": "Quadruple with balcony", "persons": 4, "capacity": [[4, 1], [3, 2]], "allotment": 1,
+            "rates": {"A": 2600000, "B": 3150000, "C": 4100000}},
+    "SUITE-SV": {"name": "Suite Sea View with balcony (SUEX)", "persons": 2, "capacity": [[2, 1], [1, 2]],
+                 "allotment": "0 (on request)", "rates": {"A": 2100000, "B": 3150000, "C": 4100000}}
+  },
+  "children": {
+    "_note": "0–1.99 free in every room. A child takes a spare bed free while adults + earlier children leave one (1 adult + 1st child in a double; 1–2 adults + 1st child in a triple…); otherwise 2–2.99 free, 3–11.99 charged.",
+    "infant_under": 2,
+    "adult_from": 12,
+    "free_if_spare_bed": true,
+    "bands": [
+      {"from": 2, "to": 3, "per_night": 0},
+      {"from": 3, "to": 12, "per_night": {"A": 300000, "B": 300000, "C": 450000}}
+    ]
+  },
+  "meals": {
+    "base": "BB",
+    "supplements": {
+      "HB": [{"from": 0, "to": 3, "per_night": 0}, {"from": 3, "to": 12, "per_night": 300000}, {"from": 12, "to": 200, "per_night": 600000}],
+      "FB": [{"from": 0, "to": 3, "per_night": 0}, {"from": 3, "to": 12, "per_night": 600000}, {"from": 12, "to": 200, "per_night": 1200000}]
+    }
+  },
+  "early_bird": {
+    "_note": "EBR, sold 07.03.2026–01.11.2027. Off room and child surcharge, not meals. Not in period C.",
+    "tiers": [{"min_days": 30, "pct": 5}, {"min_days": 45, "pct": 10}, {"min_days": 60, "pct": 15}],
+    "on": ["room", "child"],
+    "booked_windows": [["2026-03-07", "2027-11-01"]],
+    "stay_windows": [["2026-10-01", "2026-12-30"], ["2027-01-03", "2027-02-05"], ["2027-02-14", "2027-04-29"], ["2027-05-02", "2027-10-31"]],
+    "except_seasons": ["C"]
+  },
+  "free_nights": {
+    "_note": "FS001 '10 = 9', multiplied, the cheapest night; meals still charged on the free night.",
+    "every": 10,
+    "multiply": true,
+    "which": "cheapest",
+    "on": ["room", "child"],
+    "stay_windows": [["2026-10-01", "2027-10-31"]]
+  },
+  "combine": "cascade",
+  "spo": {
+    "_note": "Odeon (dev, 2026-10-29): price with exactly the offer the voucher's SPO code applies. SCO / SSO 5% only when the voucher shows that code.",
+    "required": true,
+    "eb_tokens": ["EB", "EBR"],
+    "free_tokens": ["FS001", "FS"],
+    "codes": {
+      "SCO": {"pct": 5, "on": ["room", "child"], "note": "SCO 5% is taken off room and child surcharge after the other offers; the contract file doesn't print SCO — Karen to confirm what it applies to"},
+      "SSO": {"pct": 5, "on": ["room", "child"], "note": "SSO 5% is taken off room and child surcharge after the other offers; the contract file doesn't print SSO — Karen to confirm what it applies to"}
+    }
+  },
+  "payment": "100% 10 days before check-in (proforma invoice 'HAYA - <group>', due 10 days before check-in); no 50% / 48-hour deposit",
+  "gaps": []
+}

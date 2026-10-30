@@ -5,16 +5,22 @@ Not on the intake sheet: the sheet's columns belong to the EZFOLIO build tool.
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 EMPTY = {
     "last_scan": None,       # ISO UTC of the last inbox scan
+    "processed": {},         # Graph message id -> {at, outcome}; a crashed scan doesn't redo these
     "next_question": 1,      # E-001, E-002, ...
-    "questions": {},         # "E-001" -> {booking_ref, ask, asked_at, answer, answered_at}
+    "questions": {},         # "E-001" -> {booking_ref, message_id, ask, asked_at, answer, answered_at}
     "drafts": {},            # Graph draft id -> {booking_ref, row, kind, drafted_at}
     "confirmations": {},     # "booking_ref|row" -> {draft_id, sent_at, cod_deadline, balance_deadline}
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
+    "next_review": 1,        # draft #1, #2, ... as shown on Telegram
+    "reviews": {},           # "12" -> {draft_id, status, how, source, to, kind, ref, row, text, version, ...}
+    "awaiting_feedback": None,  # "12" after Rewrite is pressed, until the rewrite is saved
 }
+
+REVIEW_OPEN = "pending"
 
 
 def now_iso():
@@ -40,14 +46,24 @@ class State:
 
     # --- scan clock ---
     def mark_scanned(self, at=None):
-        self.data["last_scan"] = at or now_iso()
+        """Move the scan clock and forget processed ids older than a week before it."""
+        self.data["last_scan"] = at = at or now_iso()
+        cutoff = (datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ") - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.data["processed"] = {k: v for k, v in self.data["processed"].items() if v["at"] >= cutoff}
+
+    def mark_processed(self, message_id, outcome):
+        self.data["processed"][message_id] = {"at": now_iso(), "outcome": outcome}
+
+    def is_processed(self, message_id):
+        return message_id in self.data["processed"]
 
     # --- questions to Karen ---
-    def ask(self, booking_ref, ask):
+    def ask(self, booking_ref, ask, message_id=""):
+        """message_id: the email that waits for this answer before its draft is written."""
         qid = f"E-{self.data['next_question']:03d}"
         self.data["next_question"] += 1
-        self.data["questions"][qid] = {"booking_ref": booking_ref, "ask": ask, "asked_at": now_iso(),
-                                       "answer": None, "answered_at": None}
+        self.data["questions"][qid] = {"booking_ref": booking_ref, "message_id": message_id, "ask": ask,
+                                       "asked_at": now_iso(), "answer": None, "answered_at": None}
         return qid
 
     def open_questions(self):
@@ -77,6 +93,36 @@ class State:
         elif kind in ("deposit_reminder", "balance_reminder"):
             self.data["reminders"][f"{booking_ref}|{kind.split('_')[0]}"] = {"draft_id": draft_id,
                                                                             "drafted_at": now_iso()}
+
+    # --- person's review of each draft (Telegram: accept / deny / rewrite / info) ---
+    def open_review(self, draft_id, **fields):
+        n = str(self.data["next_review"])
+        self.data["next_review"] += 1
+        self.data["reviews"][n] = {"draft_id": draft_id, "status": REVIEW_OPEN, "version": 1,
+                                   "opened_at": now_iso(), "history": [], **fields}
+        return n
+
+    def review(self, n):
+        n = str(n).lstrip("#")
+        if n not in self.data["reviews"]:
+            raise KeyError(f"no draft #{n}")
+        return n, self.data["reviews"][n]
+
+    def review_by_draft(self, draft_id):
+        return next((n for n, r in self.data["reviews"].items() if r["draft_id"] == draft_id), None)
+
+    def close_review(self, n, status, note=""):
+        r = self.data["reviews"][n]
+        r["history"].append({"at": now_iso(), "status": status, "note": note})
+        r["status"] = status
+
+    def forget_confirmation(self, booking_ref, row):
+        """A person deleted the confirmation draft (wrong, or a test): allow a new one for this row."""
+        key = f"{booking_ref}|{row}"
+        entry = self.data["confirmations"].pop(key, None)
+        if entry:
+            self.data["drafts"].pop(entry.get("draft_id"), None)
+        return entry is not None
 
     def confirmation_drafted(self):
         """(booking_ref, row) pairs that already have a confirmation draft."""

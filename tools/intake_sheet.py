@@ -11,8 +11,13 @@ from . import httpjson
 SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
 FIRST_DATA_ROW = 3
 
-# Written by the build tool, not by Emi. Emi only sets tracy_status = Pending on a new row.
+# Written by the build tool, not by Emi. Emi only sets tracy_status = Pending on a new row, where the sheet still
+# has that column (deleted from the live sheet 12/10; the SANDBOX keeps it).
 BUILD_TOOL_COLUMNS = {"tracy_status", "pdf_link"}
+# Tracy audit 29/10: columns 51-55 of the live sheet are EZFOLIO status/error columns (ez_error is col 53).
+# Their names aren't known here, so they are protected by position as well as by the "ez_" prefix.
+BUILD_TOOL_POSITIONS = range(50, 55)  # 0-based: columns 51-55
+BUILD_TOOL_PREFIX = "ez_"
 REQUIRED = ("company", "arrival", "departure", "rate_per_night_vnd", "room_code", "rooms")
 
 
@@ -39,10 +44,10 @@ def google_service_account_transport(keyfile):
         keyfile, scopes=["https://www.googleapis.com/auth/spreadsheets",
                          "https://www.googleapis.com/auth/drive.readonly"])
 
-    def call(method, url, body=None):
+    def call(method, url, body=None, raw=False):
         if not creds.valid:
             creds.refresh(Request())
-        return httpjson.request(method, url, headers={"Authorization": f"Bearer {creds.token}"}, body=body)
+        return httpjson.request(method, url, headers={"Authorization": f"Bearer {creds.token}"}, body=body, raw=raw)
 
     return call
 
@@ -69,6 +74,15 @@ class IntakeSheet:
                 raise SheetContractError(f"tab {self.tab!r} has no header row")
         return self._header
 
+    def build_tool_columns(self):
+        """Every column Emi never writes: tracy_status, pdf_link, ez_* and columns 51-55."""
+        return (BUILD_TOOL_COLUMNS | {h for h in self.header if h.lower().startswith(BUILD_TOOL_PREFIX)}
+                | {self.header[i] for i in BUILD_TOOL_POSITIONS if i < len(self.header)})
+
+    def group_code_columns(self):
+        """The live sheet carries the group code in two columns (Tracy audit 29/10); the SANDBOX in one."""
+        return [h for h in self.header if "group" in h.lower() and "code" in h.lower()]
+
     def check_header(self, expected):
         """Return (missing, extra) column names versus an expected list."""
         have = set(self.header)
@@ -92,6 +106,25 @@ class IntakeSheet:
         ref = booking_ref.strip().lower()
         return [r for r in self.rows() if r.get("booking_ref", "").strip().lower() == ref]
 
+    def link_in_cell(self, row_number, column):
+        """The URL behind one cell: a Drive smart chip, a hyperlink, or a URL typed as text.
+        The values API only returns the chip's file name, so this reads the cell's grid data."""
+        a1 = f"{col_letter(self.header.index(column))}{row_number}"
+        resp = self.call("GET", f"{self.base}?ranges={self._range(a1)}"
+                                "&fields=sheets.data.rowData.values(hyperlink,chipRuns,formattedValue)")
+        try:
+            cell = resp["sheets"][0]["data"][0]["rowData"][0]["values"][0]
+        except (KeyError, IndexError):
+            return None
+        for run in cell.get("chipRuns", []):
+            uri = run.get("chip", {}).get("richLinkProperties", {}).get("uri")
+            if uri:
+                return uri
+        if cell.get("hyperlink"):
+            return cell["hyperlink"]
+        text = (cell.get("formattedValue") or "").strip()
+        return text if text.startswith("http") else None
+
     def rows_awaiting_confirmation(self, already_drafted):
         """Rows with a pdf_link whose (booking_ref, row) has no confirmation draft yet."""
         return [r for r in self.rows()
@@ -106,11 +139,15 @@ class IntakeSheet:
     def append_rows(self, records):
         """Append new booking rows. Duplicates are the caller's check (booking-intake.md step 2)."""
         values = []
+        protected = self.build_tool_columns()
         for rec in records:
-            touched = BUILD_TOOL_COLUMNS & {k for k, v in rec.items() if v and not (k == "tracy_status" and v == "Pending")}
+            touched = protected & {k for k, v in rec.items() if v and not (k == "tracy_status" and v == "Pending")}
             if touched:
                 raise SheetContractError(f"Emi doesn't write {sorted(touched)}")
-            rec = dict(rec, tracy_status="Pending")
+            if "tracy_status" in self.header:
+                rec = dict(rec, tracy_status="Pending")
+            else:
+                rec = {k: v for k, v in rec.items() if k != "tracy_status"}
             values.append(self._to_values(rec))
         return self.call("POST",
                          f"{self.base}/values/{self._range('A1')}:append"
@@ -121,7 +158,7 @@ class IntakeSheet:
         """Update named cells on one row, leaving every other cell as it is."""
         if row_number < FIRST_DATA_ROW:
             raise SheetContractError("rows 1-2 are header and instructions")
-        touched = BUILD_TOOL_COLUMNS & set(fields)
+        touched = self.build_tool_columns() & set(fields)
         if touched:
             raise SheetContractError(f"Emi doesn't write {sorted(touched)}")
         self._to_values(fields)  # rejects unknown columns

@@ -1,0 +1,304 @@
+{
+  "_source": "docs/rate-knowledge/pegas.md (from 'W26 S27  Season 26 - 27 - (Haya Hotel - Pegas).pdf', contract 0002PQ011026). The PDF wins on any mismatch: fix both files.",
+  "_used_by": "tools/operator_rates.py (python -m tools.emi to-price --operator Pegas). Shape in that file's docstring.",
+  "operator": "Pegas",
+  "label": "Pegas contract 0002PQ011026 (W26/S27)",
+  "rate_source": "Pegas contract",
+  "includes": "incl. breakfast, tax and service charge",
+  "valid_from": "2026-10-01",
+  "valid_to": "2027-04-30",
+  "periods": [
+    {
+      "from": "2026-10-01",
+      "to": "2026-12-23",
+      "season": "high"
+    },
+    {
+      "from": "2026-12-27",
+      "to": "2026-12-30",
+      "season": "high"
+    },
+    {
+      "from": "2027-01-03",
+      "to": "2027-01-31",
+      "season": "high"
+    },
+    {
+      "from": "2027-02-16",
+      "to": "2027-02-28",
+      "season": "high"
+    },
+    {
+      "from": "2027-03-01",
+      "to": "2027-04-15",
+      "season": "normal"
+    },
+    {
+      "from": "2027-04-18",
+      "to": "2027-04-30",
+      "season": "normal"
+    }
+  ],
+  "holiday_season": "holiday",
+  "holidays": [
+    {
+      "from": "2026-12-24",
+      "to": "2026-12-26",
+      "name": "Christmas"
+    },
+    {
+      "from": "2026-12-31",
+      "to": "2027-01-02",
+      "name": "New Year"
+    },
+    {
+      "from": "2027-02-01",
+      "to": "2027-02-15",
+      "name": "Tet"
+    },
+    {
+      "from": "2027-04-16",
+      "to": "2027-04-17",
+      "name": "Hung Kings"
+    }
+  ],
+  "release_days": {
+    "normal": 14,
+    "high": 14,
+    "holiday": 21
+  },
+  "rooms": {
+    "STD": {
+      "name": "Standard Double",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": 1,
+      "rates": {
+        "normal": 1250000,
+        "high": 1900000,
+        "holiday": 2450000
+      }
+    },
+    "SUP-DBL": {
+      "name": "Superior Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "normal": 1400000,
+        "high": 2100000,
+        "holiday": 2700000
+      }
+    },
+    "SUP-TWN": {
+      "name": "Superior Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "normal": 1400000,
+        "high": 2100000,
+        "holiday": 2700000
+      }
+    },
+    "DLX-SV": {
+      "name": "Deluxe Sea View Double/Twin",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "normal": 1750000,
+        "high": 2200000,
+        "holiday": 2900000
+      }
+    },
+    "SUITE-SV": {
+      "name": "Suite Sea View",
+      "persons": 2,
+      "capacity": [
+        [
+          2,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "normal": 2100000,
+        "high": 3150000,
+        "holiday": 4100000
+      }
+    },
+    "TPL": {
+      "name": "Triple City View",
+      "persons": 3,
+      "capacity": [
+        [
+          3,
+          1
+        ]
+      ],
+      "allotment": 2,
+      "rates": {
+        "normal": 1800000,
+        "high": 2650000,
+        "holiday": 3450000
+      }
+    },
+    "QPL": {
+      "name": "Quadruple Family",
+      "persons": 4,
+      "capacity": [
+        [
+          4,
+          1
+        ]
+      ],
+      "allotment": "on request",
+      "rates": {
+        "normal": 2590000,
+        "high": 3150000,
+        "holiday": 4050000
+      }
+    }
+  },
+  "children": {
+    "_note": "Max 1 child (0–11.99, infants included) per room, sharing the parents' bed: 0–2.99 free, 3–11.99 charged per night whatever the adult count. 12+ = adult, must book Triple / Quadruple. infant_under 0 so a baby still counts toward the 1-child maximum.",
+    "infant_under": 0,
+    "adult_from": 12,
+    "free_if_spare_bed": false,
+    "bands": [
+      {
+        "from": 0,
+        "to": 3,
+        "per_night": 0
+      },
+      {
+        "from": 3,
+        "to": 12,
+        "per_night": {
+          "normal": 300000,
+          "high": 300000,
+          "holiday": 450000
+        }
+      }
+    ]
+  },
+  "meals": {
+    "_note": "Per person per day. Child 3–11.99 = 50% of adult. New Year Eve gala dinner 31.12: 1,200,000 per adult (not priced here).",
+    "base": "BB",
+    "supplements": {
+      "HB": [
+        {
+          "from": 0,
+          "to": 3,
+          "per_night": 0
+        },
+        {
+          "from": 3,
+          "to": 12,
+          "per_night": 200000
+        },
+        {
+          "from": 12,
+          "to": 200,
+          "per_night": 400000
+        }
+      ],
+      "FB": [
+        {
+          "from": 0,
+          "to": 3,
+          "per_night": 0
+        },
+        {
+          "from": 3,
+          "to": 12,
+          "per_night": 400000
+        },
+        {
+          "from": 12,
+          "to": 200,
+          "per_night": 800000
+        }
+      ]
+    }
+  },
+  "early_bird": {
+    "_note": "Clause 10: 10% at least 30 days, 15% at least 45 days before arrival, all room rates ('áp dụng cho tất cả giá phòng': room only). 'Valid 01/11/2026–30/04/2027' read as stay dates. Combinable with the bonus night.",
+    "tiers": [
+      {
+        "min_days": 30,
+        "pct": 10
+      },
+      {
+        "min_days": 45,
+        "pct": 15
+      }
+    ],
+    "on": [
+      "room"
+    ],
+    "stay_windows": [
+      [
+        "2026-11-01",
+        "2027-04-30"
+      ]
+    ]
+  },
+  "free_nights": {
+    "_note": "Clause 9.2: from 10 nights, 1 cheapest night free per booking (not multiplied); the free night includes every booked service (breakfast, HB, FB, child surcharge).",
+    "every": 10,
+    "multiply": false,
+    "which": "cheapest",
+    "on": [
+      "room",
+      "child",
+      "meal"
+    ],
+    "stay_windows": [
+      [
+        "2026-10-01",
+        "2027-04-30"
+      ]
+    ]
+  },
+  "combine": "cumulative",
+  "payment": "100% by bank transfer at least 7 days before check-in, slip by email; proforma invoice at least 14 days before check-in; no 50% / 48-hour deposit",
+  "gaps": [
+    {
+      "text": "the Pegas contract prints the Quadruple Normal rate as '2,590,00 0' (misprint); priced at 2,590,000 — Karen to confirm before it reaches a row",
+      "room": "QPL",
+      "nights": [
+        "2027-03-01",
+        "2027-04-30"
+      ]
+    },
+    {
+      "text": "a night on 31/12/2026: the contract prices a New Year Eve gala dinner at 1,200,000 per adult (child 3–11.99 50%) and doesn't say whether it is compulsory — not in this price, Karen to confirm",
+      "nights": [
+        "2026-12-31",
+        "2026-12-31"
+      ]
+    }
+  ]
+}

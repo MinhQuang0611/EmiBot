@@ -2,3 +2,9 @@
 # Google Sheets/Drive via service account (tools/intake_sheet.py):
 google-auth>=2.20
 requests>=2.31
+# Reading attachments (tools/attachments.py): PDF vouchers, Excel rooming lists
+pypdf>=4.0
+openpyxl>=3.1
+# Scanned PDFs (no text layer): pages rendered to PNG for the agent to open
+pypdfium2>=4.0
+pillow>=10.0

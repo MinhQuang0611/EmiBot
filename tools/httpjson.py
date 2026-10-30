@@ -13,8 +13,9 @@ class HttpError(Exception):
         self.body = body
 
 
-def request(method, url, headers=None, body=None, form=None, timeout=60):
-    """Return the decoded JSON response, or {} for an empty body. Raises HttpError on 4xx/5xx."""
+def request(method, url, headers=None, body=None, form=None, timeout=60, raw=False):
+    """Return the decoded JSON response, or {} for an empty body; raw=True returns the bytes
+    (file downloads). Raises HttpError on 4xx/5xx."""
     headers = dict(headers or {})
     data = None
     if form is not None:
@@ -26,7 +27,9 @@ def request(method, url, headers=None, body=None, form=None, timeout=60):
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
+            data_out = resp.read()
     except urllib.error.HTTPError as e:
         raise HttpError(e.code, url, e.read().decode(errors="replace")) from None
-    return json.loads(raw) if raw else {}
+    if raw:
+        return data_out
+    return json.loads(data_out) if data_out else {}
