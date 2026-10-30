@@ -10,7 +10,7 @@ NOTES = ("1. Booking.com – Ref 92777EF002985\n2. AbdolAziz Yary – UZB\n3. 22
          "6. 1,408,000 × 1 room × 2 nights = 2,816,000\n7. Invoice: prepaid on Booking.com\n8. No VAT info")
 ROW = {"action": "NEW", "received_at": "22/10/2026 13:40", "property": "HAYA", "channel_type": "OTA",
        "source_email": "SynXis Res Confirmed (92777EF002985 )", "company": "Booking.com",
-       "booking_ref": "92777EF002985", "guest_names": "AbdolAziz Yary", "nationality": "UZB",
+       "booking_ref": "SynXis 92777EF002985 (Booking.com)", "guest_names": "AbdolAziz Yary", "nationality": "Uzbekistan",
        "arrival": "22/10/2026", "departure": "24/10/2026", "nights": "2", "room_code": "STD", "rooms": "1",
        "adults": "1", "children": "0", "meal_plan": "BB", "rate_source": "Booking.com guest total", "rate_per_night_vnd": "1408000",
        "Average rate per night after discount": "1408000", "total_vnd": "2816000", "status": "Definite",
@@ -31,25 +31,33 @@ class CleanRowTest(unittest.TestCase):
 
 
 class BookingRefTest(unittest.TestCase):
-    def test_channel_words_or_brackets_refused(self):
-        # rows 59 / 40 / 48 / 19
+    def test_ota_ref_names_the_channel_as_the_live_sheet_does(self):
+        # dev 30/10: "theo sheet thật" — live rows 794, 800, 812 (replaces 27/10's numbers only)
         for ref in ("SynXis 92777EF002984 (Booking.com)", "SynXis 92777EF002721 (Expedia)",
                     "Agoda 1783017402 / SynXis 92777EF002717", "Mytour H6844730 / MT1406527499",
-                    "0511-026 (PKG-19206)"):
+                    "Booking.com 5486733008 / SynXis 92777EF003114", "MG AGIN3415562610364927 / HB2610161458"):
+            errors, _ = check(booking_ref=ref, notes="")
+            self.assertFalse(has(errors, "booking_ref:"), ref)
+        for ref in ("92777EF002985", "1783017402 / 92777EF002717", "AGIN0116572610466700"):
             errors, _ = check(booking_ref=ref, notes="")
             self.assertTrue(has(errors, "booking_ref:"), ref)
 
-    def test_plain_numbers_pass(self):
-        for ref in ("92777EF002985", "1783017402 / 92777EF002717", "AGIN0116572610466700", "GADT 0410STE251026"):
-            errors, _ = check(booking_ref=ref, notes="")
+    def test_ta_and_operator_codes_as_printed(self):
+        for ref in ("GADT 0410STE251026", "Thu1230 TVR149", "INBOM04540000001", "0511-026 (PKG-19206)"):
+            errors, _ = check(booking_ref=ref, notes="", channel_type="TA", company="Phú Minh Quang Travel",
+                              rate_source="TA card")
             self.assertFalse(has(errors, "booking_ref:"), ref)
 
     def test_built_row_only_warned(self):
         # the confirmation record is keyed by booking_ref + row: don't force a rename after the build
-        errors, warnings = check(booking_ref="SynXis 92777EF002984 (Booking.com)", notes="",
+        errors, warnings = check(booking_ref="92777EF002984", notes="",
                                  tracy_status="Entered", pdf_link="x", ezfolio_group_code="G1")
         self.assertFalse(has(errors, "booking_ref:"))
         self.assertTrue(has(warnings, "booking_ref:"))
+
+    def test_ref_numbers(self):
+        self.assertEqual(schema.ref_numbers("SynXis 92777EF002779 (Booking.com 5550972513)"),
+                         ["92777EF002779", "5550972513"])
 
     def test_ref_parts(self):
         self.assertEqual(schema.ref_parts("1783017402 / 92777EF002717"), ["1783017402", "92777EF002717"])
@@ -72,7 +80,7 @@ class CompanyTest(unittest.TestCase):
         self.assertFalse(has(errors, "company:"))
         w = next(x for x in warnings if x.startswith("company:"))
         self.assertIn("write 'Anex'", w)
-        self.assertIn("'1. Anex (Khabarovsk) – Ref 92777EF002985'", w)
+        self.assertIn("'1. Anex (Khabarovsk) – Ref SynXis 92777EF002985 (Booking.com)'", w)
         self.assertTrue(has(check(company="BOOKING.COM BV", notes="")[1], "company: 'BOOKING.COM BV' is 'Booking.com'"))
         self.assertFalse(has(check(company="Viet Ban Mai Travel", channel_type="TA", notes="")[1], "company:"))
 
@@ -97,16 +105,18 @@ class RateFloorTest(unittest.TestCase):
 
 
 class NationalityTest(unittest.TestCase):
-    """Karen 29/10 (Tracy audit): nationality stored as a code, VNM when nothing gives a clue."""
-    def test_names_and_two_letter_codes_refused_with_the_code(self):
-        errors, _ = check(nationality="Vietnam")
-        self.assertTrue(any(e.startswith("nationality: 'Vietnam'") and "'VNM'" in e for e in errors))
-        self.assertTrue(any("'GBR'" in e for e in check(nationality="UK")[0]))
-        self.assertTrue(has(check(nationality="IND; RU")[0], "nationality: 'RU'"))
+    """dev 30/10: nationality as the full country name ("KAZ" → "Kazakhstan"), Vietnam when nothing gives a clue.
+    Replaces the 3-letter code of Tracy's audit (29/10)."""
+    def test_codes_refused_with_the_name(self):
+        errors, _ = check(nationality="KAZ")
+        self.assertTrue(any(e.startswith("nationality: 'KAZ'") and "'Kazakhstan'" in e for e in errors))
+        self.assertTrue(any("'United Kingdom'" in e for e in check(nationality="UK")[0]))
+        self.assertTrue(has(check(nationality="India; RU")[0], "nationality: 'RU'"))
         self.assertTrue(has(check(nationality="vnm")[0], "nationality: 'vnm'"))
+        self.assertTrue(has(check(nationality="LAO")[0], "nationality: 'LAO'"))
 
-    def test_codes_pass(self):
-        for n in ("VNM", "GBR", "IND; VNM", "IRN", "LAO"):
+    def test_names_pass(self):
+        for n in ("Vietnam", "United Kingdom", "India; Vietnam", "Iran", "Laos", "South Korea"):
             self.assertFalse(has(check(nationality=n)[0], "nationality"), n)
 
     def test_never_blank(self):
@@ -116,9 +126,9 @@ class NationalityTest(unittest.TestCase):
 
     def test_old_full_name_on_a_change_only_warned(self):
         change = dict(action="CHANGE", what_changed="Payment 1 received", ezfolio_group_code="G1")
-        errors, warnings = check(nationality="Vietnam", **change)
+        errors, warnings = check(nationality="VNM", **change)
         self.assertFalse(has(errors, "nationality"))
-        self.assertTrue(has(warnings, "nationality: 'Vietnam'"))
+        self.assertTrue(has(warnings, "nationality: 'VNM'"))
 
 
 class NotesTest(unittest.TestCase):
@@ -139,14 +149,23 @@ class NotesTest(unittest.TestCase):
         bad = NOTES.replace("1. Booking.com – Ref 92777EF002985", "1. BOOKING.COM BV + 92777EF002985")
         w = next(x for x in check(notes=bad)[1] if x.startswith("notes:"))
         self.assertIn("start with the company 'Booking.com'", w)
-        self.assertIn("contain 'Ref 92777EF002985'", w)
+        self.assertIn("contain 'Ref SynXis 92777EF002985 (Booking.com)'", w)
 
-    def test_cancel_notes_are_the_charge_line(self):
+    def test_cancel_notes_are_the_8_items_with_the_charge_in_6(self):
+        # dev 30/10: the live sheet's CANCEL rows have the 8 items; Emi's had only the charge line
         cancel = dict(action="CANCEL", what_changed="Cancelled by agency", status="Cancelled",
-                      missing_info="ezfolio_group_code: not known")
-        self.assertTrue(has(check(notes=NOTES, **cancel)[1], "notes: a CANCEL row's notes"))
+                      missing_info="ezfolio_group_code: not known", **{"Remaining amount": "0"})
         line = "Cancellation charge (Anex contract): 0 VND — 67 days before check-in, free (>21 days). Paid: 0 VND."
-        self.assertFalse(has(check(notes=line, **cancel)[1], "notes:"))
+        self.assertTrue(has(check(notes=line, **cancel)[1], "notes: NOTES RULE"))
+        self.assertTrue(has(check(notes=NOTES, **cancel)[1], "notes: on a CANCEL row item 6"))
+        items = NOTES.splitlines()
+        items[5] = "6. " + line
+        self.assertFalse(has(check(notes="\n".join(items), **cancel)[1], "notes:"))
+
+    def test_cancel_remaining_amount_is_zero(self):
+        cancel = dict(action="CANCEL", what_changed="Cancelled by agency", status="Cancelled")
+        self.assertTrue(has(check(**cancel, **{"Remaining amount": "6120000"})[0], "Remaining amount"))
+        self.assertFalse(has(check(**cancel, **{"Remaining amount": "0"})[0], "Remaining amount"))
 
 
 class PartialRowTest(unittest.TestCase):

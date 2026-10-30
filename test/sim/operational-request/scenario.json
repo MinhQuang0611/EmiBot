@@ -1,7 +1,7 @@
 {
   "about": "A guest (Korean name in From only, no signature) asks about two OTA-style reservations that are not on the sheet: same floor, late check-in after a 21:00 flight, late check-out cost, luggage storage. Copy of draft #2 from the first live run (2026-10-22), refs prefixed TEST-.",
   "needs": "Nothing on the sheet. The two refs must NOT be there.",
-  "want": "A complete best-answer reply draft (kind request) whose first line is [CHECK BEFORE SENDING: ...] naming the late check-out % basis and luggage storage, which are not in hotel-info.md; those go to Karen with ask-karen (Tracy's audit, 29/10; before that, no draft until Karen answered). A forward to haya@haya-hotels.com with the requests, first line '**Booking:** <refs> — chưa có mã đoàn', no mention of the intake sheet (dev, 2026-10-30). No intake row, no confirmation.",
+  "want": "A complete best-answer reply draft (kind request) whose first line is [CHECK BEFORE SENDING: ...] naming the late check-out % basis and luggage storage, which are not in hotel-info.md; those go to Karen with ask-karen (Tracy's audit, 29/10; before that, no draft until Karen answered). No forward to front office: the requests go in a CHANGE row's notes, which front office reads in EZFOLIO (dev, 2026-10-30; before that a forward to haya@ was wanted). No NEW row, no confirmation.",
   "cleanup": [
     {"ref": "TEST-26090313011477ES1"},
     {"ref": "TEST-2609031300E485ES1"}
@@ -15,8 +15,8 @@
     "must_not_contain": ["available to us", "cannot be confirmed", "not shown in", "get back to you",
                          "Dear 유정아", "normal check-in", "no extra charge",
                          "Thank you for your email about", "sheet intake"],
-    "must_include_forward_to": ["haya@haya-hotels.com"],
-    "kinds": {"request": 1, "forward": 1, "inquiry": 0, "confirmation": 0},
+    "no_forward_to": ["haya@haya-hotels.com"],
+    "kinds": {"request": 1, "forward": 0, "inquiry": 0, "confirmation": 0},
     "min_questions": 1
   }
 }

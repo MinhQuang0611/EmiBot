@@ -23,7 +23,7 @@ FAQ viết cho **khách lẻ / khách OTA**, phần lớn là tin nhắn Zalo/Wh
 ## Nhận phòng / trả phòng
 - **Nhận phòng từ 14:00, trả phòng trước 12:00.** Nguồn: `direct.md`, `ta.md` (trang 4 file TA), FAQ.
 - **Giờ nhận phòng: 14:00 đến nửa đêm** (FAQ "Check-in"). Khách đến **sau nửa đêm**: cột HAYA không nói → "Chưa biết" (cột Palma có câu về bảo vệ, không dùng cho HAYA).
-- **Khách đến muộn trong khoảng đó (ví dụ 21:00) là nhận phòng bình thường**, không phải nhận phòng sớm hay trả phòng muộn. Không có phụ thu, không viết "tùy tình trạng phòng". Đây là để Emi hiểu, **không viết vào thư**: thư chỉ nói đã ghi nhận giờ đến và lễ tân sẽ chờ đón ("our front office will be expecting you" / "lễ tân sẽ chờ đón anh/chị"), không giải thích giờ nhận phòng hay phụ thu khi khách không hỏi (`skills/email-templates.md` mục 5). Giờ đến luôn chuyển cho lễ tân (`skills/department-forwards.md`).
+- **Khách đến muộn trong khoảng đó (ví dụ 21:00) là nhận phòng bình thường**, không phải nhận phòng sớm hay trả phòng muộn. Không có phụ thu, không viết "tùy tình trạng phòng". Đây là để Emi hiểu, **không viết vào thư**: thư chỉ nói đã ghi nhận giờ đến và lễ tân sẽ chờ đón ("our front office will be expecting you" / "lễ tân sẽ chờ đón anh/chị"), không giải thích giờ nhận phòng hay phụ thu khi khách không hỏi (`skills/email-templates.md` mục 5). Giờ đến ghi vào `arrival_time` và notes mục 5 của dòng booking; lễ tân đọc trong EZFOLIO, không forward (dev, 30/10).
 - **Đến sớm, gửi hành lý:** khách đến trước 14:00 được gửi hành lý ở khách sạn rồi quay lại nhận phòng. Nhận phòng sớm tùy tình trạng phòng và có phụ thu. Nguồn: FAQ "Early check in". FAQ không nói phí gửi hành lý: không viết là miễn phí hay có phí. Gửi hành lý **sau khi trả phòng**: FAQ không nói → "Chưa biết".
 - **Phụ thu nhận phòng sớm / trả phòng muộn** — chỉ khi nhận phòng **trước 14:00** hoặc trả phòng **sau 12:00**:
 
@@ -96,7 +96,7 @@ Nguồn: bảng giá TA (`ta.md`, cột "Giường"). Dùng khi khách hỏi lo�
 Tên hạng phòng trên OTA/SynXis khác tên trên bảng TA (ví dụ "Standard Garden View (1 Queen Bed)", "Suite Sea View (1 King Bed)"): dùng đúng tên trên voucher khi viết thư, cỡ giường theo bảng trên chỉ khi chắc chắn là cùng hạng phòng.
 
 ## Yêu cầu xếp phòng (cùng tầng, phòng thông nhau, loại giường, tầng cao…)
-Không có quy định trong file nào. Cách trả lời đã dùng: **"đã ghi nhận và chuyển lễ tân, tùy tình trạng phòng"** — không hứa. Luôn chuyển cho lễ tân (`skills/department-forwards.md`). Không phải là yêu cầu miễn phí/nâng hạng; nếu khách xin nâng hạng phòng → Karen (AGENTS.md luật 8).
+Không có quy định trong file nào. Cách trả lời: **"đã ghi nhận, tùy tình trạng phòng"** — không hứa. Yêu cầu ghi vào `special_requests` và notes mục 5 của dòng booking; lễ tân đọc trong EZFOLIO, không forward (dev, 30/10). Không phải là yêu cầu miễn phí/nâng hạng; nếu khách xin nâng hạng phòng → Karen (AGENTS.md luật 8).
 
 ## Chưa biết — hỏi Karen
 Emi không có thông tin này. Khách hỏi tới thì **không soạn thư**: hỏi Karen bằng `ask-karen`, soạn sau khi Karen trả lời (`karen-answer`), và ghi câu hỏi vào báo cáo scan (dev, 2026-10-22). Không để ô `[…: khách sạn xác nhận]` trong thư — lệnh draft sẽ từ chối. Không bao giờ viết câu kiểu "thông tin này không có trong hồ sơ của chúng tôi".

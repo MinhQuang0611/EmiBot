@@ -67,10 +67,6 @@ CHECK_REPLY = ("[CHECK BEFORE SENDING: late check-out % basis and luggage storag
                "check-out is subject to availability and charged by the hour of departure. You are welcome to leave "
                "your luggage with us after check-out.\n\nWe look forward to welcoming you.\n\nBest regards,\n"
                "Reservations Team")
-FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có mã đoàn\n"
-           "**Yêu cầu:**\n• 2 phòng cùng tầng")
-
-
 class OperationalRequestScenarioTest(unittest.TestCase):
     """test/sim/operational-request: sim-check grades kinds and forwards, in Outlook and Telegram draft mode."""
 
@@ -124,22 +120,22 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.assertIn("ask-karen sim-01-request", str(e.exception))
         self.draft(CHECK_REPLY, "request")
         self.ask()
-        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        with self.assertRaises(emi.Refused):  # dev 30/10: requests go in the row's notes, not to front office
+            self.draft("**Yêu cầu:**\n• 2 phòng cùng tầng", "forward", forward_to="haya@haya-hotels.com")
         ok, report = self.grade()
         self.assertTrue(ok, report)
-        self.assertIn("PASS a forward to haya@haya-hotels.com", report)
+        self.assertIn("PASS no forward to haya@haya-hotels.com", report)
         self.assertIn("PASS drafts of kind 'request': 1", report)
         self.assertIn("PASS questions to Karen: 1", report)
 
     def test_no_question_fails(self):
-        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
+        self.draft(CHECK_REPLY, "request")
         ok, report = self.grade()
         self.assertFalse(ok)
         self.assertIn("FAIL questions to Karen: 0", report)
 
     def test_robotic_reply_fails(self):
         self.draft(OLD_STYLE, "request")  # draft #3 of the live run, 2026-10-22
-        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
         ok, report = self.grade()
         self.assertFalse(ok)
         for line in ("FAIL no draft says 'normal check-in'", "FAIL no draft says 'no extra charge'",
@@ -147,11 +143,11 @@ class OperationalRequestScenarioTest(unittest.TestCase):
             self.assertIn(line, report)
 
     def test_first_live_run_fails(self):
-        self.draft(BAD_REPLY, "inquiry")  # draft #2 as it was: wrong kind, blind-spot sentences, no forward
+        self.draft(BAD_REPLY, "inquiry")  # draft #2 as it was: wrong kind, blind-spot sentences
         ok, report = self.grade()
         self.assertFalse(ok)
         for line in ("FAIL no draft says 'available to us'", "FAIL no draft says 'not shown in'",
-                     "FAIL a forward to haya@haya-hotels.com: none", "FAIL questions to Karen: 0",
+                     "FAIL questions to Karen: 0",
                      "FAIL drafts of kind 'inquiry': 1", "FAIL no draft says 'Dear 유정아'"):
             self.assertIn(line, report)
 
@@ -160,12 +156,10 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.addCleanup(os.environ.pop, "EMI_DRAFT_MODE", None)
         self.tg = Telegram("42", "TOKEN", http=lambda *a, **k: {"ok": True, "result": {"message_id": 1}})
         self.assertEqual(self.draft(BAD_REPLY, "request")["id"], "pending-1")
-        self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
         self.assertFalse(os.path.isdir(os.path.join(self.dir, "drafts")))  # nothing in Outlook yet
         ok, report = self.grade()
         self.assertFalse(ok)
         self.assertIn("FAIL no draft says 'available to us' (found in ['#1'])", report)
-        self.assertIn("PASS a forward to haya@haya-hotels.com (['#2'])", report)
         review.deny(self.mail, self.st, self.tg, "1", out=lambda *_: None)  # a denied draft no longer counts
         self.draft(CHECK_REPLY, "request")
         self.ask()

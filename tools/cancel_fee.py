@@ -58,7 +58,7 @@ def cancel_fee(rows, cancelled_at, data=None, no_show=False):
     holiday = any(s == "holiday" for _, s, _ in night_list)
     days = (arrival - cancelled_at.date()).days
 
-    lines = []
+    lines, priced = [], []
     room_total = first_night = 0
     for r in rows:
         rate = _num(r.get("Average rate per night after discount")) or _num(r.get("rate_per_night_vnd"))
@@ -71,19 +71,24 @@ def cancel_fee(rows, cancelled_at, data=None, no_show=False):
         first_night += rate * rooms
         lines.append(f"{rooms} × {r.get('room_code')} at {quoting.money(rate)} × {n} night(s) = "
                      f"{quoting.money(rate * rooms * n)}")
+        priced.append((r, rate * rooms, rate * rooms * n))
 
-    def charge(rule):
+    def charge(rule, night=None, total=None):
+        night = first_night if night is None else night
+        total = room_total if total is None else total
         if rule.get("free"):
             return 0, "free cancellation"
         if "first_nights" in rule:
-            return first_night * rule["first_nights"], f"{rule['first_nights']} night(s) of every room"
-        return room_total * rule["pct_of_rooms"] // 100, f"{rule['pct_of_rooms']}% of the room charge"
+            return night * rule["first_nights"], f"{rule['first_nights']} night(s) of every room"
+        return total * rule["pct_of_rooms"] // 100, f"{rule['pct_of_rooms']}% of the room charge"
 
     column = "holiday" if holiday else "normal"
     if holiday:
         notes.append(policy["holiday_column_note"])
+    rule = None
     if no_show:
-        fee, how = charge(policy["no_show"])
+        rule = policy["no_show"]
+        fee, how = charge(rule)
         basis = "no show"
     elif days < 0:
         raise CancelFeeError("the cancellation is after check-in: that's an early departure or no show — Karen")
@@ -100,7 +105,11 @@ def cancel_fee(rows, cancelled_at, data=None, no_show=False):
             fee, how = None, f"UNCLEAR — either {quoting.money(fa)} VND ({ha}) or {quoting.money(fb)} VND ({hb})"
             gaps.append(f"{days} days before check-in: {policy['unclear_note']} Karen decides which line applies")
         else:
-            fee, how = charge(tier[column])
+            rule = tier[column]
+            fee, how = charge(rule)
+    # dev 30/10: the Cancellation Amount column, one CANCEL row per room type, each with its own share
+    per_row = [(r.get("_row"), r.get("room_code"), charge(rule, night, total)[0]) for r, night, total in priced
+               ] if rule is not None and fee is not None else []
 
     paid = payments(rows)
     paid_total = sum(a for a, _ in paid)
@@ -108,7 +117,7 @@ def cancel_fee(rows, cancelled_at, data=None, no_show=False):
     return {"booking_ref": rows[0].get("booking_ref"), "rows": [r.get("_row") for r in rows],
             "arrival": arrival, "departure": departure, "cancelled_at": cancelled_at, "days": days,
             "holiday": holiday, "basis": basis, "how": how, "lines": lines, "room_total": room_total,
-            "fee": fee, "paid": paid, "paid_total": paid_total, "gaps": gaps, "notes": notes}
+            "fee": fee, "per_row": per_row, "paid": paid, "paid_total": paid_total, "gaps": gaps, "notes": notes}
 
 
 def render(c):
@@ -119,6 +128,9 @@ def render(c):
     out += [f"  {line}" for line in c["lines"]]
     out.append(f"  room charge {m(c['room_total'])} VND")
     out.append(f"CHARGE: {c['how']}" if c["fee"] is None else f"CHARGE: {m(c['fee'])} VND ({c['how']})")
+    if c.get("per_row"):
+        out.append("CANCELLATION AMOUNT per CANCEL row (digits): "
+                   + "; ".join(f"{code}: {fee}" for _, code, fee in c["per_row"]))
     if c["paid"]:
         out.append("PAID (sheet): " + "; ".join(f"{m(a)} on {d or '?'}" for a, d in c["paid"]) +
                    f" = {m(c['paid_total'])} VND")

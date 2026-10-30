@@ -119,16 +119,15 @@ class SheetWithoutTracyStatusTest(unittest.TestCase):
         call = next(c for c in http.calls if ":append" in c[1])
         self.assertEqual(call[2]["values"], [["NEW", "X1", "", ""]])
 
-    def test_columns_51_to_55_and_ez_columns_never_written(self):
-        header = [f"c{i}" for i in range(1, 51)] + ["ez_status", "ez_build", "ez_error", "ez_at", "ez_by", "c56"]
+    def test_ez_columns_never_written(self):
+        # the live header as the dev pasted it (30/10): Cancellation Reason is column 51, ez_* are 52-55
+        header = ([f"c{i}" for i in range(1, 50)] + ["Cancellation Amount", "Cancellation Reason", "ez_status",
+                                                      "ez_error", "ez_note", "ez_processed_at"])
         sh, _ = self.sheet(header)
-        for col in ("ez_error", "ez_by", "pdf_link"):
+        for col in ("ez_status", "ez_error", "ez_processed_at", "pdf_link"):
             with self.assertRaises(SheetContractError, msg=col):
                 sh.update_cells(5, {col: "x"})
-        renamed = [f"c{i}" for i in range(1, 51)] + ["status A", "status B", "error", "at", "by"]
-        sh, _ = self.sheet(renamed)
-        with self.assertRaises(SheetContractError):
-            sh.append_rows([{"c1": "NEW", "error": "x"}])
+        self.assertNotIn("Cancellation Reason", sh.build_tool_columns())
 
     def test_group_code_columns(self):
         sh, _ = self.sheet(["action", "ezfolio_group_code", "Group code (EZ)", "booking_ref"])

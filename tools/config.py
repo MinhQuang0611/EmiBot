@@ -63,6 +63,21 @@ def sheet():
     return IntakeSheet(SHEET_ID, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), tab=SHEET_TAB)
 
 
+# HAYA's live intake sheet "HAYA Ezfolio Booking Intake v2", read only (dev, 2026-10-30): bookings from before
+# 22/10, other writers' rows and the group codes are there. Emi still writes to EMI_SHEET_ID.
+LIVE_SHEET_ID = os.environ.get("EMI_LIVE_SHEET_ID", "16pFhmPB6sQB7Bu8S61qq094cvq8Ie1OcRGCeC-CR440")
+LIVE_SHEET_TAB = os.environ.get("EMI_LIVE_SHEET_TAB", SHEET_TAB)
+
+
+def live_sheet():
+    """None when the live sheet is the one Emi writes (nothing extra to read) or isn't set."""
+    if not LIVE_SHEET_ID or LIVE_SHEET_ID == SHEET_ID or SIM_DIR:
+        return None
+    from .intake_sheet import IntakeSheet, ReadOnlySheet, google_service_account_transport
+    return ReadOnlySheet(IntakeSheet(LIVE_SHEET_ID, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")),
+                                     tab=LIVE_SHEET_TAB))
+
+
 # HAYA's Future Availability sheet: rooms free per room type per night (dev, 2026-10-27).
 AVAILABILITY_SHEET_ID = os.environ.get("EMI_AVAILABILITY_SHEET_ID", "1PxW_60FveCEcOjwQ4u6gj9pEszHlVYkoJrCQMtzMN_U")
 

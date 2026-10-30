@@ -43,7 +43,8 @@ sales@haya-hotels.com                                  sales@haya-hotels.com
 Internal forward: `Trân trọng,` / `Reservations team / HAYA Hotel Phu Quoc` / `sales@haya-hotels.com`.
 
 **Facts and money (unchanged hard rules)**
-- **Language (Karen, 2026-10-08):** the language of the sender's email (their most recent one in a mixed thread); any other language → English. Booking.com's own wrapper is in Vietnamese: go by what the guest wrote.
+- **Language (Karen, 2026-10-08; dev, 2026-10-30):** the language the sender wrote in, whatever it is (their most recent own words in a mixed thread). Russian → Russian, Korean → Korean, German → German; a foreign guest gets English only if they wrote in English. The labels, sums, deposit deadline and sign-off follow the same forms in that language (`Заезд с 14:00`, `С уважением,` / `Reservations Team` stays as is).
+  - **OTA relays** (Booking.com, Agoda, Trip.com messages): the wrapper and the OTA's **preset questions** are printed in the extranet's language, Vietnamese, not the guest's. "Ivan Petrov đã nhắn: Tôi có thể nhận phòng vào 12:00 - 13:00 được không?" is a Booking.com preset, not a Vietnamese guest (audit 30/10, F-14: #117 and #170 answered in Vietnamese). Go by what the guest typed themselves, in this message or an earlier one on the booking (`mail-find <ref>`). Only presets, nothing typed → English, or Vietnamese for a VNM guest, with `[CHECK BEFORE SENDING: guest wrote only Booking.com presets; replied in <language>]`.
 - **Fields from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** Every email that needs an answer gets a complete best-answer draft (Tracy's audit, 29/10). What I'm not sure of goes in one first line, `[CHECK BEFORE SENDING: <what to check>]`, shown bold red in Outlook (no highlight), and to Karen with `ask-karen`; the person sending deletes the line. Never a `[…: hotel to confirm]` gap inside the text; the draft commands refuse one.
 - **Never write about what I can or can't see** ("not shown in the information available to us", "we will check and revert", "our team is checking and will send … as soon as possible"). Write the best answer and put the doubt in the CHECK line.
 - **Never Karen's name in a draft** (the commands refuse it). **Reply all**, To and Cc kept. Drafts are HTML.
@@ -311,32 +312,35 @@ sales@haya-hotels.com
 English: `Dear Ms. [Name],` / `Greetings from HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.` / `This is a friendly payment reminder for the booking below. Our accounting team has not yet received [the deposit / the remaining 50%]:` then the same lines (Group code, Confirmation number, Agency reference, Guests, Stay, Room, Total, Paid to date, Amount due, Deadline: [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)), bank details, `Please include your company name + group code #[code] in the transfer reference, and email us the payment slip after the transfer so we can verify receipt.` / `If payment has already been made, please send us the slip and disregard this reminder.`
 - One reminder per deadline (Monica's default). A second or "final" reminder, and any "the booking will be cancelled if…" line, is Karen's decision: report, don't draft.
 
-### 4b. Payment slip received — to the agency (`--kind reply`)
+### 4b. Payment slip received — thanks to the agency (`--kind reply`)
+Drafted in the same run as the forward to accounting (4c), as soon as the slip arrives (dev, 2026-10-30). Form from the dev's own reply to Travel Concierge, 30/10 (one UNC, three bookings):
 ```
-Kính gửi [chị Tên / Phòng Kế toán Đại lý],
+Kính gửi Phòng Kế toán [Đại lý],
 
-HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn Quý Công ty đã gửi ủy nhiệm chi thanh toán cho booking:
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn quý công ty đã gửi UNC. Chúng tôi xác nhận đã nhận chứng từ chuyển khoản [số tiền] VND ([ngân hàng], [DD/MM/YYYY], nội dung "[nội dung chuyển khoản trên UNC]") – [đặt cọc 50% / thanh toán phần còn lại] cho [booking / các booking] sau:
 
-Mã đặt phòng: [mã]
-Mã đoàn: #[mã đoàn]
-Tên khách: [tên]
-Thời gian lưu trú: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] đêm)
-Tổng tiền: [tổng] VND
-Số tiền trên ủy nhiệm chi: [số tiền] VND ([ngày giờ chuyển])
-[Số tiền còn lại: [số tiền] VND, vui lòng thanh toán trước ngày [DD/MM/YYYY] (07 ngày trước ngày nhận phòng).]
+BK [mã] – Mã đoàn #[mã đoàn] – [tên khách; tên khách] ([DD/MM] – [DD/MM/YYYY]): đặt cọc [số tiền] VND; còn lại [số tiền] VND, hạn thanh toán trước [DD/MM/YYYY]
+[one line per booking the UNC pays]
 
-Khách sạn đã chuyển ủy nhiệm chi cho bộ phận Kế toán để đối chiếu và sẽ phản hồi khi tiền về tài khoản.
+Thông tin xuất hóa đơn đã được ghi nhận: [TÊN CÔNG TY] – MST [mã] – [địa chỉ] – email nhận hóa đơn [email][; yêu cầu: nội dung hóa đơn ghi số booking …, xuất đúng ngày check-out].
 
-[Thông tin xuất hóa đơn đã được ghi nhận: [công ty] – MST [mã] – [địa chỉ] – hóa đơn gửi [email][; yêu cầu: ghi số booking, xuất ngày check-out …].]
+Khi thanh toán phần còn lại, quý công ty vui lòng ghi Tên công ty + Mã đoàn trong nội dung chuyển khoản và gửi UNC cho chúng tôi.
 
 Trân trọng,
-Reservations Team
+Bộ phận Đặt phòng
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
-English: `Thank you for your email and the payment receipt.` / `We have received your transfer receipt for VND [amount], the [50% deposit / balance] for the booking below. Our accounting team will check that the amount has been credited to our account, and we will confirm once it is reconciled.` + the booking lines + `Deposit received (pending reconciliation): VND [amount]` / `Balance: VND [amount], due 07 days prior to check-in (by [DD/MM/YYYY])`.
-- The slip is short of 50%: say the amount on the slip and how much is still due.
-- Only after accounting confirmed the money arrived: `Khách sạn xác nhận đã nhận được tiền cọc cho booking sau:` … `Đã nhận cọc 50%: [số tiền] VND (tiền về tài khoản khách sạn ngày [DD/MM/YYYY])`.
+- "Xác nhận đã nhận **chứng từ** chuyển khoản": the slip, not the money (accounting checks the bank). Never "đã nhận được tiền" here.
+- This form says `Chúng tôi` / `quý công ty` and signs `Bộ phận Đặt phòng`, as the dev wrote it; the other Vietnamese forms keep `Khách sạn` / `Reservations Team` until the dev or Karen says otherwise.
+- Greeting to a person instead of the accounts desk: `Kính gửi chị [Tên],` (the greeting rules above).
+- Balance date = check-in − 7 days (10/11 → 03/11). Each booking its own date.
+- **Balance paid (the UNC pays the rest):** `…– thanh toán phần còn lại cho booking sau:` · `BK [mã] – Mã đoàn #[mã] – [khách] ([ngày]): đã thanh toán đủ [tổng] VND`. No "Khi thanh toán phần còn lại" line.
+- **Slip short:** the booking line says what the slip covers and what is still due: `đặt cọc [số trên UNC] VND (thiếu [số tiền] VND so với 50%, vui lòng chuyển bổ sung trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)); còn lại …`.
+- No VAT details in the thread → leave the invoice line out (don't ask for them here).
+- Accounting answers later that the money didn't arrive or is short → to Karen; nothing to the agency until she decides.
+
+English: `Dear [Agency] Accounts Team,` / `Thank you for sending the payment slip. We confirm receipt of your transfer slip for VND [amount] ([bank], [DD/MM/YYYY], reference "[reference]"), the [50% deposit / balance] for the following booking(s):` / `BK [ref] – Group code #[code] – [guests] ([DD/MM] – [DD/MM/YYYY]): deposit VND [amount]; balance VND [amount], due by [DD/MM/YYYY]` / `VAT invoice details noted: …` / `When paying the balance, please include your company name and the group code in the transfer reference and send us the slip.` / `Best regards,` / `Reservations Team` …
 
 ### 4c. Slip forwarded to accounting (`draft-forward accountant@palmahotel.vn --kind forward`)
 Subject: `Fw: [original subject] – UNC cọc #[mã đoàn]` (or `– UNC thanh toán #[mã đoàn]`).
@@ -368,7 +372,7 @@ sales@haya-hotels.com
 ## 5. Request or update on an existing booking (`--kind request`)
 Sources: Booking.com Loo / Voong / Bettiol, Expedia Ho, Agoda 2056156621, Ohmyhotel 28374, RezLive REZ6AD9A3A2, Jain meal 211Q1126Y (13–25/10).
 
-- **Two drafts:** this reply and the forward to front office (`department-forwards.md`). Front office forwarded it in → one draft, the reply, `--to` the writer `--cc haya@haya-hotels.com`.
+- **One draft, the reply.** The request goes on a CHANGE row (`special_requests`, notes item 5), which front office reads in EZFOLIO; no forward to front office (dev, 2026-10-30). Front office forwarded it in → the reply `--to` the writer `--cc haya@haya-hotels.com`.
 - **Shape:** greeting · `Thank you for your message.` · [a short booking block when the writer is a desk, an OTA or a group: ref, group code, guest, stay, room] · one sentence or one labelled paragraph per point, in their order · closing line · sign-off.
 
 Guest, English:
@@ -407,7 +411,7 @@ sales@haya-hotels.com
 ```
 Lines by point (keep only what applies):
 - **Arrival time told:** `We have noted your arrival at around [HH:MM] on [DD/MM/YYYY].` If that's after 14:00: `Check-in time is from 14:00, so your room will be ready for you on arrival.` Late at night: `Our hotel staff is available 24/7 to assist you with check-in.`
-- **Arrives before 14:00 / asks for early check-in:** `Our standard check-in time is 14:00. We will do our best to have your room ready earlier, subject to availability on the day. If it is not yet ready when you arrive, you are welcome to leave your luggage with us and enjoy the hotel facilities in the meantime.` Never "free of charge" (rule 8): an early check-in charge question → the bands in `hotel-info.md`, or Karen.
+- **Arrives before 14:00 / asks for early check-in** — also when they didn't ask but the thread shows an arrival or a flight landing before 14:00 (dev, 2026-10-30: #206, a guest landing at 07:20 who asked only for the address): `Our standard check-in time is 14:00. We will do our best to have your room ready earlier, subject to availability on the day. If it is not yet ready when you arrive, you are welcome to leave your luggage with us and enjoy the hotel facilities in the meantime.` Never "free of charge" (rule 8): an early check-in charge question → the bands in `hotel-info.md`, or Karen. Short form inside another answer: `Check-in is from 14:00; early check-in is subject to availability.` / `Nhận phòng từ 14:00; nhận phòng sớm tùy tình trạng phòng.` / Russian `Заезд с 14:00; ранний заезд по возможности.`
 - **Room request** (bed, floor, quiet, near each other): `We have noted your request for [ ], subject to availability at check-in.` Bed already in the booked type: say the bed size (`hotel-info.md`). A group in several types: `As the group stays in [n] different room types, we will do our best to place the rooms as close to each other as possible; final allocation is subject to availability at check-in.`
 - **Food** (vegetarian, Jain): `Vegetarian options are available at our breakfast. We have noted your [ ] requirements and passed them to our kitchen team.`
 - **Baby cot:** `A baby cot will be provided in the room, subject to availability.` ("free of charge" only once Karen confirms the cot is free; `hotel-info.md`.)

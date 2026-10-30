@@ -2,7 +2,7 @@
 
 - [ ] **Chọn nơi chạy Emi**: OpenClaw riêng cho Emi hay agent trên host hiện tại; ghi rõ host/phiên bản. Host mới phát sinh chi phí.
 - [ ] **Chốt kênh hỏi/báo cáo**: tạo bot Telegram riêng, cung cấp token an toàn trên host. Chốt báo cáo job 4 gửi qua Telegram, email hay nơi khác.
-- [ ] **Xác nhận phạm vi chuyển lễ tân** trong `skills/department-forwards.md`, nhất là thông tin cần chuyển và quy tắc booking đến trong 3 ngày.
+- [x] **Xác nhận phạm vi chuyển lễ tân** — dev 30/10: không forward cho lễ tân, yêu cầu ghi vào notes EZFOLIO (`skills/department-forwards.md`).
 
 ## Quyền truy cập và secret cần cấu hình
 

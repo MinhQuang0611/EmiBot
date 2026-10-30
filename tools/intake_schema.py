@@ -12,7 +12,7 @@ from datetime import datetime
 # Columns that differ between the rows of one booking (one row per room type). Everything else is shared.
 ROOM_LEVEL = ("room_code", "rooms", "adults", "children", "child_ages", "meal_plan", "rate_source",
               "rate_per_night_vnd", "discount_promo", "Average rate per night after discount", "surcharge",
-              "Surcharge amount", "total_vnd", "notes", "Remaining amount")
+              "Surcharge amount", "total_vnd", "notes", "Remaining amount", "Cancellation Amount")
 # Filled by someone else, never by Emi on a new row. tracy_status was deleted from the live sheet on 12/10
 # (Tracy audit 29/10): the build tool filling pdf_link is what marks a row built. The SANDBOX still has it.
 NOT_EMI = ("ezfolio_group_code", "tracy_status", "pdf_link")
@@ -43,7 +43,7 @@ DATES = ("arrival", "departure", "hold_until")
 DATETIMES = ("received_at",)
 INTEGERS = ("nights", "rooms", "adults", "children")
 AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "total_vnd",
-           "Payment 1", "Payment 2", "Remaining amount")
+           "Payment 1", "Payment 2", "Remaining amount", "Cancellation Amount")
 # Surcharge amount carries the rounding difference too, which can be negative (Tracy audit 29/10: "-3").
 SIGNED_AMOUNTS = ("Surcharge amount",)
 AGENCY_CHANNELS = ("TA", "Tour operator")
@@ -82,8 +82,8 @@ CANONICAL_COMPANIES = {
 # Dropped from the end of a company name before matching: "BOOKING.COM BV", "Agoda Company Pte Ltd".
 LEGAL_SUFFIXES = {"bv", "ltd", "llc", "inc", "pte", "co", "company", "limited", "jsc", "gmbh", "corp",
                   "corporation", "plc", "sa", "ag"}
-# nationality: a 3-letter code, e.g. VNM (Karen, 29/10, via Tracy's audit). Codes and names seen or likely on
-# vouchers, to suggest the code when a name or a 2-letter code is written.
+# nationality: the full country name in English, e.g. Kazakhstan (dev, 30/10, replacing the 3-letter code of
+# Tracy's audit 29/10). Codes seen on vouchers, to suggest the name when a code is written.
 COUNTRY_CODES = {
     "VN": "Vietnam", "VNM": "Vietnam", "IN": "India", "IND": "India", "RU": "Russia", "RUS": "Russia",
     "KR": "South Korea", "KOR": "South Korea", "CN": "China", "CHN": "China", "TW": "Taiwan", "TWN": "Taiwan",
@@ -96,11 +96,10 @@ COUNTRY_CODES = {
     "UZB": "Uzbekistan", "IR": "Iran", "IRN": "Iran", "IL": "Israel", "ISR": "Israel",
     "AE": "United Arab Emirates", "ARE": "United Arab Emirates", "UAE": "United Arab Emirates",
 }
-# country name -> its 3-letter code: 'Vietnam' -> 'VNM'
-NATIONALITY_CODES = {name.lower(): code for code, name in COUNTRY_CODES.items() if len(code) == 3 and code != "GER"}
-NATIONALITY_CODES.update({"viet nam": "VNM", "korea": "KOR", "england": "GBR", "united states of america": "USA"})
-NATIONALITY_FALLBACK = "VNM"  # no nationality and no clue in the names (Rules tab)
-REF_EXAMPLE = "'1783017402 / 92777EF002717'"
+NATIONALITY_FALLBACK = "Vietnam"  # no nationality and no clue in the names (Rules tab)
+REF_EXAMPLE = ("'Agoda 1783017402 / SynXis 92777EF002717', 'Booking.com 5486733008 / SynXis 92777EF003114', "
+               "'SynXis 92777EF002715 (Booking.com)' when only the SynXis number is known, "
+               "'MG AGIN3415562610364927 / HB2610161458', 'Trip.com 1400829871007810'")
 NOTES_EXAMPLE = "'1. Booking.com – Ref 5374635524'"
 NOTES_ITEMS = 8  # the EZFOLIO Notice, items 1-8; item 8 = VAT invoice (Tracy audit 29/10)
 
@@ -141,15 +140,18 @@ def ref_parts(booking_ref):
     return [p.strip() for p in str(booking_ref).split(" / ") if p.strip()]
 
 
-def _ref_problems(ref):
-    found = []
-    if re.search(r"[()]", ref):
-        found.append("brackets")
-    norm = _norm(ref)
-    words = sorted({_COMPANY_KEYS[k] for k in _COMPANY_KEYS if re.search(rf"(?<!\w){re.escape(k)}(?!\w)", norm)})
-    if words:
-        found.append("the channel name " + "/".join(words))
-    return found
+def ref_numbers(ref):
+    """The numbers in a booking_ref written the live sheet's way: 'SynXis 92777EF002779 (Booking.com 5550972513)'
+    -> ['92777EF002779', '5550972513']. Words without a digit (channel names, 'Voucher', 'Ref') drop out."""
+    return [t for t in re.split(r"[\s/;()]+", str(ref)) if re.search(r"\d", t) and len(t) >= 4]
+
+
+def _ref_problems(ref, channel):
+    """The live sheet's way (dev, 30/10, replacing 27/10's 'numbers only'): an OTA's ref names the channel in
+    front of each number. TA and tour operator codes are written as the sender prints them."""
+    if channel == "OTA" and not re.match(r"[^\d\s]+\s+\S*\d", ref):
+        return ["no channel name in front of the number"]
+    return []
 
 
 def _notes_problems(rec, g):
@@ -165,8 +167,11 @@ def _notes_problems(rec, g):
     want = []
     if g("company") and not lines[0][3:].startswith(g("company")):
         want.append(f"start with the company {g('company')!r}")
-    if g("booking_ref") and f"Ref {g('booking_ref')}" not in lines[0]:
-        want.append(f"contain 'Ref {g('booking_ref')}'")
+    ref = g("booking_ref")
+    # 'Ref <booking_ref>' as written, or 'Ref' and every number of it ('Booking.com – Ref 5486733008 / 92777EF003114')
+    if ref and f"Ref {ref}" not in lines[0] and not ("Ref " in lines[0]
+                                                    and all(n in lines[0] for n in ref_numbers(ref))):
+        want.append(f"contain 'Ref {ref}'")
     if want:
         return [f"notes: item 1 should " + " and ".join(want) + f", e.g. {NOTES_EXAMPLE}"]
     return []
@@ -183,16 +188,13 @@ def is_built(rec):
 
 
 def nationality_problem(value):
-    """None if every part is a 3-letter code ('VNM', 'VNM; RUS'), else what to write instead."""
+    """None if every part is a full country name ('Vietnam', 'Vietnam; Russia'), else what to write instead."""
     for part in (p for p in re.split(r"\s*[;,/]\s*", str(value).strip()) if p):
-        if re.fullmatch(r"[A-Z]{3}", part):
+        if not re.fullmatch(r"[A-Za-z]{2,3}", part):
             continue
-        if re.fullmatch(r"[A-Za-z]{2,3}", part) and part.upper() in COUNTRY_CODES:
-            code = NATIONALITY_CODES.get(COUNTRY_CODES[part.upper()].lower())
-        else:
-            code = NATIONALITY_CODES.get(part.lower())
-        return (f"nationality: {part!r} — write the 3-letter code" + (f" {code!r}" if code else ", e.g. 'VNM'")
-                + " (the booking's nationality, else the passport, else the guest's name, else VNM)")
+        name = COUNTRY_CODES.get(part.upper())
+        return (f"nationality: {part!r} — write the full country name" + (f" {name!r}" if name else ", e.g. 'Vietnam'")
+                + " (the booking's nationality, else the passport, else the guest's name, else Vietnam)")
     return None
 
 
@@ -222,13 +224,17 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
 
     for k in ALWAYS:
         if k == "booking_ref" and g("channel_type") == "Direct":
-            continue  # a direct guest has no agency code
+            continue  # checked below: HAYA-D + number
         if _blank(rec.get(k)):
             errors.append(f"{k}: never blank" + {
                 "guest_names": " (TBA if names not given)",
                 "nationality": f" — the booking's nationality, else the passport, else inferred from the guest's "
                                f"name; no clue at all: {NATIONALITY_FALLBACK}"}.get(k, ""))
     direct = g("channel_type") == "Direct"
+    # dev 30/10 (live sheet row 2): a direct guest's booking_ref is HAYA-D + a running number, from direct-ref
+    if direct and action == "NEW" and not built and not re.fullmatch(r"HAYA-D\d{3,}", g("booking_ref")):
+        errors.append(f"booking_ref: a Direct booking's ref is HAYA-D + the next number ('HAYA-D012'), from "
+                      f"direct-ref — not {g('booking_ref') or 'blank'}")
     if direct and g("company"):
         # 2026-10-22: row 57 had the guest's own name as company and "new company" in missing_info
         errors.append("company: blank for a Direct booking (an individual, no company); "
@@ -301,12 +307,12 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
         if g(k) and not (k == "tracy_status" and g(k) == "Pending") and action == "NEW" and not on_sheet:
             errors.append(f"{k}: filled by the build tool, leave blank on a NEW row")
 
-    # booking_ref: the reference number(s) only, so the duplicate check (exact match) and sheet-find
-    # (substring) find the booking from either the OTA's email or its SynXis notice.
-    ref_bad = _ref_problems(g("booking_ref")) if g("booking_ref") else []
-    if ref_bad:
-        msg = (f"booking_ref: {g('booking_ref')!r} has {' and '.join(ref_bad)} in it. Write the reference "
-               f"number(s) only, two joined by ' / ', e.g. {REF_EXAMPLE}; the channel goes in company")
+    # booking_ref as the live sheet writes it (dev, 30/10): the channel before each OTA number. Matching
+    # (sheet-find, the duplicate check) goes by the numbers, so either email of a pair finds the booking.
+    ref_bad = _ref_problems(g("booking_ref"), g("channel_type")) if g("booking_ref") else []
+    if ref_bad and action == "NEW":
+        msg = (f"booking_ref: {g('booking_ref')!r} has {' and '.join(ref_bad)}. Write it as the live sheet does, "
+               f"the OTA's own number first, e.g. {REF_EXAMPLE}")
         if g("pdf_link") or built:
             # The confirmation record is keyed by booking_ref + row: renaming a built row could re-draft it.
             warnings.append(msg + " (row already built: leave it, Karen decides)")
@@ -360,14 +366,31 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
                       "3 of the rule) and it stops the build: take it out; say it in the scan report if needed")
     nat = nationality_problem(g("nationality")) if g("nationality") else None
     if nat:
-        # rows written before 29/10 carry the full name: a CHANGE copying it is not blocked
+        # rows written 29-30/10 carry a 3-letter code: a CHANGE copying it is not blocked
         (errors if action == "NEW" and not built else warnings).append(nat)
 
     if action in ("NEW", "CHANGE") and g("notes"):
         warnings += _notes_problems(rec, g)
-    if action == "CANCEL" and g("notes") and not g("notes").startswith("Cancellation charge"):
-        warnings.append("notes: a CANCEL row's notes is the one line 'Cancellation charge (<policy>): <amount> "
-                        "VND — <days> days before check-in, <rule>. Paid: <amount>.' (booking-intake.md)")
+    # dev 30/10 (comparison with the live sheet): CANCEL rows carry the 8 items too, the charge in item 6,
+    # and nothing left to pay
+    if action == "CANCEL" and not built:
+        problems = _notes_problems(rec, g) if g("notes") else ["notes: a CANCEL row has the 8 items too"]
+        lines = [x.strip() for x in g("notes").splitlines() if x.strip()]
+        if not problems and not re.match(r"6\.\s+Cancellation charge", lines[5]):
+            problems = ["notes: on a CANCEL row item 6 is '6. Cancellation charge (<policy>): <amount> VND — <days> "
+                        "days before check-in, <rule>. Paid: <amount>.' (booking-intake.md)"]
+        warnings += problems
+        # dev 30/10: the live sheet's Cancellation Amount (never blank, 0 when free) and Cancellation Reason
+        # (why + the date the notice came in, not the arrival date). Checked where the sheet has the columns.
+        if "Cancellation Amount" in rec and not re.fullmatch(r"\d+", g("Cancellation Amount")):
+            errors.append("Cancellation Amount: never blank on a CANCEL row — the charge for this row in VND "
+                          "digits, 0 when free (cancel-fee prints it per row)")
+        if "Cancellation Reason" in rec and not re.search(r"\b\d{2}/\d{2}/\d{4}\b", g("Cancellation Reason")):
+            errors.append("Cancellation Reason: the reason and the date the cancellation notice came in, "
+                          "'<reason> – notice DD/MM/YYYY' (not the arrival date)")
+        if g("Remaining amount") not in ("", "0"):
+            errors.append(f"Remaining amount: {g('Remaining amount')} on a CANCEL row — write 0 (nothing more to pay; "
+                          "a charge goes in Cancellation Amount / notes item 6)")
     avg, rooms, nights, total = (g("Average rate per night after discount"), g("rooms"), g("nights"), g("total_vnd"))
     extra = g("Surcharge amount") or "0"
     if all(x.isdigit() for x in (avg, rooms, nights, total)) and re.fullmatch(r"-?\d+", extra):

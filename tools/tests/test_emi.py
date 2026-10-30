@@ -160,7 +160,7 @@ def appended(http):
 
 BOOKING = {"action": "NEW", "received_at": "15/10/2026 11:56", "source_email": "TEST - Đặt phòng mới TEST-1510",
            "property": "HAYA", "channel_type": "TA", "company": "Công ty TEST Travel", "booking_ref": "TEST-1510",
-           "guest_names": "Nguyễn Văn Test; TBA", "nationality": "VNM", "arrival": "20/11/2026",
+           "guest_names": "Nguyễn Văn Test; TBA", "nationality": "Vietnam", "arrival": "20/11/2026",
            "departure": "22/11/2026", "nights": "2", "status": "Tentative", "priority": "Normal",
            "missing_info": "Full guest names; adults per room"}
 NOTES8 = ("1. Công ty TEST Travel – Ref TEST-1510\n2. Nguyễn Văn Test – VNM\n3. 20/11/2026 – 22/11/2026\n"
@@ -284,6 +284,17 @@ class SheetCommandsTest(unittest.TestCase):
         sh, _ = sheet_with([["NEW", "SB-2", "Nguyen An"], ["NEW", "AN-9", "Ivan Petrov"]])
         self.assertEqual(len(emi.sheet_find(sh, "petrov", out=lambda *_: None)), 1)
         self.assertEqual(len(emi.sheet_find(sh, "sb-2", out=lambda *_: None)), 1)
+
+    def test_find_by_arrival(self):
+        # dev 30/10: Booking.com 5486733008 'Анна Иванова' was on the sheet only as SynXis 92777EF003114
+        sh, _ = sheet_with([["NEW", "92777EF003114", "Anna Ivanova", "Booking.com", "31/10/2026"],
+                            ["NEW", "92777EF003120", "LI NA", "Expedia", "31/10/2026"],
+                            ["NEW", "1791966280", "Minh", "Agoda", "08/11/2026"]])
+        quiet = lambda *_: None
+        self.assertEqual(emi.sheet_find(sh, "5486733008", out=quiet), [])
+        self.assertEqual(emi.sheet_find(sh, "Иванова", out=quiet), [])
+        self.assertEqual(len(emi.sheet_find(sh, "31/10/2026", out=quiet)), 2)
+        self.assertEqual(emi.sheet_find(sh, "1/10/2026", out=quiet), [])  # a date matches whole, not part
 
 
 def sheet_row(**cells):

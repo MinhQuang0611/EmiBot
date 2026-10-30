@@ -9,7 +9,9 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
     python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
-    python -m tools.emi sheet-find <text>                 # rows whose booking_ref or guest_names contain text
+    python -m tools.emi sheet-find <text>                 # rows by ref, guest name, confirmation no., or arrival DD/MM/YYYY
+                                                          #   (Emi's sheet + the live sheet, read only)
+    python -m tools.emi direct-ref                        # next booking_ref for a direct guest, HAYA-D + number
     python -m tools.emi sheet-rows <first> [<last>]       # rows as they are on the sheet, filled cells only
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
@@ -55,8 +57,8 @@ ask-karen. Karen's name is never in a draft.
 
 A reply goes to whoever sent the email. When that is our own staff (haya@haya-hotels.com forwarding a guest's or
 agency's mail into sales@), draft-reply refuses: reply to the real sender, the From: in the quoted header, with
---to <address> (--cc haya@haya-hotels.com so front office sees the answer). draft-forward refuses to send an
-email back to the colleague who forwarded it to us.
+--to <address> (--cc haya@haya-hotels.com so front office sees the answer). draft-forward refuses anything to
+front office (haya@): requests go in the row's notes, which front office reads in EZFOLIO (dev 30/10).
 Exit 0 = done, 2 = refused or failed (reason on stderr).
 """
 import argparse
@@ -225,14 +227,55 @@ def _show_attachments(mail, message_id, work_dir, out):
 
 # --- sheet ---
 
-def sheet_find(sheet, text, out=print):
+def live_rows(live, out=print):
+    """The live intake sheet's rows, read only (dev 30/10); [] with a GAP line when it can't be read."""
+    if live is None:
+        return []
+    try:
+        return live.rows()
+    except Exception as e:  # not shared yet (403), network: look on Emi's own sheet only, and say so
+        out(f"GAP: live intake sheet not readable ({str(e).splitlines()[0][:120]}) — looked on Emi's sheet only; "
+            "a booking from before 22/10 may be there")
+        return []
+
+
+def direct_ref(sheet, live=None, out=print):
+    """The next booking_ref for a direct guest: HAYA-D + a running number, counted over Emi's sheet and the live
+    one (dev 30/10, live sheet row 2). The live sheet must be readable: a number taken there must not repeat."""
+    rows = sheet.rows()
+    if live is not None:
+        try:
+            rows += live.rows()
+        except Exception as e:
+            raise Refused(f"live intake sheet not readable ({str(e).splitlines()[0][:120]}): a direct booking's "
+                          "number can't be picked without it") from None
+    nums = [m.group(1) for r in rows for p in schema.ref_parts(r.get("booking_ref") or "")
+            if (m := re.fullmatch(r"HAYA-D(\d+)", p.strip(), re.I))]
+    width = max([3] + [len(n) for n in nums])
+    ref = f"HAYA-D{max([0] + [int(n) for n in nums]) + 1:0{width}d}"
+    out(f"{ref}  (highest so far: {max(nums, key=int) if nums else 'none'}). Write the row with sheet-append "
+        f"before asking for the next one.")
+    return ref
+
+
+def _where(r):
+    return f"live row {r['_row']}" if r.get("_sheet") == "live" else f"row {r['_row']}"
+
+
+def sheet_find(sheet, text, out=print, live=None):
+    """booking_ref, guest_names or confirmation_no containing text, or arrival equal to it (DD/MM/YYYY): a guest
+    writing with the OTA's own number and a Cyrillic name is found by the arrival date (dev 30/10, Booking.com
+    5486733008, on the sheet only as SynXis 92777EF003114 'Anna Ivanova')."""
     t = text.strip().lower()
-    hits = [r for r in sheet.rows()
-            if t in r.get("booking_ref", "").lower() or t in r.get("guest_names", "").lower()]
-    out(f"rows found: {len(hits)}")
-    for r in hits:
+    match = lambda r: (any(t in r.get(c, "").lower() for c in ("booking_ref", "guest_names", "confirmation_no"))
+                       or t == r.get("arrival", "").strip())
+    hits = [r for r in sheet.rows() if match(r)]
+    found_live = [r for r in live_rows(live, out) if match(r)]
+    out(f"rows found: {len(hits)}" + (f" on Emi's sheet, {len(found_live)} on the live sheet (read only; "
+                                       "'_sheet': 'live')" if live is not None else ""))
+    for r in hits + found_live:
         out(json.dumps({k: v for k, v in r.items() if v}, ensure_ascii=False))
-    return hits
+    return hits + found_live
 
 
 def expand_booking(data):
@@ -325,7 +368,16 @@ def sheet_audit(sheet, first_row=3, out=print):
 
 
 def _parts(ref):
-    return {p.lower() for p in schema.ref_parts(ref or "")}
+    """The reference numbers in a booking_ref, for matching. Rows written the live sheet's way name the channel
+    before each number ('Booking.com 5486733008 / SynXis 92777EF003114', 'SynXis 92777EF002779 (Booking.com
+    5550972513)', 'MG AGSG0528672610514149 / HB2610327806'): each number counts on its own. A TA code with
+    spaces ('Thu1230 TVR149') stays whole, and dates ('23/11-26/11') never count."""
+    ref = (ref or "").strip()
+    out = {p.lower() for p in schema.ref_parts(ref)}
+    if re.match(r"[^\d\s]+\s", ref):
+        out |= {n.lower() for n in schema.ref_numbers(ref)
+                if re.search(r"[A-Za-z]", n) or len(re.sub(r"\D", "", n)) >= 6}
+    return out
 
 
 def booking_state(rows, ref):
@@ -394,8 +446,10 @@ def carry_over(records, state, out=print):
         filled = [k for k in cols if not _blank(src.get(k))]
         for k in filled:
             rec[k] = src[k]
+        if rec["action"] == "CANCEL":
+            rec["Remaining amount"] = "0"  # dev 30/10: 22 CANCEL rows kept the full total
         if filled:
-            out(f"{rec['action']} {rec.get('room_code') or ''}: blanks copied from row {src['_row']}: "
+            out(f"{rec['action']} {rec.get('room_code') or ''}: blanks copied from {_where(src)}: "
                 f"{', '.join(filled)}")
     return records
 
@@ -436,11 +490,12 @@ def verify_appended(sheet, records):
                       f"before writing again, never append twice")
 
 
-def sheet_append(sheet, data, out=print):
+def sheet_append(sheet, data, out=print, live=None):
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
     rows = None
+    elsewhere = None  # the live sheet's rows, read once: a booking from before 22/10 is only there (dev 30/10)
     cancelled_here = {p for rec in records if rec.get("action") == "CANCEL" for p in _parts(rec.get("booking_ref"))}
     for rec in records:
         ref = str(rec.get("booking_ref", "")).strip()
@@ -448,18 +503,21 @@ def sheet_append(sheet, data, out=print):
             continue
         if rows is None:
             rows = sheet.rows()
-        state = booking_state(rows, ref)
+            elsewhere = live_rows(live, out)
+        state = booking_state(rows, ref) or booking_state(elsewhere, ref)
         if rec.get("action") == "NEW" and state:
             # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
             # Except a cancel-and-rebuild (GD0512, 26/10): CANCEL rows and NEW rows from the same email.
             rebuild = bool(_parts(ref) & cancelled_here) or (
                 state[0].get("action") == "CANCEL" and state[0].get("received_at") == rec.get("received_at"))
             if not rebuild:
-                hit = next(r for r in rows if _parts(r.get("booking_ref")) & _parts(ref))
+                hit = next(r for r in rows + elsewhere if _parts(r.get("booking_ref")) & _parts(ref))
                 raise Refused(f"booking_ref {ref!r}: {', '.join(sorted(_parts(hit['booking_ref']) & _parts(ref)))} "
-                              f"is already on the sheet (row {hit['_row']}): this is not a NEW booking. Use action "
-                              f"CHANGE (new rows, what_changed filled), or sheet-update row {hit['_row']} to add "
-                              f"the other number. A cancel-and-rebuild: the CANCEL rows and the NEW rows in one file")
+                              f"is already on the {'live ' if hit.get('_sheet') == 'live' else ''}sheet "
+                              f"({_where(hit)}): this is not a NEW booking. Use action CHANGE (new rows, what_changed "
+                              f"filled)" + ("" if hit.get("_sheet") == "live" else f", or sheet-update row "
+                              f"{hit['_row']} to add the other number") + ". A cancel-and-rebuild: the CANCEL rows "
+                              "and the NEW rows in one file")
         if rec.get("action") == "CHANGE":
             missing = [k for k in CHANGE_OWN if _blank(rec.get(k))]
             if missing:
@@ -472,8 +530,9 @@ def sheet_append(sheet, data, out=print):
             raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
                           f"{state[0].get('received_at', '')}): no second CANCEL row; mark the email done")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
-        records = carry_over(records, booking_state(rows, records[0].get("booking_ref")), out=out)
-        records = fill_group_code(records, rows, sheet.group_code_columns(), out=out)
+        ref0 = records[0].get("booking_ref")
+        records = carry_over(records, booking_state(rows, ref0) or booking_state(elsewhere, ref0), out=out)
+        records = fill_group_code(records, rows + elsewhere, sheet.group_code_columns(), out=out)
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     verify_appended(sheet, records)
@@ -694,16 +753,14 @@ def draft_reply(mail, st, args, tg=None, out=print):
 
 
 FRONT_OFFICE = "haya@haya-hotels.com"
-# Only the intake sheet itself: a guest's "bed sheet" or "extra sheets" is a real request.
-SHEET_WORDS = re.compile(r"sheet\s+intake|intake\s+sheet|trên\s+sheet|\bintake\s+row", re.I)
 
 
-def check_front_office_note(text, to):
-    """dev 30/10 (F-01): front office doesn't know the intake sheet."""
-    if FRONT_OFFICE in {a.lower() for a in to or []} and SHEET_WORDS.search(text):
-        raise Refused("the front-office note mentions the intake sheet, which front office doesn't use. First line: "
-                      "'**Mã đoàn:** #<code>', or '**Booking:** <ref> (<OTA> qua <channel>) — chưa có mã đoàn' "
-                      "(department-forwards.md)")
+def check_no_front_office_forward(to):
+    """dev 30/10: front office reads a booking's requests in its EZFOLIO notes, so nothing is forwarded to haya@."""
+    if FRONT_OFFICE in {a.lower() for a in to or []}:
+        raise Refused(f"no forwards to front office ({FRONT_OFFICE}): put the requests in the row's special_requests "
+                      "and notes item 5 (a CHANGE row for a booking already on the sheet); front office sees them in "
+                      "EZFOLIO (department-forwards.md)")
 
 
 def note_pending_same(st, how, kind, ref, to, out=print):
@@ -725,12 +782,12 @@ def draft_forward(mail, st, args, tg=None, out=print):
     to = _addresses(args.to)
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
-    check_front_office_note(text, to)
-    note_pending_same(st, "forward", args.kind, args.ref, to, out=out)
     sender = _sender_of(mail, args.message_id)
     if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
         raise Refused(f"{sender} forwarded this email to us: it already has it. Don't forward it back. Answer the "
                       f"guest or agency with draft-reply --to <the quoted From: address> --cc {sender}")
+    check_no_front_office_forward(to)
+    note_pending_same(st, "forward", args.kind, args.ref, to, out=out)
     lower = {a.lower() for a in to}
     for n, r in st.data["reviews"].items():
         # Slips and Palma mail are forwarded once (Tracy audit 29/10); a denied draft may be redone
@@ -870,8 +927,12 @@ def run_quote(args, out=print, availability=None):
     return q
 
 
-def run_cancel_fee(sheet, args, out=print):
-    rows = sheet.find_by_ref(args.booking_ref)
+def run_cancel_fee(sheet, args, out=print, live=None):
+    rows = [r for r in sheet.rows() if _parts(r.get("booking_ref")) & _parts(args.booking_ref)]
+    if not rows:
+        rows = [r for r in live_rows(live, out) if _parts(r.get("booking_ref")) & _parts(args.booking_ref)]
+        if rows:
+            out(f"booking found on the live sheet only (live rows {', '.join(str(r['_row']) for r in rows)})")
     if not rows:
         raise Refused(f"no rows for booking_ref {args.booking_ref!r} on the sheet")
     if args.cancelled_at:
@@ -1181,8 +1242,6 @@ def run_review(mail, st, tg, args, out=print):
             _, r = st.review(n)
             text = read_text(args.body)
             check_no_gaps(text, r.get("source") or "<message_id>")
-            if r.get("how") == "forward":
-                check_front_office_note(text, r.get("to"))
             check = None
             if r["kind"] == "confirmation":
                 check = (check_confirmation_text if not r.get("operator") else
@@ -1295,6 +1354,7 @@ def parser():
     s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
     s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
+    sub.add_parser("direct-ref", help="next booking_ref for a direct guest: HAYA-D + number")
     s = sub.add_parser("sheet-rows", help="rows FIRST..LAST as they are on the sheet (read-only)")
     s.add_argument("first", type=int); s.add_argument("last", type=int, nargs="?")
     s = sub.add_parser("sheet-audit", help="check rows already on the sheet with the sheet-check rules")
@@ -1435,13 +1495,15 @@ def main(argv=None):
         elif c == "sheet-check":
             sheet_check(config.sheet(), read_json(args.file))
         elif c == "sheet-find":
-            sheet_find(config.sheet(), args.text)
+            sheet_find(config.sheet(), args.text, live=config.live_sheet())
+        elif c == "direct-ref":
+            direct_ref(config.sheet(), live=config.live_sheet())
         elif c == "sheet-rows":
             sheet_rows(config.sheet(), args.first, args.last)
         elif c == "sheet-audit":
             sheet_audit(config.sheet(), args.from_row)
         elif c == "sheet-append":
-            sheet_append(config.sheet(), read_json(args.file))
+            sheet_append(config.sheet(), read_json(args.file), live=config.live_sheet())
         elif c == "sheet-update":
             sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR)
         elif c == "draft-reply":
@@ -1473,7 +1535,7 @@ def main(argv=None):
                 return 0
             run_stop_sales(data)
         elif c == "cancel-fee":
-            run_cancel_fee(config.sheet(), args)
+            run_cancel_fee(config.sheet(), args, live=config.live_sheet())
         elif c == "pdf-fetch":
             pdf_fetch(config.sheet(), args.row)
         elif c == "draft-confirmation":

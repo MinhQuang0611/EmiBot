@@ -14,9 +14,9 @@ FIRST_DATA_ROW = 3
 # Written by the build tool, not by Emi. Emi only sets tracy_status = Pending on a new row, where the sheet still
 # has that column (deleted from the live sheet 12/10; the SANDBOX keeps it).
 BUILD_TOOL_COLUMNS = {"tracy_status", "pdf_link"}
-# Tracy audit 29/10: columns 51-55 of the live sheet are EZFOLIO status/error columns (ez_error is col 53).
-# Their names aren't known here, so they are protected by position as well as by the "ez_" prefix.
-BUILD_TOOL_POSITIONS = range(50, 55)  # 0-based: columns 51-55
+# The EZFOLIO status/error columns (Tracy audit 29/10: "columns 51-55, ez_error is 53"). Their names are known
+# since the dev pasted the live header (30/10): ez_status, ez_error, ez_note, ez_processed_at, now columns 52-55,
+# with Cancellation Reason at 51. Protected by name, not by position.
 BUILD_TOOL_PREFIX = "ez_"
 REQUIRED = ("company", "arrival", "departure", "rate_per_night_vnd", "room_code", "rooms")
 
@@ -75,9 +75,8 @@ class IntakeSheet:
         return self._header
 
     def build_tool_columns(self):
-        """Every column Emi never writes: tracy_status, pdf_link, ez_* and columns 51-55."""
-        return (BUILD_TOOL_COLUMNS | {h for h in self.header if h.lower().startswith(BUILD_TOOL_PREFIX)}
-                | {self.header[i] for i in BUILD_TOOL_POSITIONS if i < len(self.header)})
+        """Every column Emi never writes: tracy_status, pdf_link, ez_*."""
+        return BUILD_TOOL_COLUMNS | {h for h in self.header if h.lower().startswith(BUILD_TOOL_PREFIX)}
 
     def group_code_columns(self):
         """The live sheet carries the group code in two columns (Tracy audit 29/10); the SANDBOX in one."""
@@ -176,6 +175,38 @@ class IntakeSheet:
         gid = next(s["properties"]["sheetId"] for s in meta["sheets"] if s["properties"]["title"] == self.tab)
         return self.call("POST", f"{self.base}:batchUpdate", body={"requests": [{"deleteDimension": {
             "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": row_number - 1, "endIndex": row_number}}}]})
+
+
+class ReadOnlySheet:
+    """HAYA's live intake sheet, read only (dev, 2026-10-30): Emi looks bookings and group codes up there and
+    writes only to its own sheet. Shared with the service account as Viewer; this refuses writes as well."""
+
+    def __init__(self, sheet):
+        self._sheet = sheet
+
+    @property
+    def header(self):
+        return self._sheet.header
+
+    def rows(self):
+        """Rows marked '_sheet': 'live'. The bot fills 'Group code'; copied to ezfolio_group_code when that is
+        blank, so a lookup finds the code in the column Emi's own sheet has."""
+        out = []
+        for r in self._sheet.rows():
+            if not str(r.get("ezfolio_group_code") or "").strip() and str(r.get("Group code") or "").strip():
+                r["ezfolio_group_code"] = r["Group code"]
+            r["_sheet"] = "live"
+            out.append(r)
+        return out
+
+    def find_by_ref(self, booking_ref):
+        ref = booking_ref.strip().lower()
+        return [r for r in self.rows() if r.get("booking_ref", "").strip().lower() == ref]
+
+    def __getattr__(self, name):
+        if name in ("append_rows", "update_cells", "delete_test_row", "call"):
+            raise SheetContractError("the live intake sheet is read only for Emi")
+        return getattr(self._sheet, name)
 
 
 def missing_required(record):

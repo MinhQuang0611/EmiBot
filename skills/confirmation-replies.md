@@ -70,9 +70,9 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 
 **Deadline passed, still nothing:** I report it to Karen. The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
 
-**A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): forward it to accounting (see `department-forwards.md`), write the CHANGE row with the payment, and no reminder goes out. If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
+**A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): write the CHANGE row with the payment, forward the slip to accounting (`department-forwards.md`, `email-templates.md` 4c) and, for an agency or guest, draft the thank-you that confirms the slip (`email-templates.md` 4b) in the same run (dev, 2026-10-30). No reminder goes out. An OTA payout advice gets no thank-you (no-reply sender). If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
 
-**The accountant doesn't answer the forward:** the payment is fine. I draft the acknowledgement of receipt to the agency (Tracy's audit, 29/10).
+**The accountant answers that the money didn't arrive or is short:** to Karen; nothing more to the agency until she decides. No answer means the payment is fine (Tracy's audit, 29/10).
 
 ## Voice
 Agency confirmations follow the templates and sign off "Trân trọng," / "Best regards," + "Reservations Team / HAYA Hotel Phu Quoc, Trademark Collection by Wyndham / sales@haya-hotels.com" (dev, 2026-10-27, from the Sent folder). Anything outside a template is in Karen's voice: greeting, the facts, a polite ask if there is one, no reasons given for asks. No emoji. Run `anti-ai-slop` on any free-written text before it goes to Drafts.

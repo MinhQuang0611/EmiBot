@@ -46,47 +46,29 @@ class SimBase(unittest.TestCase):
         return path
 
 
-class FrontOfficeNoteTest(SimBase):
-    """F-01: #190/#191 told front office 'chưa có trên sheet intake' for rows written in the same run."""
+class NoFrontOfficeForwardTest(SimBase):
+    """dev 30/10: #205 (Agoda 1791966280, four requests) forwarded to haya@; the reviewer logged the requests in the
+    booking's EZFOLIO notes instead, which is where front office sees them. Forwards are for payment slips."""
 
-    def fwd(self, text, to="haya@haya-hotels.com"):
+    def fwd(self, text, to):
         a = SimpleNamespace(message_id="sim-01-request", to=to, body=self.body(text), kind="forward",
-                            ref="92777EF002985", row="")
+                            ref="1791966280", row="")
         return emi.draft_forward(self.mail, self.st, a, out=self.lines.append)
 
-    def test_sheet_mentioned_to_front_office_refused(self):
-        old = ("**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có trên sheet intake, chưa có mã đoàn\n"
-               "**Yêu cầu:**\n• Phòng không hút thuốc")
-        with self.assertRaises(emi.Refused) as e:
-            self.fwd(old)
-        self.assertIn("chưa có mã đoàn", str(e.exception))
+    def test_forward_to_front_office_refused(self):
+        for to in ("haya@haya-hotels.com", "HAYA@haya-hotels.com", "accountant@palmahotel.vn, haya@haya-hotels.com"):
+            with self.assertRaisesRegex(emi.Refused, "notes item 5"):
+                self.fwd("**Booking:** 1791966280 — chưa có mã đoàn\n**Yêu cầu:**\n• Phòng không hút thuốc", to)
 
-    def test_new_first_line_passes(self):
-        self.fwd("**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có mã đoàn\n"
-                 "**Lưu trú:** 22/10/2026 – 24/10/2026 (đến hôm nay)\n**Yêu cầu:**\n• Phòng không hút thuốc")
-        self.fwd("**Mã đoàn:** #30287\n**Yêu cầu:**\n• 2 phòng cùng tầng", to="accountant@palmahotel.vn")
+    def test_slip_to_accounting_passes(self):
+        self.fwd("Mã đoàn: #30511\n\nDear chị, em gửi UNC đặt cọc của Travel Concierge.", "accountant@palmahotel.vn")
 
-    def test_guest_bed_sheet_passes(self):
-        self.fwd("**Mã đoàn:** #30287\n**Yêu cầu:**\n• Khách xin thêm 1 bed sheet và gối")
-
-    def test_rewrite_checked_too(self):
-        tg = None  # the check runs before anything reaches Telegram or Outlook
-        a = SimpleNamespace(message_id="sim-01-request", to="haya@haya-hotels.com", kind="forward",
-                            ref="92777EF002985", row="",
-                            body=self.body("**Booking:** 92777EF002985 (Booking.com qua SynXis) — chưa có mã đoàn"))
-        emi.draft_forward(self.mail, self.st, a, tg=tg, out=self.lines.append)
-        n = max(self.st.data["reviews"], key=int)
-        bad = self.body("**Booking:** 92777EF002985 — chưa có trên sheet intake, chưa có mã đoàn", "r.txt")
-        with self.assertRaisesRegex(emi.Refused, "mentions the intake sheet"):
-            emi.run_review(self.mail, self.st, tg, SimpleNamespace(cmd="review-rewrite", n=n, body=bad,
-                                                                  feedback="x"), out=self.lines.append)
-
-    def test_skill_template_has_no_sheet(self):
+    def test_skill_has_no_front_office_forward(self):
         path = os.path.join(os.path.dirname(__file__), "..", "..", "skills", "department-forwards.md")
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        self.assertNotIn("chưa có trên sheet", text)
-        self.assertIn("— chưa có mã đoàn", text)
+        self.assertNotIn("Nhờ lễ tân", text)
+        self.assertIn("EZFOLIO", text)
 
 
 class PendingSameDraftTest(SimBase):
@@ -163,7 +145,7 @@ class BackdatedNewTest(unittest.TestCase):
 
 class IndianRateTest(unittest.TestCase):
     """F-05: row 374 (nationality changed to India, rate left 1,700,000), rows 302-303."""
-    TA = dict(channel_type="TA", company="Victoria DMC", rate_source="TA card", nationality="IND", notes="",
+    TA = dict(channel_type="TA", company="Victoria DMC", rate_source="TA card", nationality="India", notes="",
               missing_info="")
 
     def test_no_plus_20_refused(self):
@@ -175,7 +157,7 @@ class IndianRateTest(unittest.TestCase):
                              "rate_per_night_vnd: Indian"))
         self.assertFalse(has(check(**dict(self.TA, missing_info="rate: Indian +20% not in the agency's rate"))[0],
                              "rate_per_night_vnd: Indian"))
-        self.assertFalse(has(check(**dict(self.TA, nationality="VNM"))[0], "rate_per_night_vnd: Indian"))
+        self.assertFalse(has(check(**dict(self.TA, nationality="Vietnam"))[0], "rate_per_night_vnd: Indian"))
         self.assertFalse(has(check(**dict(self.TA, channel_type="OTA", company="Agoda", rate_source="OTA net"))[0],
                              "rate_per_night_vnd: Indian"))
 
