@@ -132,6 +132,13 @@ class IntakeSheetTest(unittest.TestCase):
         self.assertEqual(row[:3], ["NEW", "SB-1", "Sao Bien"])
         self.assertEqual(row[HEADER.index("tracy_status")], "Pending")
 
+    def test_append_goes_after_the_last_row_not_after_a_blank_one(self):
+        sh, http = sheet_with([["NEW", "SB-1"], [], ["CHANGE", "AN-2"]])  # data rows 3, (blank 4), 5
+        sh.append_rows([{"booking_ref": "SB-3", "action": "NEW"}])
+        url = urllib.parse.unquote(http.calls[-1][1])
+        self.assertIn("!A5:", url)
+        self.assertIn(":append?", url)
+
     def test_append_rejects_unknown_and_build_tool_columns(self):
         sh, _ = sheet_with([])
         with self.assertRaises(SheetContractError):

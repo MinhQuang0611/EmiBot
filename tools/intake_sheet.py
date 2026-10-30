@@ -155,8 +155,13 @@ class IntakeSheet:
             else:
                 rec = {k: v for k, v in rec.items() if k != "tracy_status"}
             values.append(self._to_values(rec))
+        # Anchored on the last data row, not A1: from A1 Sheets takes the first "table", which on the live sheet
+        # ended at a blank row (then 139), so rows were inserted mid-sheet and every row below moved down (30/10).
+        last = col_letter(len(self.header) - 1)
+        filled = self.call("GET", f"{self.base}/values/{self._range(f'A{FIRST_DATA_ROW}:{last}')}").get("values", [])
+        anchor = f"A{FIRST_DATA_ROW + len(filled) - 1}:{last}{FIRST_DATA_ROW + len(filled) - 1}" if filled else "A1"
         return self.call("POST",
-                         f"{self.base}/values/{self._range('A1')}:append"
+                         f"{self.base}/values/{self._range(anchor)}:append"
                          f"?valueInputOption={self.value_input}&insertDataOption=INSERT_ROWS",
                          body={"values": values})
 
