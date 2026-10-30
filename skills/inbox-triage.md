@@ -15,7 +15,7 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | Type | What it looks like | Goes to |
 |---|---|---|
 | New booking | Agency/guest/OTA asks to book or sends a booking notice | `booking-intake.md` → action NEW. Tour operator (Anex, Odeon, Crystal Bay, Pegas, Selfie, Fun and Sun): `tour-operators.md` first — contract price, allotment or on request, Anex robot replies |
-| Change | Dates, rooms, names, pax, flight, pick-up, meals or requests changed or added on an existing booking | `booking-intake.md` → action CHANGE: new rows, never an edit of the old ones ("One email, one set of rows") |
+| Change | Dates, rooms, names, pax, flight, pick-up, meals or requests changed or added on an existing booking | `booking-intake.md` → action CHANGE: new rows once the booking is built; before the build, `sheet-update` the NEW rows ("One email, one set of rows", dev 30/10) |
 | Declined on request | HAYA answered an on-request booking "cannot be accommodated" | `booking-intake.md` → action CANCEL, not NEW |
 | Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → a separate CANCEL row, and the cancellation reply drafted right away (`confirmation-replies.md`). Karen first only if unclear: a possible fee, or which booking (Karen, 29/10) |
 | Payment slip | Bank transfer proof (UNC, remittance) for a deposit or balance, or an OTA payout advice (e.g. Citi Paylink for Traveloka) | `booking-intake.md` → a CHANGE row with the payment columns filled + forward to accounting, always, in Vietnamese (`department-forwards.md`) + the thank-you to the agency or guest confirming the slip (`email-templates.md` 4b), same run (dev, 2026-10-30) |

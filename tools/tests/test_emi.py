@@ -235,7 +235,7 @@ class SheetCommandsTest(unittest.TestCase):
         self.assertFalse(any(x.startswith("WARNING") and "total_vnd" in x for x in lines))
 
     def test_new_with_existing_ref_refused_change_allowed(self):
-        existing = [["NEW", "", "", "", "", "", "", "", "TEST-1510"]]
+        existing = [sheet_row(action="NEW", booking_ref="TEST-1510", pdf_link="https://drive.google.com/built")]
         sh, http = real_sheet(existing)
         with self.assertRaises(emi.Refused):
             emi.sheet_append(sh, {"booking": BOOKING, "room_lines": [DLX]}, out=lambda *_: None)
@@ -245,6 +245,16 @@ class SheetCommandsTest(unittest.TestCase):
         sh, http = real_sheet(existing)
         emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
         self.assertEqual(appended(http)[0]["action"], "CHANGE")
+
+    def test_change_before_the_build_goes_into_the_new_row(self):
+        # dev 30/10, live sheet: Victoria INBOM04540000001's nationality went into NEW row 803, no CHANGE row
+        sh, http = real_sheet([sheet_row(action="NEW", booking_ref="TEST-1510")])
+        change = dict(BOOKING, action="CHANGE", what_changed="Nationality → India",
+                      missing_info="ezfolio_group_code: not known yet")
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
+        self.assertIn("sheet-update 3", str(e.exception))
+        self.assertIsNone(appended(http))
 
     def test_new_refused_when_one_of_its_numbers_is_on_the_sheet(self):
         sh, _ = real_sheet([["NEW", "", "", "", "", "", "", "", "1783017402 / 92777EF002717"]])

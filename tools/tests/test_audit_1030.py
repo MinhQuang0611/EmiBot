@@ -101,7 +101,7 @@ class ChangeArrivalTest(unittest.TestCase):
 
     def existing(self):
         new = dict(BOOKING, received_at="10/10/2026 10:00", arrival="17/10/2026", departure="19/10/2026",
-                   missing_info="")
+                   missing_info="", pdf_link="https://drive.google.com/built")
         return [[new.get(h, DLX.get(h, "")) for h in REAL_HEADER]]
 
     def change(self, **kw):

@@ -133,6 +133,22 @@ class CancellationColumnsTest(unittest.TestCase):
                       cancelling.render(c))
 
 
+class CodTest(unittest.TestCase):
+    """dev 30/10: COD written with the booking as text, the live sheet's way (645 of its 818 rows)."""
+    ROW = dict(action="NEW", channel_type="OTA", company="Agoda", booking_ref="Agoda 1791966280 / SynXis 92777EF003124",
+               guest_names="X", nationality="Vietnam", COD="")
+
+    def test_blank_cod_refused_on_a_new_row_warned_on_an_old_one(self):
+        self.assertTrue(any(e.startswith("COD: never blank") for e in schema.check_row(self.ROW)[0]))
+        errors, warnings = schema.check_row(dict(self.ROW, _row=385))
+        self.assertFalse(any(e.startswith("COD") for e in errors))
+        self.assertTrue(any(w.startswith("COD: never blank") for w in warnings))
+
+    def test_ota_cod_is_na(self):
+        self.assertFalse(any(x.startswith("COD") for x in sum(schema.check_row(dict(self.ROW, COD="N/A (OTA prepaid)")), [])))
+        self.assertTrue(any(w.startswith("COD:") for w in schema.check_row(dict(self.ROW, COD="01/11/2026 14:00"))[1]))
+
+
 class DirectRefTest(unittest.TestCase):
     def test_next_number_over_both_sheets(self):
         sh, _ = real_sheet([["NEW", "", "", "HAYA", "Direct", "", "", "", "HAYA-D007"]])

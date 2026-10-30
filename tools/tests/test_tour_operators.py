@@ -167,7 +167,7 @@ class OperatorChangeRowTest(unittest.TestCase):
                   status="Definite", priority="Normal", arrival="21/11/2026", departure="23/11/2026", nights="2")
 
     def test_change_without_its_own_rate_and_notes_refused(self):
-        sh, http = real_sheet([sheet_row(**ODEON_BOOKING)])
+        sh, http = real_sheet([sheet_row(**ODEON_BOOKING, pdf_link="https://drive.google.com/built")])
         with self.assertRaises(emi.Refused) as e:
             emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [{"room_code": "DLX-SV"}]},
                              out=lambda *_: None)
@@ -175,7 +175,7 @@ class OperatorChangeRowTest(unittest.TestCase):
         self.assertIsNone(appended(http))
 
     def test_change_with_rate_and_notes_written(self):
-        sh, http = real_sheet([sheet_row(**ODEON_BOOKING)])
+        sh, http = real_sheet([sheet_row(**ODEON_BOOKING, pdf_link="https://drive.google.com/built")])
         notes = "\n".join(["1. Odeon – Ref TEST-OD-4609701", "2. TEST GUEST – RUS", "3. 21/11/2026 – 23/11/2026",
                            "4. 2 Deluxe Sea View – 4 adults, 0 children", "5. None",
                            "6. Odeon contract: 2,200,000 × 2 night(s) = 4,400,000; = 4,400,000, BB, incl. tax",

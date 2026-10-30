@@ -17,8 +17,10 @@ ROOM_LEVEL = ("room_code", "rooms", "adults", "children", "child_ages", "meal_pl
 # (Tracy audit 29/10): the build tool filling pdf_link is what marks a row built. The SANDBOX still has it.
 NOT_EMI = ("ezfolio_group_code", "tracy_status", "pdf_link")
 BUILT_STATUSES = ("Entered", "Problem")
-# Filled later from payment slips (sheet-update), not when the booking first arrives.
-PAYMENT = ("COD", "Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time")
+# Filled later from payment slips (a CHANGE row), not when the booking first arrives.
+PAYMENT = ("Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time")
+# COD is written with the booking, as text, the live sheet's way (dev 30/10): 'N/A (OTA prepaid)',
+# '48h after confirmation is received (deposit 50%); balance by 03/11/2026', 'N/A (cancelled)'.
 
 # Rules tab: "on every booking row (NEW or CHANGE) ... must NEVER be blank", else named in missing_info.
 REQUIRED_BOOKING_ROW = ("company", "arrival", "departure", "room_code", "rooms", "rate_per_night_vnd",
@@ -371,6 +373,15 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
 
     if action in ("NEW", "CHANGE") and g("notes"):
         warnings += _notes_problems(rec, g)
+    # dev 30/10: the live sheet writes COD with every row (645 of 818), as text
+    if "COD" in rec and action in ("NEW", "CHANGE", "CANCEL") and not built and not g("COD"):
+        # rows already on the sheet from before 30/10: a warning
+        (warnings if "_row" in rec else errors).append(
+                      "COD: never blank — the payment deadline as text (booking-intake.md, COD): OTA 'N/A (OTA "
+                      "prepaid)' / 'N/A (Booking.com – card guarantee)'; TA '48h after confirmation is received "
+                      "(deposit 50%); balance by DD/MM/YYYY'; CANCEL 'N/A (cancelled)'")
+    elif "COD" in rec and g("channel_type") == "OTA" and g("COD") and not g("COD").lower().startswith("n/a"):
+        warnings.append(f"COD: {g('COD')!r} on an OTA row — the live sheet writes 'N/A (<how the OTA pays>)'")
     # dev 30/10 (comparison with the live sheet): CANCEL rows carry the 8 items too, the charge in item 6,
     # and nothing left to pay
     if action == "CANCEL" and not built:
@@ -388,6 +399,8 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
         if "Cancellation Reason" in rec and not re.search(r"\b\d{2}/\d{2}/\d{4}\b", g("Cancellation Reason")):
             errors.append("Cancellation Reason: the reason and the date the cancellation notice came in, "
                           "'<reason> – notice DD/MM/YYYY' (not the arrival date)")
+        if "COD" in rec and not g("COD").lower().startswith("n/a"):
+            warnings.append("COD: a CANCEL row's COD is 'N/A (cancelled)'")
         if g("Remaining amount") not in ("", "0"):
             errors.append(f"Remaining amount: {g('Remaining amount')} on a CANCEL row — write 0 (nothing more to pay; "
                           "a charge goes in Cancellation Amount / notes item 6)")

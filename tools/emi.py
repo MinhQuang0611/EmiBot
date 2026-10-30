@@ -315,6 +315,9 @@ def check_rows(sheet, records, fresh=True):
         if unknown:
             errors.append(f"{label}: not sheet columns {unknown} — run sheet-schema for the exact names")
         e, w = schema.check_row(rec, codes, earlier_arrivals=earlier.get(rec.get("booking_ref")))
+        if not fresh:  # a row written before 30/10 without COD: updating another cell isn't blocked by it
+            w += [x for x in e if x.startswith("COD:")]
+            e = [x for x in e if not x.startswith("COD:")]
         received = schema._date(rec.get("received_at") or "", "%d/%m/%Y %H:%M")
         if fresh and rec.get("action") == "NEW" and received and (
                 (_today_vn() - received.date()).days > BACKDATED_DAYS):
@@ -518,6 +521,16 @@ def sheet_append(sheet, data, out=print, live=None):
                               f"filled)" + ("" if hit.get("_sheet") == "live" else f", or sheet-update row "
                               f"{hit['_row']} to add the other number") + ". A cancel-and-rebuild: the CANCEL rows "
                               "and the NEW rows in one file")
+        if rec.get("action") == "CHANGE" and not any(rec.get(p) for p in schema.PAYMENT) and state and all(
+                r.get("action") == "NEW" and r.get("_sheet") != "live" for r in state):
+            # dev 30/10: the live sheet folds news into the NEW row until the booking is built (Victoria
+            # INBOM04540000001: nationality and adults went into NEW row 803, no CHANGE row)
+            mine = [r for r in rows + elsewhere if _parts(r.get("booking_ref")) & _parts(ref)]
+            if not any(schema.is_built(r) for r in mine):
+                raise Refused(f"{ref} isn't built yet (no pdf_link on either sheet): news before the build goes into "
+                              f"the NEW row — sheet-update {' and '.join(str(r['_row']) for r in state)} with the "
+                              f"cells this email changes, as the live sheet does. A CHANGE row once it's built; a "
+                              f"payment is always a CHANGE row")
         if rec.get("action") == "CHANGE":
             missing = [k for k in CHANGE_OWN if _blank(rec.get(k))]
             if missing:
@@ -545,8 +558,9 @@ def sheet_append(sheet, data, out=print, live=None):
 
 
 def sheet_update(sheet, row, fields, work_dir=None, out=print):
-    """Correct a cell on a row not yet built. News about the booking (a payment, a pick-up, a name) is a
-    CHANGE row instead: each row is the record of one email (live sheet 2026-10-27).
+    """Correct or update a NEW row not yet built: a wrong cell, or news from a later email (nationality, pax,
+    names, a request) — the live sheet folds those into the NEW row until the build (dev 30/10). After the build,
+    and for a payment at any time, a CHANGE row instead.
     The row as it was is saved to <work_dir>/sheet-backup first, and read back after (Tracy audit 29/10)."""
     if not fields:
         raise Refused("no fields given")
