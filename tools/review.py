@@ -18,7 +18,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from .graph_mail import CHECK_LINE, SendBlocked, clean_subject, reply_subject
+from .graph_mail import clean_subject, reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -262,37 +262,15 @@ def _approvers():
     return [a.strip().lstrip("@").lower() for a in os.environ.get("EMI_APPROVERS", "").split(",") if a.strip()]
 
 
-def send_on_accept():
-    """EMI_SEND_ON_ACCEPT=1 (dev, 2026-10-30): Karen's Accept sends the draft. Needs EMI_APPROVERS and the
-    Mail.Send sign-in. Off = Accept only tags it and a person presses Send."""
-    return os.environ.get("EMI_SEND_ON_ACCEPT", "") == "1"
-
-
 def accept(mail, st, tg, n, by="", out=print):
     allowed = _approvers()
-    send = send_on_accept()
-    if send and not allowed:
-        raise ReviewError("EMI_SEND_ON_ACCEPT=1 needs EMI_APPROVERS (Karen's Telegram name); nothing sent")
     if allowed and (by or "").strip().lstrip("@").lower() not in allowed:
         raise ReviewError(f"#{str(n).lstrip('#')}: only {', '.join(allowed)} can Accept"
                           + (f", not {by}" if by else " (no --by given)") + ". The draft stays pending.")
     n, r = _pending(mail, st, n)
-    if send and CHECK_LINE.lower() in (r.get("text") or "").lower():
-        raise ReviewError(f"#{n} còn dòng {CHECK_LINE} …]: Emi không gửi. Rewrite #{n} để bỏ dòng đó, rồi Accept lại.")
     new = not in_outlook(r)
     if new:
         _to_outlook(mail, st, r)
-    if send:
-        try:
-            mail.send_draft(r["draft_id"])
-        except SendBlocked as e:
-            raise ReviewError(f"#{n} chưa gửi: {e}") from None
-        st.close_review(n, "sent", by)
-        _done_waiting(st, n)
-        msg = f"#{n} đã gửi ({by})." + (" Thư nằm trong Outlook › Sent Items." if not new else "")
-        _mark(tg, r, esc(msg))
-        out(msg)
-        return
     mail.approve_draft(r["draft_id"])
     st.close_review(n, "approved", by)
     _done_waiting(st, n)

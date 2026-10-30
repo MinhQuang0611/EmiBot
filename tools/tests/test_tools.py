@@ -241,33 +241,6 @@ class DeviceCodeTokenTest(unittest.TestCase):
             with open(cache) as f:
                 self.assertIn("new", f.read())
 
-    def test_send_sign_in_keeps_its_scope_for_refresh(self):
-        with tempfile.TemporaryDirectory() as d:
-            cache = os.path.join(d, "tok.json")
-            asked = []
-
-            def http(method, url, form=None, **kw):
-                asked.append(form.get("scope", ""))
-                if url.endswith("/devicecode"):
-                    return {"message": "go", "device_code": "dc", "expires_in": 60}
-                return {"access_token": "AT", "refresh_token": "r", "expires_in": 0}
-
-            tok = DeviceCodeToken("cid", cache, http=http, out=lambda m: None)
-            tok.start(send=True)
-            self.assertIn("Mail.Send", asked[0])
-            self.assertTrue(tok.finish())
-            tok._token = None
-            tok()  # access token expired at once: refresh
-            self.assertIn("Mail.Send", asked[-1])
-
-    def test_send_draft_refuses_a_check_line(self):
-        mail, http = mail_with([
-            ("GET", "/messages/d1?$select=body", {"body": {"content": "<b>[CHECK BEFORE SENDING: giá]</b> Dear Guest"}}),
-            ("GET", "/messages/d1", {"id": "d1", "isDraft": True, "categories": ["Emi"]})])
-        with self.assertRaises(SendBlocked):
-            mail.send_draft("d1")
-        self.assertFalse(any(u.endswith("/send") for _, u, _ in http.calls))
-
     def test_device_login_polls_until_authorized(self):
         with tempfile.TemporaryDirectory() as d:
             answers = iter([HttpError(400, "t", '{"error":"authorization_pending"}'),

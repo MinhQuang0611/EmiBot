@@ -15,7 +15,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from datetime import timezone
 
-from .graph_mail import SendBlocked, reply_subject, text_to_html
+from .graph_mail import reply_subject, text_to_html
 
 
 def _thread_key(subject):
@@ -158,7 +158,7 @@ class SimMail:
 
     def get_draft(self, draft_id):
         meta = self._meta(draft_id)
-        if meta is None or meta.get("deleted") or meta.get("sent"):
+        if meta is None or meta.get("deleted"):
             return None
         return {"id": draft_id, "subject": meta["subject"], "isDraft": True,
                 "toRecipients": [{"emailAddress": {"address": a}} for a in meta["to"]],
@@ -170,15 +170,6 @@ class SimMail:
         if meta is None or meta.get("deleted"):
             raise PermissionError(f"{draft_id} is no longer in Drafts")
         meta["categories"] = ["Emi", "Emi approved"]
-        self._save(meta)
-
-    def send_draft(self, draft_id):
-        meta = self._meta(draft_id)
-        if meta is None or meta.get("deleted") or meta.get("sent"):
-            raise PermissionError(f"{draft_id} is no longer in Drafts")
-        if "[check before sending" in meta.get("text", "").lower():
-            raise SendBlocked(f"{draft_id} still has its [CHECK BEFORE SENDING] line; not sent")
-        meta["sent"] = True  # kept on disk, like Outlook's Sent Items
         self._save(meta)
 
     def delete_draft(self, draft_id):

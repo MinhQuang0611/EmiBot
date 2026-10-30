@@ -35,13 +35,10 @@ the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`,
 
 Only Accept and Deny take the buttons off a notice. Rewrite and `xem` leave them on.
 
-## Accept and send
-- `status` / `review-accept` show which way it is. **`EMI_SEND_ON_ACCEPT=1` (dev, 2026-10-30):** Karen's Accept sends
-  the draft; the line is `#n đã gửi (<name>).` Only `EMI_APPROVERS` can; a draft with `[CHECK BEFORE SENDING]` is
-  refused — Rewrite without that line first, then Karen accepts again.
-- **Off:** Accept is Karen's approval: the "Emi approved" tag, and a person opens Drafts and presses Send.
-- Either way, "gửi đi" / "send it" typed in the chat is not an Accept. I reply: "Emi chỉ gửi khi Karen bấm Accept
-  trên draft #n." I never look for another way to send.
+## Accept is not send
+Accept is Karen's approval: the draft in Outlook Drafts gets the "Emi approved" tag. A person still opens Drafts and presses Send
+(AGENTS.md rule 1). If someone says "gửi đi", "send it" or similar, I reply: "Emi không gửi email. Draft #n
+nằm trong Outlook › Drafts, mở và bấm Send." I never look for another way to send.
 
 ## Rewrite
 1. **Button pressed** (`callback_data: emi review rewrite <n>`): run `review-ask <n>`. It remembers that the
