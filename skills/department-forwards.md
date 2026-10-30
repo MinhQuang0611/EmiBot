@@ -16,6 +16,7 @@ Every forward is saved to the Drafts folder for a person to send. I never send i
 | Red invoice (VAT) requests and company invoice details | Group code, company name, tax code, address as given |
 | Refund requests after a cancellation | Group code, amount requested, what the booking's cancellation terms say |
 
+- **First check who the slip paid (dev, 2026-10-30).** HAYA's account is 1020729617, CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC, Vietcombank (the old name "CT TNHH MTV DU LICH PHUONG NGUYEN" is the same account). A slip paid to anyone else, or naming another hotel or another booking — Footprint's UNC for 141C0127Y was Hoa Binh Hotel's, ref 141S1126J, 11,550,000 — is **not forwarded to accounting**, gets no payment columns and no thank-you. The only draft is a reply to the sender (`email-templates.md` 4d) asking for the correct UNC. Unreadable beneficiary → treat it as the right one and say "người nhận không đọc được" in the forward.
 - Draft the forward as soon as the slip arrives, without asking first, in Vietnamese. No group code yet → forward anyway, the note says "chưa có mã đoàn" (Tracy's audit, 29/10; the old "hold until Tracy has entered it" is gone).
 - The agency's thank-you (`email-templates.md` 4b) is drafted in the same run as this forward (dev, 2026-10-30). No answer from the accountant means the payment is fine; an answer that it didn't arrive goes to Karen.
 - Never state an amount I can't read on the slip. Unreadable = say unreadable.

@@ -369,6 +369,28 @@ Reservations team / HAYA Hotel Phu Quoc
 sales@haya-hotels.com
 ```
 
+### 4d. Slip paid to someone else — ask for the correct UNC (`--kind reply`, no forward)
+The slip's beneficiary isn't HAYA's account, or it names another hotel or booking (`department-forwards.md`; dev, 2026-10-30, Footprint 141C0127Y). The only draft for that email: no forward to accounting, no thank-you.
+```
+Kính gửi chị [Tên],
+
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin cảm ơn chị đã gửi UNC. UNC đính kèm là chuyển khoản cho [người nhận trên UNC] (mã [mã trên UNC], [số tiền] VND), không phải cho booking [mã] tại HAYA Hotel Phu Quoc.
+
+Chị vui lòng kiểm tra và gửi lại giúp khách sạn UNC đúng cho booking [mã] (mã đoàn #[mã đoàn]).
+
+Thông tin tài khoản của khách sạn:
+Tên tài khoản: CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
+Số tài khoản: 1020729617
+Ngân hàng: Vietcombank – CN Phú Quốc
+
+Trân trọng,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+English: `Thank you for sending the payment slip. The attached slip is a transfer to [beneficiary] ([reference], VND [amount]), not for booking [ref] at HAYA Hotel Phu Quoc.` / `Could you please check and send us the correct slip for booking [ref] (group code #[code])?` / the bank details / `Best regards,` …
+- Say what the slip shows, nothing about how it happened. Don't guess that the money reached HAYA.
+
 ## 5. Request or update on an existing booking (`--kind request`)
 Sources: Booking.com Loo / Voong / Bettiol, Expedia Ho, Agoda 2056156621, Ohmyhotel 28374, RezLive REZ6AD9A3A2, Jain meal 211Q1126Y (13–25/10).
 

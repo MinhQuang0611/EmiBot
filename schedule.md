@@ -17,7 +17,7 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 1. Read every email in sales@haya-hotels.com received since the last scan, whole thread and attachments.
 2. Classify each one.
 3. New / change / cancellation → write intake sheet rows. A clear cancellation → CANCEL row + cancellation reply draft at once; unclear (fee, which booking) → Karen first.
-4. Payment slips, UNC, remittances, OTA payout advices → a CHANGE row with the payment columns filled; draft the forward to accountant@palmahotel.vn in Vietnamese, with the group code or "chưa có mã đoàn", and the thank-you to the sender confirming the slip (`email-templates.md` 4b). Once per email.
+4. Payment slips, UNC, remittances, OTA payout advices → a CHANGE row with the payment columns filled; draft the forward to accountant@palmahotel.vn in Vietnamese, with the group code or "chưa có mã đoàn", and the thank-you to the sender confirming the slip (`email-templates.md` 4b). Once per email. A slip paid to someone else (not HAYA's account 1020729617, or another hotel's / booking's UNC) → no forward, no payment columns, only the reply asking for the correct UNC (`email-templates.md` 4d; dev, 2026-10-30).
 5. Arrival details, special requests, rooming lists → on the booking's row (`special_requests`, `arrival_time`, notes item 5), a CHANGE row for a booking already on the sheet; the guest or agency gets the reply. No forward to front office: it reads the EZFOLIO notes (dev, 2026-10-30).
 6. Inquiries and quote requests → draft the reply.
 7. Read the Sent folder: for any draft of mine that was sent, record the real sent time and note any edits as corrections.
