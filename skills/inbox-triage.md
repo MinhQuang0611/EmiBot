@@ -17,15 +17,17 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | New booking | Agency/guest/OTA asks to book or sends a booking notice | `booking-intake.md` → action NEW. Tour operator (Anex, Odeon, Crystal Bay, Pegas, Selfie, Fun and Sun): `tour-operators.md` first — contract price, allotment or on request, Anex robot replies |
 | Change | Dates, rooms, names, pax, flight, pick-up, meals or requests changed or added on an existing booking | `booking-intake.md` → action CHANGE: new rows, never an edit of the old ones ("One email, one set of rows") |
 | Declined on request | HAYA answered an on-request booking "cannot be accommodated" | `booking-intake.md` → action CANCEL, not NEW |
-| Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → action CANCEL, and flag to Karen |
-| Payment slip | Bank transfer proof for a deposit or balance | `booking-intake.md` → a CHANGE row with the payment columns filled + `department-forwards.md` (accounting) |
+| Cancellation | Sender cancels, or an OTA cancellation notice | `booking-intake.md` → a separate CANCEL row, and the cancellation reply drafted right away (`confirmation-replies.md`). Karen first only if unclear: a possible fee, or which booking (Karen, 29/10) |
+| Payment slip | Bank transfer proof (UNC, remittance) for a deposit or balance, or an OTA payout advice (e.g. Citi Paylink for Traveloka) | `booking-intake.md` → a CHANGE row with the payment columns filled + forward to accounting, always, in Vietnamese (`department-forwards.md`) |
 | Inquiry / quote request | Availability, price, hotel questions, **no booking yet** | `inquiries-and-quotes.md` |
 | Money ask | Discount, upgrade, waived fee, free extra | Flag to Karen as a request. Never resolved by me. |
 | Operational | Arrival time, transfer, special request, question about the stay, complaint, invoice request on an **existing booking** (also one whose ref isn't on the sheet yet) | A CHANGE row if it changes or adds to the booking + reply (`email-templates.md` section 5) + forward (`department-forwards.md`): two drafts. Front office forwarded it in → the reply only, cc front office |
-| Chaser on a booking request | "Kindly resend", "any update?", "pls confirm" on a request we haven't confirmed (e.g. first sent to the wrong address, like `sales@palmahotel.vn`, or never answered) | It's the **booking request itself**: New booking → `booking-intake.md` (check the sheet first, the row may exist). Not an operational request, no front-office forward. No holding reply (`confirmation-replies.md`): top of the scan report for Karen, with how long they've waited. The confirmation later goes to the agency, `--to` if it was forwarded in |
+| Chaser on a booking request | "Kindly resend", "any update?", "pls confirm" on a request we haven't confirmed (e.g. first sent to the wrong address, like `sales@palmahotel.vn`, or never answered) | It's the **booking request itself**: New booking → `booking-intake.md` (check the sheet first, the row may exist). Not an operational request, no front-office forward. Never a "we'll check" reply: the complete best answer (rule 9), or, while the booking waits on EZFOLIO, top of the scan report with how long they've waited. The confirmation later goes to the agency, `--to` if it was forwarded in |
 | Decline / thanks | "Not interested", "booked elsewhere", "thank you", "received" | Decline → a one- or two-line reply (`email-templates.md` section 6). Plain thanks with nothing to answer → no draft, one report line |
-| Palma | Anything about Palma Resort | Flag to Karen. Not mine. |
+| Palma | Anything about Palma Resort | `draft-forward <id> booking@palmahotel.vn <note> --kind forward`, once (check Sent Items with `mail-find`; `draft-forward` refuses a second forward). No HAYA row, no reply. accountant@palmahotel.vn writing about a HAYA payment is not Palma |
+| Accountant's silence | A slip forwarded to accounting, no answer from accountant@ | The payment is fine: draft the acknowledgement of receipt to the agency (`email-templates.md` 4) |
 | Noise | Marketing, SynXis one-time passcodes, internal chatter | Skip, don't log |
+| Phishing | "New booking" from `care@mail.myjorney.com` or `vip@mail.voyageandco.com` | Never logged, drafted, clicked or reported. `inbox-new` already drops them. Never click a confirm or portal link in an unsolicited email |
 
 One email can be two types (a change request with a payment slip attached). Handle both.
 
@@ -35,7 +37,11 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `confirmation`, `deposit_reminder`, `balance_reminder` — `confirmation-replies.md`.
 - `forward` — every forward to accounting or front office.
 - `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
+- `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`).
+- `stop_sales` — the stop-sales email to the B2B and OTA sites (`stop-sales`, `inquiries-and-quotes.md`).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
+
+**Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. Drafts are HTML.
 
 **Rates another agency gets** ("same rate as Aurora Travel", "as our partner X"): never quoted or compared (`inquiries-and-quotes.md`). The row's rate waits in `missing_info` and the question goes to Karen.
 
@@ -46,7 +52,7 @@ A guest who booked through an OTA and writes to us from their own address (quest
 
 B2B reservation systems and bedbanks (RezLive, Hotelbeds, WebBeds and the like) writing about a booking they hold — reconfirmations, special requests — are agencies, not OTA robots: they get a reply, unless the address says no-reply.
 
-Any OTA rate under **1,000,000 VND per room-night** is flagged to Karen the same day as a likely promotion mistake.
+**OTA and B2B bookings are always accepted and logged** (Booking.com, Agoda, Expedia, Trip.com, MG Bedbank, HotelBeds, WebBeds, Ohmyhotel…; Tracy's audit, 29/10): no rate-floor flag, no availability question to Karen. The old 1,000,000 VND floor is gone.
 
 ## 4. Report to Karen
 After each scan, a short report: new bookings, changes, cancellations, payment slips, drafts waiting for review, money asks, anything in `missing_info`, and anything I couldn't classify. Leave pure OTA noise out unless she asks for it.
@@ -70,11 +76,11 @@ Emi: 2 mail mới (12:13–12:40)
 
 3. Hỏi về hồ bơi (Zion)
 - Loại: hỏi thông tin khách sạn
-- Draft: không có, chờ Karen trả lời E-003 (hồ bơi trong nhà hay ngoài trời, mấy hồ)
+- Draft: #3, có dòng CHECK BEFORE SENDING (hồ bơi trong nhà hay ngoài trời), đã hỏi E-003
 
 Chờ Karen: …
 ```
 
-- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram) or "không có" plus the reason in a few words. Waiting on a question: "không có, chờ Karen trả lời E-0nn" and the question.
+- Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram) or "không có" plus the reason in a few words. A draft with a CHECK BEFORE SENDING line: say so and the E-0nn asked.
 - No line about the steps that have no command yet (Sent folder, flags, 40-hour reminders). They go in the daily report, not in every scan report.
 - Under 25 lines. Several emails of the same kind (OTA notices, noise): one line with the count.

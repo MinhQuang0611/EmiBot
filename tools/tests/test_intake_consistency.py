@@ -1,16 +1,16 @@
 """Rows that each passed the checks but disagreed with each other (live rows 56–79, 2026-10-22):
-booking_ref and company spelled differently for the same channel, nationality as a code, notes not in
-the 1–7 format, a one-cell row typed by hand. tools/intake_schema.py check_row."""
+booking_ref and company spelled differently for the same channel, nationality written two ways, notes not in
+the 1–8 format, a one-cell row typed by hand. tools/intake_schema.py check_row."""
 import unittest
 
 from tools import intake_schema as schema
 
-NOTES = ("1. Booking.com – Ref 92777EF002985\n2. AbdolAziz Yary – Uzbekistan\n3. 22/10/2026 – 24/10/2026\n"
+NOTES = ("1. Booking.com – Ref 92777EF002985\n2. AbdolAziz Yary – UZB\n3. 22/10/2026 – 24/10/2026\n"
          "4. 1 Standard Garden – 1 adult, 0 children\n5. Non-smoking room\n"
-         "6. 1,408,000 × 1 room × 2 nights = 2,816,000\n7. Invoice: none stated")
+         "6. 1,408,000 × 1 room × 2 nights = 2,816,000\n7. Invoice: prepaid on Booking.com\n8. No VAT info")
 ROW = {"action": "NEW", "received_at": "22/10/2026 13:40", "property": "HAYA", "channel_type": "OTA",
        "source_email": "SynXis Res Confirmed (92777EF002985 )", "company": "Booking.com",
-       "booking_ref": "92777EF002985", "guest_names": "AbdolAziz Yary", "nationality": "Uzbekistan",
+       "booking_ref": "92777EF002985", "guest_names": "AbdolAziz Yary", "nationality": "UZB",
        "arrival": "22/10/2026", "departure": "24/10/2026", "nights": "2", "room_code": "STD", "rooms": "1",
        "adults": "1", "children": "0", "meal_plan": "BB", "rate_source": "Booking.com guest total", "rate_per_night_vnd": "1408000",
        "Average rate per night after discount": "1408000", "total_vnd": "2816000", "status": "Definite",
@@ -89,51 +89,50 @@ class CompanyTest(unittest.TestCase):
 
 
 class RateFloorTest(unittest.TestCase):
-    LOW = {"rate_per_night_vnd": "841500", "Average rate per night after discount": "981750",
-           "total_vnd": "1963500"}
-
-    def test_ota_rate_under_floor_must_be_flagged(self):
-        # rows 58 / 76: MG at 935,000 and 841,500 with nothing in missing_info
-        e = next(x for x in check(**self.LOW)[0] if x.startswith("missing_info: OTA rate"))
-        self.assertIn("841,500 / 981,750", e)
-        flagged = "meal plan not stated; rate floor: 841,500 VND/night under 1,000,000 – likely promotion mistake"
-        self.assertEqual(check(missing_info=flagged, **self.LOW)[0], [])
-
-    def test_only_ota_and_only_unbuilt_rows_blocked(self):
-        self.assertFalse(has(check(channel_type="TA", company="X Travel", rate_source="TA card", notes="",
-                                   **self.LOW)[0], "missing_info: OTA rate"))
-        built = dict(tracy_status="Entered", pdf_link="B.pdf", ezfolio_group_code="G1", **self.LOW)
-        errors, warnings = check(**built)
-        self.assertFalse(has(errors, "missing_info: OTA rate"))
-        self.assertTrue(has(warnings, "missing_info: OTA rate"))
-        self.assertEqual(check()[0], [])  # 1,408,000 is above the floor
+    def test_low_ota_rate_is_accepted(self):
+        # Tracy audit 29/10: OTA and B2B bookings are always accepted and logged, no rate-floor flag
+        low = {"rate_per_night_vnd": "841500", "Average rate per night after discount": "981750",
+               "total_vnd": "1963500"}
+        self.assertFalse(has(check(**low)[0], "missing_info"))
 
 
 class NationalityTest(unittest.TestCase):
-    def test_codes_refused_with_the_name(self):
-        errors, _ = check(nationality="VNM")
-        self.assertIn("nationality: 'VNM' is a code; write the full English country name ('Vietnam')", errors)
-        self.assertTrue(has(check(nationality="India; RU")[0], "nationality: 'RU'"))
-        self.assertTrue(has(check(nationality="XQ")[0], "nationality: 'XQ' is a code"))
+    """Karen 29/10 (Tracy audit): nationality stored as a code, VNM when nothing gives a clue."""
+    def test_names_and_two_letter_codes_refused_with_the_code(self):
+        errors, _ = check(nationality="Vietnam")
+        self.assertTrue(any(e.startswith("nationality: 'Vietnam'") and "'VNM'" in e for e in errors))
+        self.assertTrue(any("'GBR'" in e for e in check(nationality="UK")[0]))
+        self.assertTrue(has(check(nationality="IND; RU")[0], "nationality: 'RU'"))
+        self.assertTrue(has(check(nationality="vnm")[0], "nationality: 'vnm'"))
 
-    def test_full_names_pass(self):
-        for n in ("Vietnam", "United Kingdom", "India; Vietnam", "Iran", "Laos"):
+    def test_codes_pass(self):
+        for n in ("VNM", "GBR", "IND; VNM", "IRN", "LAO"):
             self.assertFalse(has(check(nationality=n)[0], "nationality"), n)
 
-    def test_blank_only_when_named_in_missing_info(self):
-        # MG voucher showing only the source market: blank, said in missing_info
+    def test_never_blank(self):
         self.assertTrue(has(check(nationality="")[0], "nationality: never blank"))
         errors, _ = check(nationality="", missing_info="nationality – only source market Malaysia given")
+        self.assertTrue(has(errors, "nationality: never blank"))
+
+    def test_old_full_name_on_a_change_only_warned(self):
+        change = dict(action="CHANGE", what_changed="Payment 1 received", ezfolio_group_code="G1")
+        errors, warnings = check(nationality="Vietnam", **change)
         self.assertFalse(has(errors, "nationality"))
+        self.assertTrue(has(warnings, "nationality: 'Vietnam'"))
 
 
 class NotesTest(unittest.TestCase):
-    def test_numbering_must_be_1_to_7(self):
-        six = "\n".join(NOTES.splitlines()[:6])
-        self.assertTrue(has(check(notes=six)[1], "notes: NOTES RULE wants exactly 7 lines"))
+    def test_numbering_must_be_1_to_8(self):
+        seven = "\n".join(NOTES.splitlines()[:7])
+        self.assertTrue(has(check(notes=seven)[1], "notes: NOTES RULE wants exactly 8 lines"))
         extra = NOTES + "\nCancellation charge: to check"
         self.assertTrue(has(check(notes=extra)[1], "notes: NOTES RULE"))
         self.assertTrue(has(check(notes="Guest wants high floor")[1], "notes: NOTES RULE"))
+
+    def test_item_8_is_the_vat_invoice(self):
+        vat = NOTES.replace("8. No VAT info", "8. VAT invoice: CÔNG TY ABC, MST 0402145541, 12 Lê Lợi, ke@abc.vn")
+        self.assertFalse(has(check(notes=vat)[1], "notes:"))
+        self.assertTrue(has(check(notes=NOTES.replace("8. No VAT info", "8. Invoice: none"))[1], "notes: item 8"))
 
     def test_item_1_is_company_and_ref(self):
         # row 61 / 65: "1. Anex + 112930961", "1. BOOKING.COM BV + 92777EF002985"
@@ -178,11 +177,10 @@ class LiveSheetDiffTest(unittest.TestCase):
         self.assertFalse(has(check(action="CANCEL", what_changed="x", ezfolio_group_code="1",
                                    arrival="12/11/2025", departure="14/11/2025")[0], "arrival"))
 
-    def test_wyndham_points_night_is_not_a_promotion_mistake(self):
+    def test_wyndham_points_night_passes(self):
         zero = {"company": "Wyndham", "rate_per_night_vnd": "0", "Average rate per night after discount": "0",
                 "total_vnd": "0", "rate_source": "Other", "notes": ""}
-        self.assertFalse(has(check(**zero)[0], "missing_info: OTA rate"))
-        self.assertTrue(has(check(**dict(zero, company="Expedia"))[0], "missing_info: OTA rate"))
+        self.assertEqual(check(**zero)[0], [])
 
     def test_tentative_without_hold_is_warned(self):
         self.assertTrue(has(check(status="Tentative")[1], "status: Tentative"))
@@ -212,6 +210,23 @@ class OldRowRulesTest(unittest.TestCase):
         built = dict(tracy_status="Entered", pdf_link="Booking.pdf", ezfolio_group_code="G123")
         self.assertEqual(check(**built)[0], [])
         self.assertTrue(has(check(pdf_link="Booking.pdf")[0], "pdf_link: filled by the build tool"))
+        # live sheet: no tracy_status column, pdf_link alone marks the row built
+        on_sheet = dict(ROW, pdf_link="Booking.pdf", ezfolio_group_code="G123", _row=40)
+        on_sheet.pop("tracy_status")
+        self.assertEqual(schema.check_row(on_sheet)[0], [])
+        self.assertTrue(schema.is_built(on_sheet))
+
+
+class RoundingTest(unittest.TestCase):
+    def test_negative_rounding_in_surcharge_amount(self):
+        # contract total 2,816,000 - 3: the difference goes in the extra-service columns (Tracy audit 29/10)
+        errors, warnings = check(total_vnd="2815997", surcharge="Rounding -3", **{"Surcharge amount": "-3"})
+        self.assertEqual(errors, [])
+        self.assertFalse(has(warnings, "total_vnd"))
+
+    def test_mismatch_suggests_the_rounding_line(self):
+        w = next(x for x in check(total_vnd="2816004")[1] if x.startswith("total_vnd"))
+        self.assertIn("'Rounding +4'", w)
 
 
 if __name__ == "__main__":

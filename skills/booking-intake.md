@@ -18,11 +18,12 @@ The voucher, rooming list or booking form is usually an attachment, and it is wh
 1. **Classify** the email as NEW, CHANGE, or CANCEL (see `inbox-triage.md`).
 2. **Check for an existing row.** `sheet-find` each reference number on its own (the OTA's number and the SynXis number, if the email has both) and the lead guest's surname. If the booking is already there (from an earlier email, the other half of an Agoda/SynXis pair, or written by Sunny from Zalo), it is not NEW: anything the new email adds or changes is a CHANGE row (see "One email, one set of rows" below). The one exception: a SynXis notice whose OTA number is already on a row, saying nothing new — add the SynXis number to that row's `booking_ref` with `sheet-update` (every row of the booking), don't append.
    - **Every email for the booking, not just this one.** Read the whole thread, then `mail-find <ref>` for each reference number and read those emails too (an MG voucher, the RezLive or VCC email for the same booking, an earlier version). Room type, pax, nationality or a rate missing from one email is often in another. A field is blank only when none of them has it.
-3. **CHANGE / CANCEL:** the rows repeat the whole booking as it stands after this email (Rules tab), not only what changed. `sheet-append` copies every column I leave blank from the booking's latest rows — company, channel, group code, confirmation number, guests, dates, payments, and per room type the pax and the rate block — and prints what it copied; check those lines. So on a CHANGE I fill only what this email changes, plus `what_changed`. Also look in the thread for the group code or confirmation number (HAYA's own confirmation, the PDF name): the sheet may not have it. If the booking was never in the sheet, the email still decides the action — "amendment", "revised", "update", "Re:" on a booking → CHANGE, never NEW — and `missing_info` says "original booking not on the sheet" so Tracy finds it in EZFOLIO.
+3. **CHANGE / CANCEL:** the rows repeat the whole booking as it stands after this email (Rules tab), not only what changed. **Karen's EZFOLIO tool copies only the latest CHANGE row's notes, word for word, into the Notice** (Tracy's audit, 29/10). So every CHANGE row writes itself: `notes` as the full contract-ready Notice (items 1–8: rate calculation line, invoice line, VAT line, guest requests), and every rate field — `rate_per_night_vnd`, `Average rate per night after discount`, `rate_source`, `total_vnd`, `status`, `nights`, `meal_plan`. `sheet-append` refuses a CHANGE without them. It copies the rest I leave blank from the booking's latest rows (company, channel, confirmation number, guests, dates, payments, pax) and prints what it copied; check those lines. Plus `what_changed`.
+   - **Group code** on every CHANGE / CANCEL row, in both group-code columns of the live sheet: from the booking's NEW row (`sheet-append` finds it on any earlier row of the booking), else EZFOLIO's RER004 report, else EZFOLIO. Also look in the thread (HAYA's own confirmation, the PDF name). Not found → named in `missing_info`. If the booking was never in the sheet, the email still decides the action — "amendment", "revised", "update", "Re:" on a booking → CHANGE, never NEW — and `missing_info` says "original booking not on the sheet" so Tracy finds it in EZFOLIO.
 4. **Fill one row per room type**, same `booking_ref` on every row of one booking:
    - `action`, `received_at` (DD/MM/YYYY HH:MM, when the email carrying the booking or the change arrived — see "Follow-ups" below), `source_email` (that email's subject only, no links or IDs), `property` (HAYA), `channel_type` (TA / OTA / Direct / Tour operator — see "Channel type" below).
    - `company` exactly as named in EZFOLIO — see "Company" below (not in EZFOLIO yet: write the name and put "new company" in `missing_info`; never for a named OTA or tour operator — Booking.com, Agoda, MG, Anex… are already there, and `sheet-check` refuses it), `contact_person`, `company_email` (the address of whoever actually wrote the booking: for an email a colleague forwarded in, the original From in the quoted header, never haya@ or another @haya-hotels.com address; the confirmation is sent there), `booking_ref` (see "booking_ref" below). **Direct:** never the guest's own name in `company` (the column is for an agency/OTA as named in EZFOLIO), and never "new company". Leave `company` blank and write `REQUIRED blank: company – direct guest, EZFOLIO account for direct bookings not known` in `missing_info` (Karen hasn't said which EZFOLIO account direct guests go under). The guest's name goes in `contact_person`, their email in `company_email`, and `booking_ref` stays blank unless the guest gave one.
-   - `ezfolio_group_code`, `confirmation_no`: carried over for CHANGE / CANCEL, blank for NEW. `what_changed`: CHANGE only, e.g. "Dates 12–15 Nov → 13–16 Nov"; for CANCEL, the reason.
+   - `ezfolio_group_code`, `confirmation_no`: carried for CHANGE / CANCEL (step 3), blank for NEW. I never write the group code on any other row (`sheet-update` refuses it), unless Karen asks. `what_changed`: CHANGE only, e.g. "Dates 12–15 Nov → 13–16 Nov"; for CANCEL, the reason.
    - `guest_names` separated by ";", lead guest first, TBA if not given. `nationality`: see "Nationality" below.
    - `arrival`, `departure` (DD/MM/YYYY), `nights`, `room_code` (see "Room code" below), `rooms`, `adults`, `children` (0 if none), `child_ages` ("9; 2"), `meal_plan` (BB / RO / other).
    - **A date with no year** ("12 Nov") is the next one after the email: an email of 24/10/2026 asking for 12 Nov means 12/11/2026. `sheet-check` refuses a NEW or CHANGE arriving before the email's date.
@@ -31,14 +32,16 @@ The voucher, rooming list or booking form is usually an attachment, and it is wh
    - **`meal_plan`**: HAYA's TA and contract rates include breakfast, so BB unless the email says room only. OTA notices (Booking.com, Expedia, Trip.com…) → BB unless the notice says "room only" / "no meal". Never blank.
    - `rate_source` (TA card / Anex contract / Odeon contract / Pegas contract / Crystal Bay contract / Selfie contract / Booking.com guest total / OTA net / Special (Karen) / Other — exactly one of these; how the rate was worked out goes in notes item 6, never in brackets here). Booking.com → `Booking.com guest total`; every other OTA → `OTA net`; `sheet-check` refuses the mix-up. `rate_per_night_vnd` (number only; Indian guests: the rate **with** the +20% in it, e.g. 1,700,000 → 2,040,000, and the surcharge column says "+20% Indian guests (incl. in rate)"), `discount_promo`, `Average rate per night after discount`, `surcharge` (text, e.g. "+20% Indian guests", "Child 350k x 3 nights") and `Surcharge amount`, `total_vnd`.
    - `status` (Definite / Tentative / Cancelled): **Definite** for a booking request, a voucher, a tour operator's booking, and every CHANGE of a Definite booking. **Tentative** only when the sender asks to hold or put rooms on option, with a time limit → `hold_until`. `hold_until` (DD/MM/YYYY, or DD/MM/YYYY HH:MM when the agency gives a time), `prepaid`, `invoice_details`, `arrival_time`, `transfer`, `special_requests`.
-   - `notes` in the 7-line EZFOLIO format — see "Notes" below. Never mention an upgrade.
+   - `notes` in the 8-item EZFOLIO format — see "Notes" below. Never mention an upgrade.
    - `missing_info`: everything the email didn't say.
-   - **OTA rate floor:** an OTA row with `rate_per_night_vnd` or the average under 1,000,000 VND gets `rate floor: <rate> VND/night under 1,000,000 – likely promotion mistake` in `missing_info` (inbox-triage.md §3); `sheet-check` refuses the row without it, and the report names it to Karen.
-   - `priority`. Leave `tracy_status` as Pending and `pdf_link` blank — those are Tracy's.
+   - **OTA and B2B rates are accepted as they come** (Tracy's audit, 29/10): no rate-floor flag.
+   - **Rounding:** rate × nights × rooms (+ surcharges) must equal the email's or contract's exact total. If it doesn't, the signed difference goes in the extra-service columns, the same ones as the one-night and child surcharges: `Surcharge amount` gets it added (e.g. `4`, `-3`; with a child surcharge of 1,050,000 and −3: `1049997`), `surcharge` gets `Rounding +4` / `Rounding -3` (after any other surcharge text, `; ` between). Tour operators, agencies and OTAs alike. EZFOLIO posts it as a folio transaction: 110 Room Charge, sub 1 System Charge, note "Rounding adjustment to contract total". `sheet-check` prints the difference when the total doesn't add up.
+   - **No child or extra-bed charge when the party fits the room's capacity.**
+   - `priority`. Never write `pdf_link`, the group code (except step 3), or the EZFOLIO status/error columns (live sheet columns 51–55, `ez_error` is 53): `sheet-append` and `sheet-update` refuse them. The live sheet has no `tracy_status` any more (deleted 12/10); on the SANDBOX `sheet-append` still sets it to Pending.
    - `COD` (deposit deadline): 48 hours from when the client receives the confirmation, unless the email or contract states another deadline.
    - `Payment 1`, `Payment 1 date + time`, `Payment 2`, `Payment 2 date + time` from slips in the thread. `Remaining amount` = total − Payment 1 − Payment 2 (equal to the total until a payment arrives). A slip that arrives after the booking was written is a CHANGE row (`what_changed`: "Payment 1 received 4,000,000"), never an edit of the NEW row: `sheet-update` refuses payment columns.
    - Column names above are the sheet's exact headers (`test/fixtures/intake-columns.csv`). Filled examples: `test/fixtures/intake-examples.csv`.
-5. **Rooms free?** For a NEW booking, or a CHANGE that adds rooms or nights: `availability --arrival … --departure … --alloc "<code>:<rooms>,…"` with the row's room codes. `DOES NOT FIT` → the row is still written as the email asks, `missing_info` gets `availability: <the DOES NOT FIT line>`, and it goes to Karen at the top of the scan report. I don't decline, move the guest to another type, or tell the sender anything: whether to accept, overbook or offer another type is Karen's call. A tour operator's allotment booking still gets the line (Karen knows the allotments).
+5. **Rooms free?** OTA and B2B bookings (Booking.com, Agoda, Expedia, Trip.com, MG Bedbank, HotelBeds, WebBeds, Ohmyhotel…) are always accepted and logged: no availability check, no question (Tracy's audit, 29/10). For a TA or direct NEW booking, or a CHANGE that adds rooms or nights: `availability --arrival … --departure … --alloc "<code>:<rooms>,…"` with the row's room codes. `DOES NOT FIT` → the row is still written as the email asks, `missing_info` gets `availability: <the DOES NOT FIT line>`, and it goes to Karen at the top of the scan report. I don't decline, move the guest to another type, or tell the sender anything: whether to accept, overbook or offer another type is Karen's call. A tour operator's allotment booking still gets the line (Karen knows the allotments).
    - **Exception — a tour operator's on-request booking** (dev, 2026-10-29): `on-request` decides. No availability, or occupancy over 60% with check-in more than 30 days away → CANCEL rows and a decline draft; anything else → ask Karen before any row (`tour-operators.md` step 5).
 6. **Required, never blank:** `company` (Direct: blank + named in `missing_info`, see above), `arrival`, `departure`, rate, `room_code`, `rooms`. If I can't fill one, the row is not ready and the gap goes in `missing_info` and to Karen.
 
@@ -71,10 +74,12 @@ The reference number(s) only, exactly as the sender prints them. The channel goe
 - `sheet-check` warns on a known variant. These spellings are a working list: Karen hasn't confirmed them against EZFOLIO's company list yet.
 
 ## Nationality
-A full English country name: "Vietnam", "India", "United Kingdom". Never a code ("VNM", "VN", "UK") — `sheet-check` refuses 2–3 letter codes.
-- From the guest's passport or a nationality field in the email or voucher.
-- A "market", "source market", "country of residence" or "POS" field is **not** nationality. MG and other bedbank vouchers often show only the market. If that is all there is, nationality comes from the names only when they leave no real doubt (Vietnamese names → Vietnam); otherwise leave `nationality` blank and write `nationality – only source market <X> given` in `missing_info`. Never copy the market across.
-- No names (TBA) and no nationality on a Vietnamese agency's booking written in Vietnamese: Vietnam, as before. Any other case with nothing to go on: blank and named in `missing_info`.
+A 3-letter code: `VNM`, `IND`, `GBR`, `RUS`, `KOR` (Karen, 29/10, via Tracy's audit). Never blank. `sheet-check` refuses a country name or a 2-letter code on a NEW row and says which code to write; rows from before 29/10 with a full name only get a warning.
+1. The nationality the booking lists (a nationality field in the email or voucher).
+2. Else the passport, if the agency sends one.
+3. Else inferred from the guest's name.
+4. The name gives no clue (or TBA): `VNM`.
+- A "market", "source market", "country of residence" or "POS" field is **not** nationality. Never copy the market across; go on to the passport and the name.
 - Changing `nationality` on an existing row means a document said so. Say which one in the report ("voucher page 2: Nationality Malaysia").
 
 ## Room code
@@ -85,29 +90,31 @@ A full English country name: "Vietnam", "India", "United Kingdom". Never a code 
 - A name that fits two codes ("Superior" with no bed type) or none: blank, with `REQUIRED blank: room_code – voucher says <name>` in `missing_info`. Only after reading every email for the booking (step 2).
 
 ## Notes
-Exactly 7 lines, one item each, numbered `1. ` to `7. `, parts joined with ` – `. Nothing after line 7. `sheet-check` warns on anything else.
+Exactly 8 items, one per line, numbered `1. ` to `8. `, parts joined with ` – `. Nothing after item 8. `sheet-check` warns on anything else (Tracy's audit, 29/10; the Rules tab on the sheet still says 1–7 until Karen updates it).
 ```
 1. <company> – Ref <booking_ref>
-2. <lead guest> – <nationality>
+2. <lead guest> – <nationality code>
 3. <arrival> – <departure>
 4. <rooms> <room type> – <adults> adults, <children> children (<ages>)
 5. <requests, or None>
 6. <rate calculation, incl. VAT/breakfast note>
-7. Invoice: <invoice details, or none stated>
+7. Invoice: <who pays and how: agency transfer, prepaid on the OTA, pay at hotel; Anex: from the contract>
+8. VAT invoice: <company, MST, address, invoice email>   — or —   8. No VAT info
 ```
 Example:
 ```
 1. Phú Minh Quang Travel – Ref Thu1230 TVR149
-2. MR DEEPAK GUPTA – India
+2. MR DEEPAK GUPTA – IND
 3. 04/01/2027 – 06/01/2027
 4. 1 Deluxe Seaview – 2 adults, 1 child (4)
 5. None
 6. 2,000,000 +20% Indian = 2,400,000 × 2 nights × 1 room = 4,800,000, incl. 8% VAT
-7. Invoice: CÔNG TY TNHH THƯƠNG MẠI & DỊCH VỤ DU LỊCH PHÚ MINH QUANG, MST 0402145541
+7. Invoice: agency pays by bank transfer
+8. VAT invoice: CÔNG TY TNHH THƯƠNG MẠI & DỊCH VỤ DU LỊCH PHÚ MINH QUANG, MST 0402145541
 ```
 - Line 1 starts with `company` exactly as on the row and contains `Ref <booking_ref>` exactly. Direct: `1. Direct – <contact_person>`, plus ` – Ref <ref>` if the guest gave one.
 - Vietnamese-language email: the items may be in Vietnamese; the numbering and the line 1 format stay.
-- CANCEL row: not the 7 lines — the single cancellation-charge line from "Cancellations — the charge" below.
+- CANCEL row: not the 8 items — the single cancellation-charge line from "Cancellations — the charge" below (whether CANCEL notes keep that line is open with Karen).
 
 ## Channel type
 Exactly one of `TA`, `OTA`, `Direct`, `Tour operator` — never "Tour operator (Anex)" (the sheet's row 2 shows that as an example); the operator's name goes in `company`. Decided by who the booking comes from, checked in this order (2026-10-09):
@@ -128,6 +135,7 @@ Each row is the record of one email. A later email about a booking already on th
 | The operator's own cancel notice for a booking already CANCEL on the sheet | no row; `sheet-append` refuses a second CANCEL. `done <id> "already cancelled"` |
 | Cancel and rebuild (agency cancels the group and sends it again under the same code) | CANCEL rows for the old booking + NEW rows for the new one, both from this email, in **one file** (a JSON list of rows) |
 | A chaser or reminder with nothing new ("please reconfirm", an MG reminder, "any update?") | no row; a report line |
+| A transfer request on a booking under 250 USD (the guest gives a WhatsApp number and flight number) | no row; the transfer is paid, 200k one way. Above 250 USD the airport transfer is free one way: that is a CHANGE row |
 | A forward of a booking that already reached sales@ (a colleague's Fw:) | no row; the original email is the record (`inbox-triage.md` §1) |
 
 A follow-up on a booking that isn't on the sheet yet → write the NEW rows from the original voucher in the thread. `received_at` and `source_email` are the voucher email's, not the follow-up's; then the follow-up's own CHANGE rows if it adds something.
@@ -166,7 +174,10 @@ For every TA cancellation, before writing the CANCEL row:
 
 ## Before a row is ready for Tracy
 - `missing_info` is blank, or Karen has said to proceed anyway.
-- For a CANCEL row: Karen has OK'd the cancellation. Tracy never cancels without it.
+- A CANCEL row that clearly matches one booking is ready at once (Karen, 29/10). Unclear (a possible fee, which booking) → Karen first.
+
+## Writing to the sheet
+Re-read before writing (`sheet-find`: no duplicates), write through the service account as RAW text, read back after. `sheet-append` reads the rows back and refuses to report success if they aren't there; `sheet-update` saves the row as it was to `emi-work/sheet-backup/` first and reads the cell back after. A failed read-back is never "try again": check with `sheet-find` first.
 
 ## After Tracy
-Tracy sets `tracy_status` to Entered (or Problem) and adds `pdf_link`. That change is what opens `confirmation-replies.md`. A row at Problem goes to Karen with what Tracy reported.
+Karen's EZFOLIO tool (Tracy until then) builds the booking and fills `pdf_link`. That is what opens `confirmation-replies.md`. An error in the EZFOLIO status columns (`ez_error`) goes to Karen with what it says.

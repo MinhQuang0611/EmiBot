@@ -2,6 +2,7 @@
 import base64
 import io
 import os
+import re
 import tempfile
 import urllib.parse
 import unittest
@@ -124,7 +125,28 @@ ROOM_CODES = [["DLX-SV", "DELUXE SEAVIEW", "HAYA"], ["TPL", "TRIPLE", "HAYA"],
 
 
 def real_sheet(data_rows=(), codes=True):
-    rules = [("GET", "!1:1", {"values": [REAL_HEADER]}), ("GET", "!A3:", {"values": [list(r) for r in data_rows]})]
+    """A fake sheet that keeps what is appended or updated, so sheet-append / sheet-update can read it back."""
+    store = [list(r) for r in data_rows]
+
+    def append(body):
+        store.extend(list(v) for v in body["values"])
+        return {}
+
+    def batch(body):
+        for d in body["data"]:
+            letters, num = re.match(r"([A-Z]+)(\d+)", d["range"].split("!")[1]).groups()
+            col = 0
+            for ch in letters:
+                col = col * 26 + ord(ch) - 64
+            i = int(num) - 3
+            while len(store) <= i:
+                store.append([])
+            store[i] += [""] * (col - len(store[i]))
+            store[i][col - 1] = d["values"][0][0]
+        return {}
+
+    rules = [("POST", ":append", append), ("POST", "values:batchUpdate", batch),
+             ("GET", "!1:1", {"values": [REAL_HEADER]}), ("GET", "!A3:", lambda _: {"values": [list(r) for r in store]})]
     if codes:
         rules.insert(0, ("GET", "Room codes", {"values": ROOM_CODES}))
     http = FakeHttp(rules)
@@ -138,11 +160,15 @@ def appended(http):
 
 BOOKING = {"action": "NEW", "received_at": "15/10/2026 11:56", "source_email": "TEST - Đặt phòng mới TEST-1510",
            "property": "HAYA", "channel_type": "TA", "company": "Công ty TEST Travel", "booking_ref": "TEST-1510",
-           "guest_names": "Nguyễn Văn Test; TBA", "nationality": "Vietnam", "arrival": "20/11/2026",
+           "guest_names": "Nguyễn Văn Test; TBA", "nationality": "VNM", "arrival": "20/11/2026",
            "departure": "22/11/2026", "nights": "2", "status": "Tentative", "priority": "Normal",
            "missing_info": "Full guest names; adults per room"}
+NOTES8 = ("1. Công ty TEST Travel – Ref TEST-1510\n2. Nguyễn Văn Test – VNM\n3. 20/11/2026 – 22/11/2026\n"
+          "4. 2 Deluxe Seaview – 4 adults, 0 children\n5. None\n6. 2,000,000 × 2 nights × 2 rooms = 8,000,000\n"
+          "7. Invoice: agency pays by transfer\n8. No VAT info")
 DLX = {"room_code": "DLX-SV", "rooms": "2", "adults": "4", "meal_plan": "BB", "rate_source": "TA card",
-       "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000", "total_vnd": "8000000"}
+       "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000", "total_vnd": "8000000",
+       "notes": NOTES8}
 TPL = dict(DLX, room_code="TPL", rooms="1", rate_per_night_vnd="2300000",
            **{"Average rate per night after discount": "2300000", "total_vnd": "4600000"})
 
@@ -236,8 +262,13 @@ class SheetCommandsTest(unittest.TestCase):
         sh, http = real_sheet([row])
         with self.assertRaises(emi.Refused):
             emi.sheet_update(sh, 3, {"arrival": "20-11-2026"}, out=lambda *_: None)
-        emi.sheet_update(sh, 3, {"guest_names": "Nguyễn Văn Test; Trần Thị Test"}, out=lambda *_: None)
+        lines = []
+        with tempfile.TemporaryDirectory() as d:
+            emi.sheet_update(sh, 3, {"guest_names": "Nguyễn Văn Test; Trần Thị Test"}, work_dir=d, out=lines.append)
+            backups = os.listdir(os.path.join(d, "sheet-backup"))
         self.assertTrue(any("values:batchUpdate" in c[1] for c in http.calls))
+        self.assertIn("read back OK", lines[-1])
+        self.assertEqual(len(backups), 1)
 
     def test_template_splits_booking_and_room_columns(self):
         sh, _ = real_sheet()
@@ -268,12 +299,19 @@ class FollowUpRowsTest(unittest.TestCase):
     group code, company, rates and pax, declined bookings cancelled twice, a cancel-and-rebuild refused."""
     CHANGE = dict(action="CHANGE", received_at="25/10/2026 13:56", source_email="Re: TEST-1510",
                   booking_ref="TEST-1510", what_changed="Payment 1 received", property="HAYA", status="Definite",
-                  priority="Normal", **{"Payment 1": "4000000", "Payment 1 date + time": "25/10/2026 13:50"})
+                  priority="Normal", nights="2",
+                  **{"Payment 1": "4000000", "Payment 1 date + time": "25/10/2026 13:50"})
+    OWN = ("notes", "rate_source", "rate_per_night_vnd", "Average rate per night after discount", "total_vnd",
+           "meal_plan")
+
+    def own(self, line):
+        """What a CHANGE row writes itself (Tracy audit 29/10): notes 1-8 and the rate fields."""
+        return {k: line[k] for k in ("room_code",) + self.OWN}
 
     def test_change_row_gets_the_bookings_details(self):
         sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**TPL_BUILT)])
         lines = []
-        emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [{"room_code": "DLX-SV"}, {"room_code": "TPL"}]},
+        emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [self.own(DLX), self.own(TPL)]},
                          out=lines.append)
         rows = appended(http)
         self.assertEqual([(r["company"], r["channel_type"], r["ezfolio_group_code"], r["adults"],
@@ -282,11 +320,28 @@ class FollowUpRowsTest(unittest.TestCase):
                           ("Công ty TEST Travel", "TA", "30255", "4", "2300000", "4000000")])
         self.assertTrue(any("blanks copied from row 3" in x for x in lines))
 
+    def test_change_without_its_own_notes_and_rate_refused(self):
+        sh, http = real_sheet([sheet_row(**BUILT)])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [{"room_code": "DLX-SV"}]},
+                             out=lambda *_: None)
+        self.assertIn("fill notes, rate_source", str(e.exception))
+        self.assertIsNone(appended(http))
+
+    def test_group_code_from_an_earlier_row(self):
+        # the latest rows (a CHANGE without the code) don't have it; the NEW row does
+        no_code = dict(BUILT, action="CHANGE", received_at="24/10/2026 09:00", what_changed="x",
+                       ezfolio_group_code="")
+        sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**no_code)])
+        lines = []
+        emi.sheet_append(sh, {"booking": self.CHANGE, "room_lines": [self.own(DLX)]}, out=lines.append)
+        self.assertEqual(appended(http)[0]["ezfolio_group_code"], "30255")
+        self.assertTrue(any("group code 30255 from row 3" in x for x in lines))
+
     def test_a_new_rate_keeps_its_own_surcharge(self):
         # Indian surcharge waived: the old "+20%" must not come back with the copied columns
         sh, http = real_sheet([sheet_row(**dict(BUILT, surcharge="+20% Indian guests"))])
-        line = {"room_code": "DLX-SV", "rate_per_night_vnd": "2000000",
-                "Average rate per night after discount": "2000000", "total_vnd": "8000000"}
+        line = self.own(DLX)
         emi.sheet_append(sh, {"booking": dict(self.CHANGE, what_changed="Indian surcharge waived"),
                               "room_lines": [line]}, out=lambda *_: None)
         self.assertEqual(appended(http)[0]["surcharge"], "")
@@ -326,6 +381,17 @@ class FollowUpRowsTest(unittest.TestCase):
         with self.assertRaises(emi.Refused) as e:
             emi.sheet_update(sh, 3, {"guest_names": "Omar"}, out=lambda *_: None)
         self.assertIn("already built in EZFOLIO", str(e.exception))
+        # live sheet: tracy_status deleted, pdf_link alone
+        sh, _ = real_sheet([sheet_row(**dict(BUILT, pdf_link="x.pdf"))])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_update(sh, 3, {"guest_names": "Omar"}, out=lambda *_: None)
+        self.assertIn("already built in EZFOLIO", str(e.exception))
+
+    def test_group_code_not_edited_on_a_booking_row(self):
+        sh, _ = real_sheet([sheet_row(**dict(BUILT, ezfolio_group_code=""))])
+        with self.assertRaises(emi.Refused) as e:
+            emi.sheet_update(sh, 3, {"ezfolio_group_code": "30255"}, out=lambda *_: None)
+        self.assertIn("group code is written only on CHANGE / CANCEL", str(e.exception))
 
 
 def chip(uri):

@@ -1,7 +1,7 @@
 {
   "about": "A guest (Korean name in From only, no signature) asks about two OTA-style reservations that are not on the sheet: same floor, late check-in after a 21:00 flight, late check-out cost, luggage storage. Copy of draft #2 from the first live run (2026-10-22), refs prefixed TEST-.",
   "needs": "Nothing on the sheet. The two refs must NOT be there.",
-  "want": "No reply draft yet: the late check-out % basis and luggage storage are not in hotel-info.md, so the missing facts go to Karen with ask-karen (rule of 2026-10-22: a draft only with every fact in it) and the email waits. A forward to haya@haya-hotels.com with the requests, saying the refs are not on the sheet. No intake row, no confirmation.",
+  "want": "A complete best-answer reply draft (kind request) whose first line is [CHECK BEFORE SENDING: ...] naming the late check-out % basis and luggage storage, which are not in hotel-info.md; those go to Karen with ask-karen (Tracy's audit, 29/10; before that, no draft until Karen answered). A forward to haya@haya-hotels.com with the requests, saying the refs are not on the sheet. No intake row, no confirmation.",
   "cleanup": [
     {"ref": "TEST-26090313011477ES1"},
     {"ref": "TEST-2609031300E485ES1"}
@@ -16,7 +16,7 @@
                          "Dear 유정아", "normal check-in", "no extra charge",
                          "Thank you for your email about"],
     "must_include_forward_to": ["haya@haya-hotels.com"],
-    "kinds": {"request": 0, "forward": 1, "inquiry": 0, "confirmation": 0},
+    "kinds": {"request": 1, "forward": 1, "inquiry": 0, "confirmation": 0},
     "min_questions": 1
   }
 }

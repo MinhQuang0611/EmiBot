@@ -14,11 +14,13 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
-    python -m tools.emi draft-reply <message_id> <body.txt> [--all | --to A[,B] [--cc C]] [--kind K --ref R --row N]
+    python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N]
+                                                          # reply all by default, To and Cc kept
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
+    python -m tools.emi stop-sales                        # room types with 1 room or fewer left: stop-sales email due
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]] [--subject S] [--attach F]
@@ -31,7 +33,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
     python -m tools.emi invoice-data <booking_ref>        # proforma figures: number, due date, lines
-    python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # a fact is missing: ask, no draft yet
+    python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
     python -m tools.emi status                            # scan clock and counts
@@ -47,8 +49,9 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
 Every draft stays in Drafts with the Emi category. Nothing here can send (graph_mail refuses).
-A draft is written only with every fact in it: a text with a '[...: hotel to confirm]' gap is refused, and the
-missing fact goes to Karen with ask-karen instead (dev, 2026-10-22).
+A draft is the complete best answer (Tracy audit 29/10): a '[...: hotel to confirm]' gap inside the text is refused.
+What is uncertain goes in one first line '[CHECK BEFORE SENDING: ...]' (bold red in the draft) and to Karen with
+ask-karen. Karen's name is never in a draft.
 
 A reply goes to whoever sent the email. When that is our own staff (haya@haya-hotels.com forwarding a guest's or
 agency's mail into sales@), draft-reply refuses: reply to the real sender, the From: in the quoted header, with
@@ -78,6 +81,8 @@ from .state import now_iso
 VN = timezone(timedelta(hours=7))
 WORK_DIR = os.environ.get("EMI_WORK_DIR", "emi-work")
 FIRST_SCAN_LOOKBACK = timedelta(hours=24)   # inbox-triage.md: no last scan -> the last 24 hours
+# Fake "new booking" senders (Tracy audit 29/10): never listed, logged, drafted, clicked or reported.
+PHISHING_SENDERS = {"care@mail.myjorney.com", "vip@mail.voyageandco.com"}
 
 
 class Refused(Exception):
@@ -118,7 +123,8 @@ def inbox_new(mail, st, out=print):
     if since is None:
         since = (datetime.now(timezone.utc) - FIRST_SCAN_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
         out(f"first scan: no last_scan saved, reading the last {FIRST_SCAN_LOOKBACK.total_seconds() / 3600:.0f} hours")
-    msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])]
+    msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])
+            and _sender(m) not in PHISHING_SENDERS]
     if config.SIM_DIR:
         out(f"SIM MODE: emails from {config.SIM_DIR}/inbox, drafts to files — the real mailbox is not touched")
     only = [] if config.SIM_DIR else [a.strip().lower() for a in os.environ.get("EMI_TEST_ONLY_FROM", "").split(",")
@@ -331,7 +337,10 @@ CARRY_BLOCKS = (("adults", "children", "child_ages"),
                  "surcharge", "Surcharge amount", "total_vnd"))
 
 
-TO_CHANGE_OWN = ("notes", "rate_source", "rate_per_night_vnd", "Average rate per night after discount", "total_vnd")
+# Tracy audit 29/10: Karen's EZFOLIO tool copies only the LATEST CHANGE row's notes into the Notice, so every
+# CHANGE row (not only a tour operator's) holds the full notes 1-8 and its own rate fields.
+CHANGE_OWN = ("notes", "rate_source", "rate_per_night_vnd", "Average rate per night after discount", "total_vnd",
+              "status", "nights", "meal_plan")
 
 
 def _blank(v):
@@ -368,6 +377,42 @@ def carry_over(records, state, out=print):
     return records
 
 
+def fill_group_code(records, rows, group_cols, out=print):
+    """CHANGE / CANCEL rows carry the group code in every group-code column (Tracy audit 29/10). Not on the
+    booking's latest rows -> any earlier row of the booking (the NEW row usually has it)."""
+    for rec in records:
+        if rec.get("action") not in ("CHANGE", "CANCEL"):
+            continue
+        code = next((rec.get(c) for c in group_cols if not _blank(rec.get(c))), "")
+        if not code:
+            mine = _parts(rec.get("booking_ref"))
+            earlier = [r for r in rows if mine and _parts(r.get("booking_ref")) & mine
+                       and any(not _blank(r.get(c)) for c in group_cols)]
+            if earlier:
+                src = earlier[-1]
+                code = next(src[c] for c in group_cols if not _blank(src.get(c)))
+                out(f"{rec['action']} {rec.get('room_code') or ''}: group code {code} from row {src['_row']}")
+        if code:
+            for c in group_cols:
+                if _blank(rec.get(c)):
+                    rec[c] = code
+    return records
+
+
+def verify_appended(sheet, records):
+    """Read the sheet back after a write: every row written must be there with its key cells (Tracy audit 29/10:
+    re-read, write, verify)."""
+    keys = ("action", "booking_ref", "received_at", "room_code", "total_vnd")
+    rows = sheet.rows()
+    missing = [rec for rec in records
+               if not any(all(str(r.get(k, "")).strip() == str(rec.get(k, "") or "").strip() for k in keys)
+                          for r in rows)]
+    if missing:
+        raise Refused(f"wrote {len(records)} row(s) but {len(missing)} not found on the sheet afterwards "
+                      f"({', '.join(str(m.get('room_code') or '?') for m in missing)}): check with sheet-find "
+                      f"before writing again, never append twice")
+
+
 def sheet_append(sheet, data, out=print):
     records = expand_booking(data)
     if not records:
@@ -392,31 +437,35 @@ def sheet_append(sheet, data, out=print):
                               f"is already on the sheet (row {hit['_row']}): this is not a NEW booking. Use action "
                               f"CHANGE (new rows, what_changed filled), or sheet-update row {hit['_row']} to add "
                               f"the other number. A cancel-and-rebuild: the CANCEL rows and the NEW rows in one file")
-        channel = rec.get("channel_type") or (state[0].get("channel_type", "") if state else "")
-        if rec.get("action") == "CHANGE" and channel == "Tour operator":
-            # tour-operators.md: every CHANGE row has a fully rewritten notes and its rate fields filled
-            missing = [k for k in TO_CHANGE_OWN if _blank(rec.get(k))]
+        if rec.get("action") == "CHANGE":
+            missing = [k for k in CHANGE_OWN if _blank(rec.get(k))]
             if missing:
-                raise Refused(f"tour operator CHANGE {rec.get('room_code') or ''}: fill {', '.join(missing)} on this "
-                              f"row (notes rewritten in full, rate from to-price), not copied from the old rows")
+                raise Refused(f"CHANGE {rec.get('room_code') or ''}: fill {', '.join(missing)} on this row, not "
+                              f"copied from the old rows. The build tool copies only the latest CHANGE row's notes "
+                              f"into the Notice: notes 1-8 in full, rate fields as the booking now stands "
+                              f"(tour operator: to-price)")
         if rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL":
             # 2026-10-27: operators' cancel notices for bookings already closed as declined on request
             raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
                           f"{state[0].get('received_at', '')}): no second CANCEL row; mark the email done")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
         records = carry_over(records, booking_state(rows, records[0].get("booking_ref")), out=out)
+        records = fill_group_code(records, rows, sheet.group_code_columns(), out=out)
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
-    out(f"appended {len(records)} row(s). Check them below; fix a wrong cell with sheet-update <row> by column name.")
+    verify_appended(sheet, records)
+    out(f"appended {len(records)} row(s), read back from the sheet. Check them below; fix a wrong cell with "
+        f"sheet-update <row> by column name.")
     for ref in dict.fromkeys(rec["booking_ref"] for rec in records if rec.get("booking_ref")):
         for r in sheet.find_by_ref(ref):
             out(f"row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != "_row"},
                                                   ensure_ascii=False))
 
 
-def sheet_update(sheet, row, fields, out=print):
+def sheet_update(sheet, row, fields, work_dir=None, out=print):
     """Correct a cell on a row not yet built. News about the booking (a payment, a pick-up, a name) is a
-    CHANGE row instead: each row is the record of one email (live sheet 2026-10-27)."""
+    CHANGE row instead: each row is the record of one email (live sheet 2026-10-27).
+    The row as it was is saved to <work_dir>/sheet-backup first, and read back after (Tracy audit 29/10)."""
     if not fields:
         raise Refused("no fields given")
     current = next((r for r in sheet.rows() if r["_row"] == int(row)), None)
@@ -426,17 +475,31 @@ def sheet_update(sheet, row, fields, out=print):
     if pay:
         raise Refused(f"{pay}: a payment is a CHANGE row (sheet-template CHANGE, what_changed 'Payment 1 "
                       f"received …'), not an edit of row {row}")
-    if current.get("tracy_status") in ("Entered", "Problem"):
-        raise Refused(f"row {row} is already built in EZFOLIO ({current['tracy_status']}): write a CHANGE row, "
+    if schema.is_built(current):
+        raise Refused(f"row {row} is already built in EZFOLIO (pdf_link or tracy_status set): write a CHANGE row, "
                       f"or report the wrong cell to Karen")
+    group = sorted(set(fields) & set(sheet.group_code_columns()))
+    if group and current.get("action") != "CANCEL":
+        raise Refused(f"{group}: the group code is written only on CHANGE / CANCEL rows (sheet-append carries it), "
+                      f"or when Karen asks")
     merged = {k: v for k, v in {**current, **fields}.items() if k != "_row"}
     errors, warnings = check_rows(sheet, [merged])
     for w in warnings:
         out(f"WARNING {w}")
     if errors:
         raise Refused(f"row {row} would not pass the checks after this update:\n  " + "\n  ".join(errors))
+    folder = os.path.join(work_dir or WORK_DIR, "sheet-backup")
+    os.makedirs(folder, exist_ok=True)
+    backup = os.path.join(folder, f"row{int(row)}-{datetime.now(VN):%Y%m%d-%H%M%S}.json")
+    with open(backup, "w", encoding="utf-8") as f:
+        json.dump(current, f, ensure_ascii=False, indent=1)
     sheet.update_cells(int(row), fields)
-    out(f"updated row {row}: {sorted(fields)}")
+    after = next((r for r in sheet.rows() if r["_row"] == int(row)), {})
+    wrong = [k for k, v in fields.items() if str(after.get(k, "")).strip() != str(v).strip()]
+    if wrong:
+        raise Refused(f"row {row} read back after the update does not show {wrong}; the row as it was is in "
+                      f"{backup}. Report to Karen, don't retry blindly")
+    out(f"updated row {row}: {sorted(fields)} (read back OK; backup {backup})")
 
 
 def sheet_schema(sheet, out=print):
@@ -451,6 +514,7 @@ def sheet_schema(sheet, out=print):
                    "starts with Yes / No" if h in schema.PREFIX_ENUMS else
                    "DD/MM/YYYY" if h in schema.DATES else "DD/MM/YYYY HH:MM" if h in schema.DATETIMES else
                    "whole number" if h in schema.INTEGERS else "VND digits only" if h in schema.AMOUNTS else
+                   "VND digits, minus allowed (rounding)" if h in schema.SIGNED_AMOUNTS else
                    "Room codes tab, below" if h == "room_code" else "")
         out(f"- {h} | {schema.level(h)} | {req} | {allowed} | {instr.get(h, '')}".replace(" |  |", " |"))
     codes = schema.room_codes(sheet) or {}
@@ -506,7 +570,7 @@ def _sender_of(mail, message_id):
 
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
-GUEST_KINDS = ("request", "inquiry", "confirmation", "deposit_reminder", "balance_reminder")
+GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
                 "{sender}. If it is a forward (Fw:), the real sender is the 'From:' line in the quoted header: "
@@ -550,17 +614,36 @@ def _to_line(to, cc):
 
 # '[Indoor or outdoor: hotel to confirm]', '[giá đưa đón: khách sạn xác nhận]': a fact Emi doesn't have.
 GAP = re.compile(r"\[[^\]\n]*(?:to confirm|xác nhận)[^\]\n]*\]", re.I)
+# Tracy audit 29/10: the uncertain part of a best-answer draft is named in one first line, bold red in Outlook.
+CHECK_LINE = re.compile(r"^\[CHECK BEFORE SENDING:[^\]\n]+\]$")
+KAREN = re.compile(r"\bKaren\b", re.I)
 
 
 def check_no_gaps(text, message_id="<message_id>"):
-    """Only a complete email becomes a draft (dev, 2026-10-22: a draft with '[Indoor or outdoor: hotel to
-    confirm]' reached Telegram). A fact Emi doesn't have goes to Karen as a question; the draft waits."""
-    gaps = list(dict.fromkeys(GAP.findall(text)))
+    """A draft is the complete best answer (Tracy audit 29/10; before that, dev 2026-10-22: no draft until
+    Karen answers). A gap inside the text is refused; what is uncertain goes in one first line
+    '[CHECK BEFORE SENDING: …]' and to Karen with ask-karen. Karen's name is never in a draft."""
+    lines = text.strip().splitlines()
+    first = lines[0].strip() if lines else ""
+    body = "\n".join(lines[1:]) if CHECK_LINE.match(first) else text
+    misplaced = [x.strip() for x in body.splitlines() if x.strip().upper().startswith("[CHECK BEFORE SENDING")]
+    if misplaced:
+        raise Refused(f"'[CHECK BEFORE SENDING: …]' is one line at the very top of the draft, nothing else on it, "
+                      f"closed with ']': {' | '.join(misplaced)}")
+    gaps = list(dict.fromkeys(GAP.findall(body)))
     if gaps:
-        raise Refused(f"the text still has {len(gaps)} gap(s): {' | '.join(gaps)}. No draft is written with a "
-                      f"missing fact. Ask Karen: ask-karen {message_id} \"<the missing fact, as a question>\" "
-                      f"--ref <ref>, then done {message_id} \"waiting on Karen E-...\". Write the draft after "
-                      f"karen-answer.")
+        raise Refused(f"the text still has {len(gaps)} gap(s): {' | '.join(gaps)}. Write the best full answer "
+                      f"instead, and name what is uncertain in a first line '[CHECK BEFORE SENDING: <what to check>]'; "
+                      f"then ask-karen {message_id} \"<the uncertain fact, as a question>\" --ref <ref>.")
+    if KAREN.search(text):
+        raise Refused("the draft names Karen: never put Karen's name in a draft (Tracy audit 29/10). The sign-off "
+                      "is Reservations Team; an internal note says 'khách sạn' / 'sales'.")
+
+
+def reply_all_default(args, to):
+    """Always reply all, keeping To and Cc (Tracy audit 29/10), unless --to sets the recipients itself or
+    --sender-only asks for the sender alone."""
+    return not to and not getattr(args, "sender_only", False)
 
 
 def draft_reply(mail, st, args, tg=None, out=print):
@@ -569,6 +652,7 @@ def draft_reply(mail, st, args, tg=None, out=print):
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
+    args.all = reply_all_default(args, to)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
@@ -593,6 +677,13 @@ def draft_forward(mail, st, args, tg=None, out=print):
     if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
         raise Refused(f"{sender} forwarded this email to us: it already has it. Don't forward it back. Answer the "
                       f"guest or agency with draft-reply --to <the quoted From: address> --cc {sender}")
+    lower = {a.lower() for a in to}
+    for n, r in st.data["reviews"].items():
+        # Slips and Palma mail are forwarded once (Tracy audit 29/10); a denied draft may be redone
+        if (r.get("how") == "forward" and r.get("source") == args.message_id and r.get("status") != "denied"
+                and lower & {a.lower() for a in r.get("to") or []}):
+            raise Refused(f"this email already has a forward to {', '.join(sorted(lower & {a.lower() for a in r['to']}))}"
+                          f" (draft #{n}, {r.get('status')}): never forward twice")
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="forward", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, to=to)
@@ -664,6 +755,19 @@ def run_availability(args, data, out=print):
         problems = avail.fits(result, alloc)
         out("FITS: " + args.alloc if not problems else "DOES NOT FIT: " + "; ".join(problems))
     return result
+
+
+def run_stop_sales(data, out=print):
+    """Room types down to 1 room or fewer on a night (Tracy audit 29/10): close them on the B2B and OTA sites
+    with a stop-sales email drafted in sales@, in the form and to the recipients of HAYA's past ones."""
+    low = avail.low_inventory(data, _today_vn())
+    out(avail.render_low(data, low))
+    if low:
+        out("Next: mail-find \"stop sale\" for HAYA's last stop-sales email (Sent Items): same recipients, same "
+            "form, these room types and dates. draft-new <that email's id> <its recipients> \"<its subject form>\" "
+            "<body> --kind stop_sales. Dates already closed in an earlier stop-sales email: not again. No past "
+            "email found -> ask-karen for the recipients.")
+    return low
 
 
 def run_quote(args, out=print, availability=None):
@@ -864,6 +968,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         how = "new"
     else:
         to, cc = reply_recipients(mail, args, "confirmation")
+        args.all = reply_all_default(args, to)
         how = "reply"
     # kept on the review so a Rewrite is checked the same way
     meta = {"operator": company if r.get("channel_type") == "Tour operator" else "",
@@ -1051,10 +1156,10 @@ def ask_karen(st, tg, message_id, question, ref="", out=print):
     qid = st.ask(ref, question, message_id)
     text = (f"❓ <b>{qid} — câu hỏi cho Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
             + f"\n{review.esc(question)}\n\nTrả lời: <code>{qid} &lt;câu trả lời&gt;</code>. "
-            f"Emi soạn thư sau khi có câu trả lời.")
+            f"Draft đã có dòng CHECK BEFORE SENDING; Emi sửa draft sau khi có câu trả lời.")
     sent = tg.send(text) if tg is not None else None
     out(f"{qid} asked" + (" on Telegram" if sent else " (Telegram off: put it in the scan report)")
-        + f"; no draft for this email until karen-answer {qid}")
+        + f"; the draft for this email carries '[CHECK BEFORE SENDING: …]' until karen-answer {qid}")
     return qid
 
 
@@ -1070,9 +1175,10 @@ def karen_answer(st, qid, answer, out=print):
     out(f"{qid} answered: {answer.strip()}")
     out(f"question was: {q['ask']}")
     if waiting:
-        out(f"the same email still waits on {', '.join(waiting)}: no draft yet")
+        out(f"the same email still waits on {', '.join(waiting)}: keep the CHECK line")
     elif q.get("message_id"):
-        out(f"every question for email {q['message_id']} is answered: write its draft now (show it, then "
+        out(f"every question for email {q['message_id']} is answered: rewrite its draft without the CHECK line "
+            f"(review-rewrite <n>, or a new draft if none was made yet: show it, then "
             f"draft-reply / draft-forward). A lasting hotel fact also goes to MEMORY.md and the scan report.")
     return qid
 
@@ -1141,12 +1247,14 @@ def parser():
             s.add_argument("to", help="comma-separated addresses")
         s.add_argument("body", help="UTF-8 text file with the message")
         if name == "draft-reply":
-            s.add_argument("--all", action="store_true", help="reply all")
+            s.add_argument("--all", action="store_true", help="reply all (the default now; kept for old calls)")
+            s.add_argument("--sender-only", action="store_true", help="reply to the sender alone, not reply all")
             _recipient_args(s)
             s.add_argument("--internal", action="store_true",
                            help="the reply really is for our own colleague (haya@, palmahotel.vn); kind reply only")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
-                       help="reply, forward, confirmation, deposit_reminder, balance_reminder, inquiry, request")
+                       help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
+                            "inquiry, request")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
@@ -1165,6 +1273,7 @@ def parser():
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
     s.add_argument("--alloc", help="check this allocation fits, e.g. 'STD:3,TPL:1'")
+    sub.add_parser("stop-sales", help="room types with 1 room or fewer left per night: stop-sales email due")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -1173,7 +1282,8 @@ def parser():
     s = sub.add_parser("forget-confirmation"); s.add_argument("ref"); s.add_argument("row", type=int)
     s = sub.add_parser("draft-confirmation")
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
-    s.add_argument("--all", action="store_true", help="reply all")
+    s.add_argument("--all", action="store_true", help="reply all (the default now; kept for old calls)")
+    s.add_argument("--sender-only", action="store_true", help="reply to the sender alone, not reply all")
     _recipient_args(s)
     s.add_argument("--subject", default="", help="a new email with this subject instead of a reply (Odeon)")
     s.add_argument("--attach", action="append", default=[], help="another PDF to attach, e.g. our proforma invoice")
@@ -1209,7 +1319,7 @@ def parser():
     s.add_argument("--last-week", action="store_true", help="last Monday to Sunday")
     s = sub.add_parser("invoice-data", help="proforma invoice figures for a tour operator booking")
     s.add_argument("booking_ref")
-    s = sub.add_parser("ask-karen", help="a fact for the reply is missing: ask Karen, write no draft yet")
+    s = sub.add_parser("ask-karen", help="a fact for the reply is uncertain: ask Karen; the draft has a CHECK line")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
     s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
     s.add_argument("qid"); s.add_argument("answer", nargs="+")
@@ -1272,7 +1382,7 @@ def main(argv=None):
         elif c == "sheet-append":
             sheet_append(config.sheet(), read_json(args.file))
         elif c == "sheet-update":
-            sheet_update(config.sheet(), args.row, read_json(args.file))
+            sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR)
         elif c == "draft-reply":
             draft_reply(config.mail(), st, args, tg=config.telegram())
             st.save()
@@ -1293,6 +1403,11 @@ def main(argv=None):
             if data is None:
                 return 2
             run_availability(args, data)
+        elif c == "stop-sales":
+            data = load_availability()
+            if data is None:
+                return 2
+            run_stop_sales(data)
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args)
         elif c == "pdf-fetch":

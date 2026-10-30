@@ -61,6 +61,12 @@ OLD_STYLE = ("Dear Guest,\n\nThank you for your email about your stay from 14/11
              "so an evening arrival is a normal check-in with no extra charge.\n\nBest,\nHAYA Team")
 BAD_REPLY = ("Dear 유정아,\n\nThe luggage-storage policy is not shown in the reservation record currently "
              "available to us.\n\nBest,\nHAYA Team")
+CHECK_REPLY = ("[CHECK BEFORE SENDING: late check-out % basis and luggage storage are not in hotel-info.md]\n"
+               "Dear Guest,\n\nThank you for your email. We have noted your request for two rooms on the same floor, "
+               "subject to availability, and your arrival at around 21:00 on 14/11/2026. Check-out is at 12:00; late "
+               "check-out is subject to availability and charged by the hour of departure. You are welcome to leave "
+               "your luggage with us after check-out.\n\nWe look forward to welcoming you.\n\nBest regards,\n"
+               "Reservations Team")
 FORWARD = ("**Booking:** TEST-26090313011477ES1, TEST-2609031300E485ES1 — chưa có trên sheet intake\n"
            "**Yêu cầu:**\n• 2 phòng cùng tầng")
 
@@ -110,17 +116,19 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         emi.ask_karen(self.st, self.tg, "sim-01-request", "Late check-out 25/50/100%: of what rate? Luggage storage "
                       "after check-out: offered, and is it free?", ref="TEST-26090313011477ES1", out=lambda *_: None)
 
-    def test_reply_with_gaps_refused_and_karen_asked_instead(self):
+    def test_reply_with_gaps_refused_best_answer_with_check_line_instead(self):
+        # Tracy's audit 29/10: a complete best answer, the doubt in a CHECK line on top, Karen asked
         with self.assertRaises(emi.Refused) as e:
             self.draft(GOOD_REPLY, "request")
         self.assertIn("2 gap(s)", str(e.exception))
         self.assertIn("ask-karen sim-01-request", str(e.exception))
+        self.draft(CHECK_REPLY, "request")
         self.ask()
         self.draft(FORWARD, "forward", forward_to="haya@haya-hotels.com")
         ok, report = self.grade()
         self.assertTrue(ok, report)
         self.assertIn("PASS a forward to haya@haya-hotels.com", report)
-        self.assertIn("PASS drafts of kind 'request': 0", report)
+        self.assertIn("PASS drafts of kind 'request': 1", report)
         self.assertIn("PASS questions to Karen: 1", report)
 
     def test_no_question_fails(self):
@@ -159,6 +167,7 @@ class OperationalRequestScenarioTest(unittest.TestCase):
         self.assertIn("FAIL no draft says 'available to us' (found in ['#1'])", report)
         self.assertIn("PASS a forward to haya@haya-hotels.com (['#2'])", report)
         review.deny(self.mail, self.st, self.tg, "1", out=lambda *_: None)  # a denied draft no longer counts
+        self.draft(CHECK_REPLY, "request")
         self.ask()
         ok, report = self.grade()
         self.assertTrue(ok, report)

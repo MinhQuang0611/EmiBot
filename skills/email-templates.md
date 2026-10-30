@@ -44,8 +44,9 @@ Internal forward: `Trân trọng,` / `Reservations team / HAYA Hotel Phu Quoc` /
 
 **Facts and money (unchanged hard rules)**
 - **Language (Karen, 2026-10-08):** the language of the sender's email (their most recent one in a mixed thread); any other language → English. Booking.com's own wrapper is in Vietnamese: go by what the guest wrote.
-- **Fields from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** A draft is written only when I have every fact it needs (dev, 2026-10-22): a missing fact → no draft, `ask-karen`, `done <id> "waiting on Karen E-…"`. Never a `[…: hotel to confirm]` gap; the draft commands refuse one.
-- **Never write about what I can or can't see** ("not shown in the information available to us", "we will check and revert", "our team is checking and will send … as soon as possible"). A missing fact means no draft yet.
+- **Fields from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** Every email that needs an answer gets a complete best-answer draft (Tracy's audit, 29/10). What I'm not sure of goes in one first line, `[CHECK BEFORE SENDING: <what to check>]`, shown bold red in Outlook (no highlight), and to Karen with `ask-karen`; the person sending deletes the line. Never a `[…: hotel to confirm]` gap inside the text; the draft commands refuse one.
+- **Never write about what I can or can't see** ("not shown in the information available to us", "we will check and revert", "our team is checking and will send … as soon as possible"). Write the best answer and put the doubt in the CHECK line.
+- **Never Karen's name in a draft** (the commands refuse it). **Reply all**, To and Cc kept. Drafts are HTML.
 - **Deposit deadline (AGENTS.md rule 6):** exact time, date and Vietnam time: `trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)` / `by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)`. 48 hours after the agency receives the hotel's confirmation (Karen, 2026-10-08). Balance: 7 days before check-in, with the date.
 - **Total line:** Vietnamese `Tổng tiền: [tổng] VND (đã bao gồm ăn sáng và 8% VAT)`; English `Total: VND [total], including breakfast, VAT and service charge.` A surcharge is a line of its own with its reason (`Phụ thu trẻ em (ngủ chung giường với bố mẹ): 350.000 VND × 03 trẻ × 3 đêm = 3.150.000 VND`), or named in brackets on the rate line (`(đã bao gồm phụ thu 20% áp dụng cho khách quốc tịch Ấn Độ)`). Service charge is never a line of its own.
 - **Bank details** — always the new name, even if their slip shows the old one:
@@ -212,7 +213,7 @@ sales@haya-hotels.com
 English: same blocks in the order of section 1 English; opening `Thank you for your email. Please find the revised booking confirmation below[; the group has been rebuilt under a new group code, and the old group code #[old] has been cancelled]:`; `Room: [new] (instead of [old])`; block A/B as in Vietnamese; `Please see the revised PDF attached. It replaces the earlier confirmation.`
 - **A quote that replaces an earlier one** says so: `Báo giá này thay thế báo giá phòng [hạng] gửi lúc [HH:MM] ngày [DD/MM/YYYY].`
 
-## 3. Cancellation confirmed (`draft-reply --kind reply`) — only after Karen OK'd it and it's done in EZFOLIO (AGENTS.md rule 7)
+## 3. Cancellation confirmed (`draft-reply --kind cancellation`) — as soon as the CANCEL row is written for a clear cancellation; Karen first only when the fee or the booking is unclear (AGENTS.md rule 7)
 Sources: Anex 112887487 (14/10), Anex 112885099 (15/10).
 
 English (tour operators and most agencies):
@@ -394,7 +395,7 @@ Lines by point (keep only what applies):
 - **Food** (vegetarian, Jain): `Vegetarian options are available at our breakfast. We have noted your [ ] requirements and passed them to our kitchen team.`
 - **Baby cot:** `A baby cot will be provided in the room, subject to availability.` ("free of charge" only once Karen confirms the cot is free; `hotel-info.md`.)
 - **Transfer:** section 7.
-- A fact not in `hotel-info.md` → no reply yet: `ask-karen`.
+- A fact not in `hotel-info.md` → the best answer I can give, a `[CHECK BEFORE SENDING: …]` first line, and `ask-karen`.
 
 Vietnamese guest: same lines in Vietnamese, `Kính gửi anh/chị [Tên],` / `Cảm ơn anh/chị đã thông tin cho khách sạn.` / `Khách sạn ghi nhận yêu cầu [ ], tùy tình trạng phòng khi nhận phòng.` / `Hân hạnh được đón tiếp anh/chị tại HAYA Hotel Phu Quoc.`
 

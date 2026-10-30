@@ -4,6 +4,8 @@ tools/operator_rates.py; this file is the procedure.
 """
 from datetime import date, timedelta
 
+from .intake_schema import is_built
+
 # skills/tour-operators.md step 5: an on-request booking (release passed or allotment used up)
 ON_REQUEST_OCCUPANCY = 60.0   # % on any night of the stay ...
 ON_REQUEST_DAYS = 30          # ... with check-in more than this many days away -> reject
@@ -226,8 +228,7 @@ def render_checkouts(hits, company, first, last):
         amount = sum(_amount(r.get("total_vnd")) for r in s)
         total += amount
         rooms = ", ".join(f"{r.get('rooms') or '?'} {r.get('room_code') or '?'}" for r in s)
-        built = {r.get("tracy_status") for r in s}
-        flag = "" if built == {"Entered"} else f"  [tracy_status {', '.join(sorted(b or 'blank' for b in built))}]"
+        flag = "" if all(is_built(r) for r in s) else "  [not built: no pdf_link]"
         out.append(f"- Ref {h.get('booking_ref')} | group #{h.get('ezfolio_group_code') or '?'} | "
                    f"{h.get('guest_names') or 'TBA'} | {h.get('arrival')} – {h.get('departure')} | {rooms} | "
                    f"{amount:,} VND{flag}")

@@ -9,7 +9,7 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 ## Availability and rates — where they come from
 - **Availability: the "Future Availability — HAYA" Google Sheet** (dev, 2026-10-27; ID in `tools/config.py`, `EMI_AVAILABILITY_SHEET_ID`). One row per room type, one column per night; each cell is the rooms of that type still free that night. **0 = none left**; below 0 = overbooked, also none left. Its title gives the window it covers (e.g. 27/10/2026–23/02/2027).
 - I read it only through the commands: `quote` checks every option it prints against it, and `availability --arrival … --departure … [--alloc "STD:2,TPL:1"]` shows every room type for a stay. Never from memory, never from an older run: it changes every day.
-- A stay outside the sheet's window, or the sheet not readable → the command prints it; availability is unknown, and the question goes to Karen (`ask-karen`), no draft until she answers.
+- A stay outside the sheet's window, or the sheet not readable → the command prints it; availability is unknown. The best-answer draft still goes out with `[CHECK BEFORE SENDING: availability not checked for <dates>]` on top, and the question goes to Karen (`ask-karen`).
 - **Direct guests** (an individual, no company): `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf`, transcribed in `docs/rate-knowledge/direct.md`, priced with `quote --channel Direct`. The table is printed valid **01/03/2026–31/05/2026**. For any stay after that, `quote` prints `GAP: RATES OUT OF DATE`. Until Karen confirms the table still applies, there is no draft: the price question goes to Karen with `ask-karen`, and the reply is written after her answer. Walk-in rates: none.
 
 ## What to offer
@@ -17,7 +17,7 @@ Taken over from Sunny on 2026-10-08 for email only. Sunny still answers on Zalo 
 - The option or the named type is `NOT AVAILABLE` → don't offer it. Re-run `quote --room-type <code>` (or `--alloc`) with the next cheapest type that `availability` shows free every night, and offer that, saying plainly the asked type is full on those dates ("Phòng Standard đã hết vào đêm 11–12/11, HAYA xin gợi ý …"). Nothing free for the whole stay → say so and give the nearest dates or types that are free; never "we'll check and get back to you".
 - **One allocation**, matching the number of rooms asked for. If one type can't cover the whole request, offer a combination (e.g. 1 Standard + 5 Superior Double).
 - Give only the number of rooms they asked about. Don't tell an agency how many rooms are left — except when it's the last one: "còn 1 phòng".
-- **Stop-sale:** if a date is over 50% occupancy and check-in is more than 14 days away, don't offer it. Say the hotel is not accepting bookings for that date. Never say "sold out" when it isn't.
+- **Stop-sale for travel-agency requests only:** if a date is over 50% occupancy and check-in is more than 14 days away, reply "sold out" for that date (Karen confirmed this revenue rule, via Tracy's audit, 29/10). It applies to TA room requests, not to OTA or B2B bookings, which are always accepted.
 - Extra bed requested → offer a Triple. Triple unavailable → Quadruple.
 - Capacity: Triple = 3 people + 1 child under 12. Quadruple = 4 + 1 child under 12. Every other type = 2 + 1 child under 12.
 - Children: 0–2.99 free. 3.00–11.99 charged when sharing the parents' bed. 12 and over counts as an adult.
@@ -48,7 +48,7 @@ Never price a stay by hand. Run, from `/data/emi`:
 - The sender said how to split the rooms ("3 rooms for 2 adults, 1 room 2 adults + extra bed") → price exactly that: `--alloc "STD:3,TPL:1"` (extra bed = Triple). They gave a room count only → `--rooms N`. They named a type → `--room-type DLX-SV`. Two separate beds → `--twin`. Indian guests → `--indian`.
 - Nothing said about rooms → the command lists options (cheapest, fewest rooms, only doubles, sea-view upgrade). Offer **one** allocation — the cheapest unless the guests' make-up says otherwise (4 adult friends ≠ one Quadruple; a family of 4 = Quadruple) — and at most one alternative line.
 - Every number in the reply (rates, surcharges, total, deposit) is copied from the command's output.
-- `GAP:` lines are things the data can't answer. Availability is read from the sheet (above): `GAP: availability sheet not readable` → no draft, the scan report says so. A 2027-holiday gap → the night's rate goes to Karen with `ask-karen`; the reply waits for her answer.
+- `GAP:` lines are things the data can't answer. Availability is read from the sheet (above): `GAP: availability sheet not readable` → the draft with a CHECK BEFORE SENDING line, and the scan report says so. A 2027-holiday gap → the best rate I can give with a CHECK BEFORE SENDING line naming the night, and `ask-karen`.
 - Direct guest → add `--channel Direct`. What differs from TA, all printed by the command: two rate columns only (ngày thường / Lễ, Tết), no ROH, no 1-night surcharge, no Indian +20%, child sharing a bed 350.000 (500.000 on holidays), **100% payment before check-in** (no 50% deposit line in the reply), and early check-in / late check-out charges. The `NOTE:` lines (holiday dates, breakfast) are open points for Karen: list them in the scan report. Don't write "bao gồm ăn sáng" in a direct-guest reply until Karen confirms it.
 - Tour operator or OTA → the command refuses and says where to look: `to-price --operator <name>` prices from that operator's own contract (`tour-operators.md`); OTA → Karen.
 
@@ -198,3 +198,10 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 - **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have means no draft yet: `ask-karen`, and the scan report names the question.
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.
+
+## Stop sales on the B2B and OTA sites (Tracy's audit, 29/10)
+A room type with **1 room or fewer** left on a night in the Future Availability sheet (0 and below included) is closed on the B2B and OTA sites. Each scan:
+1. `py -m tools.emi stop-sales` lists the room types and dates.
+2. `mail-find "stop sale"` for HAYA's last stop-sales email in Sent Items: copy its recipients and its form exactly; only the room types and dates change. Dates already closed in an earlier stop-sales email are not sent again.
+3. `draft-new <that email's id> <its recipients> "<its subject form>" <body> --kind stop_sales`. A person presses Send.
+4. No past stop-sales email found → `ask-karen` for the recipients and the form; the draft waits.

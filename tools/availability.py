@@ -106,6 +106,45 @@ def fits(result, alloc):
     return problems
 
 
+# Tracy audit 29/10: a room type with 1 room or fewer left on a night (0 and overbooked included) is closed on the
+# B2B and OTA sites, by a stop-sales email drafted in sales@.
+STOP_SALES_AT = 1
+
+
+def low_inventory(data, today, limit=STOP_SALES_AT):
+    """{code: [nights from today on with limit or fewer rooms free]} for the room types that have any."""
+    low = {}
+    for code, r in data["rooms"].items():
+        nights = [n for n in data["dates"] if n >= today and r["free"].get(n) is not None and r["free"][n] <= limit]
+        if nights:
+            low[code] = nights
+    return low
+
+
+def _ranges(nights):
+    """[d1, d2, d3, d7] -> ['d1–d3', 'd7'] as DD/MM/YYYY, consecutive nights joined."""
+    out, start, prev = [], None, None
+    for n in nights + [None]:
+        if n is not None and prev is not None and (n - prev).days == 1:
+            prev = n
+            continue
+        if start is not None:
+            out.append(f"{start:%d/%m/%Y}" + (f"–{prev:%d/%m/%Y}" if prev != start else ""))
+        start = prev = n
+    return out
+
+
+def render_low(data, low):
+    if not low:
+        return f"STOP SALES: none — every room type has more than {STOP_SALES_AT} room free every night ({data['title']})"
+    out = [f"STOP SALES NEEDED ({data['title']}): room types with {STOP_SALES_AT} or fewer rooms free"]
+    for code, nights in low.items():
+        out.append(f"  {code} {data['rooms'][code]['name']}: " + ", ".join(_ranges(nights))
+                   + "  (free: " + ", ".join(f"{n:%d/%m} {data['rooms'][code]['free'][n]}" for n in nights[:6])
+                   + (" …" if len(nights) > 6 else "") + ")")
+    return "\n".join(out)
+
+
 def render(data, result):
     out = [f"AVAILABILITY ({data['title']}), nights {result['nights'][0]:%d/%m/%Y}–{result['nights'][-1]:%d/%m/%Y}:"]
     for code, r in result["rooms"].items():

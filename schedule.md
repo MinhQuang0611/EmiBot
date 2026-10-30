@@ -16,12 +16,13 @@ Hourly (Karen, 2026-10-08). The 06:00–22:00 window is Monica's, matched to job
 Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inquiries-and-quotes.md`.
 1. Read every email in sales@haya-hotels.com received since the last scan, whole thread and attachments.
 2. Classify each one.
-3. New / change / cancellation → write or update intake sheet rows. Cancellations are flagged to Karen.
-4. Payment slips → a CHANGE row with the payment columns filled; draft the forward to accountant@palmahotel.vn with the group code.
+3. New / change / cancellation → write intake sheet rows. A clear cancellation → CANCEL row + cancellation reply draft at once; unclear (fee, which booking) → Karen first.
+4. Payment slips, UNC, remittances, OTA payout advices → a CHANGE row with the payment columns filled; draft the forward to accountant@palmahotel.vn in Vietnamese, with the group code or "chưa có mã đoàn". Once per email.
 5. Arrival details, special requests, rooming lists, changes within 3 days of arrival → draft the forward to haya@haya-hotels.com.
 6. Inquiries and quote requests → draft the reply.
 7. Read the Sent folder: for any draft of mine that was sent, record the real sent time and note any edits as corrections.
-8. Flag OTA rates under 1,000,000 VND/room-night, Palma emails, money asks, and anything unclassified.
+8. Palma emails → forward draft to booking@palmahotel.vn (once). Flag money asks and anything unclassified. Phishing senders are dropped by `inbox-new`.
+8a. **Stop sales:** `stop-sales` → any room type at 1 room or fewer on a night → stop-sales draft in the form of HAYA's last one (`skills/inquiries-and-quotes.md`).
 9. **40-hour deposit reminder.** For every confirmed booking with no deposit seen, count hours since the confirmation was actually sent. 40 hours reached → re-check the inbox and the payment columns, then draft the deposit reminder. At the 22:00 run, also draft it for any booking that will reach 40 hours before 06:00. This lives here, not in job 3, because the 40-hour mark can land at any hour and job 3 only runs twice a day.
 
 ### Job 1 — the commands, in order
@@ -35,16 +36,16 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
    2. Classify it (`skills/inbox-triage.md`).
    3. Booking → `py -m tools.emi sheet-find <booking_ref>` and `sheet-find <guest surname>`.
       - Not there (new booking) → `py -m tools.emi sheet-template NEW emi-work/out/<ref>.json`. Fill the values: shared columns in `booking`, one `room_lines` entry per room type (copy the entry for each extra type). Don't add or rename keys. Unknown → leave blank; a blank REQUIRED column goes in `missing_info` as `REQUIRED blank: <column> – <reason>`.
-      - Change, payment, follow-up that adds something, or cancellation of a booking already there → `sheet-template CHANGE` (or `CANCEL`): new rows with the same `booking_ref` and `what_changed` filled. Fill only what this email changes; `sheet-append` copies the rest from the booking's latest rows and prints what it copied. A CANCEL with one empty room line becomes one row per room type. Cancel-and-rebuild: CANCEL and NEW rows in one file. Never `sheet-update` an older row for news about the booking (`skills/booking-intake.md`, "One email, one set of rows").
-      - NEW, or a CHANGE adding rooms/nights → `py -m tools.emi availability --arrival <DD/MM/YYYY> --departure <DD/MM/YYYY> --alloc "<code>:<rooms>,…"`. `DOES NOT FIT` → `availability: …` in `missing_info`, top of the report for Karen (`skills/booking-intake.md` step 5).
+      - Change, payment, follow-up that adds something, or cancellation of a booking already there → `sheet-template CHANGE` (or `CANCEL`): new rows with the same `booking_ref` and `what_changed` filled. A CHANGE row writes its own `notes` (all 8 items) and every rate field (`rate_per_night_vnd`, average, `rate_source`, `total_vnd`, `status`, `nights`, `meal_plan`); `sheet-append` copies the rest (company, guests, dates, payments, pax, group code into both columns) from the booking's rows and prints what it copied. A CANCEL with one empty room line becomes one row per room type. Cancel-and-rebuild: CANCEL and NEW rows in one file. Never `sheet-update` an older row for news about the booking (`skills/booking-intake.md`, "One email, one set of rows").
+      - TA or direct NEW, or a CHANGE adding rooms/nights (not OTA / B2B: always accepted) → `py -m tools.emi availability --arrival <DD/MM/YYYY> --departure <DD/MM/YYYY> --alloc "<code>:<rooms>,…"`. `DOES NOT FIT` → `availability: …` in `missing_info`, top of the report for Karen (`skills/booking-intake.md` step 5).
       - **Tour operator** (Anex, Odeon, Crystal Bay, Pegas, Selfie): `skills/tour-operators.md`. Rates from `py -m tools.emi to-price --operator <name> …` (Odeon: `--spo` from the voucher). On request → `py -m tools.emi on-request …`: REJECT = CANCEL rows + decline draft, ASK KAREN = `ask-karen`, no row. Anex robot emails: every one gets a reply draft (it goes to reservation@anexvietnam.com by itself).
       - `py -m tools.emi sheet-check emi-work/out/<ref>.json` → fix every line it lists, run it again until `OK`. Warnings: fix them or say why in `notes`.
       - `py -m tools.emi sheet-append emi-work/out/<ref>.json` → prints the rows as written: compare with the email.
-      - A wrong cell I wrote on a row not yet built → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row. It refuses payment columns and rows already built (Entered/Problem): those are CHANGE rows.
+      - A wrong cell I wrote on a row not yet built → `sheet-update <row> emi-work/out/<ref>-fix.json` (`{"column": "value"}`); it re-checks the whole row. It refuses payment columns, the group code and rows already built (`pdf_link` filled): those are CHANGE rows. It backs the row up and reads it back.
       - If a command refuses, read the reason and fix the JSON. Never write to the sheet any other way.
    4. Inquiry or quote request (no booking yet) → `py -m tools.emi quote …` as in `skills/inquiries-and-quotes.md`, offer only options it marks `AVAILABLE` (the Future Availability sheet; `availability` for the other room types), write the reply from its template with the command's numbers, `py -m tools.emi draft-reply <id> emi-work/out/<sender>-inquiry.txt --kind inquiry`. List every `GAP:` line in the report.
    5. Forward / reply needed → write the text to `emi-work/out/<ref>-<kind>.txt`, then `py -m tools.emi draft-forward <id> <to> <file> --kind forward --ref <ref>` or `py -m tools.emi draft-reply <id> <file> --kind <kind>`. Kind (`skills/inbox-triage.md` "Draft kind"): `request` for a question or special request on an existing booking (then also the front-office forward), `inquiry` only for a price or availability question with no booking yet, `reply` for anything else. An email forwarded in by a colleague (@haya-hotels.com, @palmahotel.vn): reply to the original writer with `--to <their address> --cc <colleague>` (`skills/email-templates.md` "Who the reply goes to"); `draft-reply` refuses to answer a colleague by mistake.
-      **A fact the reply needs and I don't have** (not in `hotel-info.md`, the rate files or the email): no draft. `py -m tools.emi ask-karen <id> "<the question, in Vietnamese>" --ref <ref>` — it posts the question to Telegram as E-0nn — then `done <id> "waiting on Karen E-0nn"`. A forward that has everything is still drafted. The draft commands refuse a text with a `[…: hotel to confirm]` gap.
+      **A fact I'm not sure of** (not in `hotel-info.md`, the rate files or the email): still the complete best-answer draft, with `[CHECK BEFORE SENDING: <what to check>]` as its first line (bold red in Outlook), and `py -m tools.emi ask-karen <id> "<the question, in Vietnamese>" --ref <ref>` (Tracy's audit, 29/10). Never "we'll check and get back to you". The draft commands refuse a `[…: hotel to confirm]` gap inside the text and Karen's name anywhere in a draft. Replies are reply-all by default.
    6. `py -m tools.emi done <id> <one-line outcome>` — also for noise, so a re-run skips it.
 5. Steps 7–9 above (Sent folder, flags, 40-hour reminders): not wired to commands yet. Skip them, and leave them out of the scan report.
 6. If any `show` or sheet command failed, **don't** run step 7: the next run starts from the same point and skips what's already `done`.
@@ -53,7 +54,7 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
 
 ## 2. Confirmation drafts — `30 6-22 * * *`
 Skills: `confirmation-replies.md`, `email-templates.md`.
-1. Read the intake sheet for rows where the build tool has pasted a `pdf_link` (or marked a cancellation done) and no confirmation has been drafted yet.
+1. Read the intake sheet for rows where the build tool has pasted a `pdf_link` and no confirmation has been drafted yet. (Cancellations are answered in job 1.)
 2. Open the PDF and check it against the row. Mismatch → flag to Karen, no draft.
 3. Changed booking → check the payment columns for the deposit; pick the reminder or no-reminder block.
 4. Draft the reply on the agency's thread in their language, PDF attached, deadline as exact time and date in Vietnam time. Leave it in Drafts.

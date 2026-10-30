@@ -11,8 +11,13 @@ from . import httpjson
 SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
 FIRST_DATA_ROW = 3
 
-# Written by the build tool, not by Emi. Emi only sets tracy_status = Pending on a new row.
+# Written by the build tool, not by Emi. Emi only sets tracy_status = Pending on a new row, where the sheet still
+# has that column (deleted from the live sheet 12/10; the SANDBOX keeps it).
 BUILD_TOOL_COLUMNS = {"tracy_status", "pdf_link"}
+# Tracy audit 29/10: columns 51-55 of the live sheet are EZFOLIO status/error columns (ez_error is col 53).
+# Their names aren't known here, so they are protected by position as well as by the "ez_" prefix.
+BUILD_TOOL_POSITIONS = range(50, 55)  # 0-based: columns 51-55
+BUILD_TOOL_PREFIX = "ez_"
 REQUIRED = ("company", "arrival", "departure", "rate_per_night_vnd", "room_code", "rooms")
 
 
@@ -68,6 +73,15 @@ class IntakeSheet:
             if not self._header:
                 raise SheetContractError(f"tab {self.tab!r} has no header row")
         return self._header
+
+    def build_tool_columns(self):
+        """Every column Emi never writes: tracy_status, pdf_link, ez_* and columns 51-55."""
+        return (BUILD_TOOL_COLUMNS | {h for h in self.header if h.lower().startswith(BUILD_TOOL_PREFIX)}
+                | {self.header[i] for i in BUILD_TOOL_POSITIONS if i < len(self.header)})
+
+    def group_code_columns(self):
+        """The live sheet carries the group code in two columns (Tracy audit 29/10); the SANDBOX in one."""
+        return [h for h in self.header if "group" in h.lower() and "code" in h.lower()]
 
     def check_header(self, expected):
         """Return (missing, extra) column names versus an expected list."""
@@ -125,11 +139,15 @@ class IntakeSheet:
     def append_rows(self, records):
         """Append new booking rows. Duplicates are the caller's check (booking-intake.md step 2)."""
         values = []
+        protected = self.build_tool_columns()
         for rec in records:
-            touched = BUILD_TOOL_COLUMNS & {k for k, v in rec.items() if v and not (k == "tracy_status" and v == "Pending")}
+            touched = protected & {k for k, v in rec.items() if v and not (k == "tracy_status" and v == "Pending")}
             if touched:
                 raise SheetContractError(f"Emi doesn't write {sorted(touched)}")
-            rec = dict(rec, tracy_status="Pending")
+            if "tracy_status" in self.header:
+                rec = dict(rec, tracy_status="Pending")
+            else:
+                rec = {k: v for k, v in rec.items() if k != "tracy_status"}
             values.append(self._to_values(rec))
         return self.call("POST",
                          f"{self.base}/values/{self._range('A1')}:append"
@@ -140,7 +158,7 @@ class IntakeSheet:
         """Update named cells on one row, leaving every other cell as it is."""
         if row_number < FIRST_DATA_ROW:
             raise SheetContractError("rows 1-2 are header and instructions")
-        touched = BUILD_TOOL_COLUMNS & set(fields)
+        touched = self.build_tool_columns() & set(fields)
         if touched:
             raise SheetContractError(f"Emi doesn't write {sorted(touched)}")
         self._to_values(fields)  # rejects unknown columns

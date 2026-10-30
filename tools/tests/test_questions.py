@@ -56,7 +56,7 @@ class QuestionTest(unittest.TestCase):
         self.ask()
         self.ask("Is the pool heated?")
         emi.karen_answer(self.st, "e-001", "1 outdoor pool on the 2nd floor", out=self.lines.append)
-        self.assertIn("the same email still waits on E-002: no draft yet", self.lines)
+        self.assertIn("the same email still waits on E-002: keep the CHECK line", self.lines)
         emi.karen_answer(self.st, "E-002", "No", out=self.lines.append)
         self.assertTrue(any(x.startswith("every question for email m1 is answered") for x in self.lines))
         self.assertEqual(self.st.open_questions(), {})

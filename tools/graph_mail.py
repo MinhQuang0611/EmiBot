@@ -200,6 +200,9 @@ def text_to_html(text):
     """Plain text to the HTML HAYA's own sent confirmations use: a blank line starts a paragraph,
     a single line break stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
     def inline(s, labels=True):
+        if s.strip().upper().startswith("[CHECK BEFORE SENDING"):
+            # Tracy audit 29/10: bold red, no highlight; the person sending deletes it
+            return f'<b><span style="color:#FF0000">{html.escape(s.strip())}</span></b>'
         if labels and "**" not in s:
             # Text written without markup still gets HAYA's bold labels.
             m = LABEL.match(s)

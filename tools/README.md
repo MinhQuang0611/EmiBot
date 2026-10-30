@@ -11,7 +11,7 @@ Python 3.10+. Graph uses only the standard library. Google needs `pip install -r
 | `drive.py` | Downloads a Drive file (the confirmation PDF behind `pdf_link`) with the service account. Needs the Drive API enabled in the GCP project and the file or folder shared with the service account. |
 | `attachments.py` | Saves attachments under `EMI_WORK_DIR` (default `emi-work/`) and extracts text: PDF (pypdf), Excel .xlsx (openpyxl), .docx, .csv/.txt. Images are saved for the agent to open. |
 | `graph_mail.py` | Outlook for sales@ via Microsoft Graph: read inbox, thread, attachments, Sent, Drafts; create reply / forward / new **drafts**, attach a PDF, tag drafts `Emi`. No send method; `_call` refuses `send`, `sendMail`, `reply`, `replyAll`, `forward`. |
-| `intake_sheet.py` | Intake sheet: read rows by header name, find by `booking_ref`, append rows, update single cells. Refuses unknown columns and refuses to write `tracy_status` / `pdf_link` (except `Pending` on a new row). Deletes only `TEST-` rows. |
+| `intake_sheet.py` | Intake sheet: read rows by header name, find by `booking_ref`, append rows, update single cells. Refuses unknown columns and refuses to write `pdf_link`, `ez_*` and columns 51–55 (the EZFOLIO status columns), and `tracy_status` (except `Pending` on a new row). Deletes only `TEST-` rows. |
 | `state.py` | JSON state between runs: last scan, Telegram questions `E-001`…, drafts, confirmations, reminders. |
 | `precheck.py` | Cheap check before cron jobs 1 and 2. Exit 0 = work, 1 = quiet, 2 = check failed. |
 | `acceptance.py` | Acceptance tests 2–7 from `openclaw-setup-brief.md` against the real systems. |

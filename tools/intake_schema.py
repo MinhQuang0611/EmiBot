@@ -13,8 +13,10 @@ from datetime import datetime
 ROOM_LEVEL = ("room_code", "rooms", "adults", "children", "child_ages", "meal_plan", "rate_source",
               "rate_per_night_vnd", "discount_promo", "Average rate per night after discount", "surcharge",
               "Surcharge amount", "total_vnd", "notes", "Remaining amount")
-# Filled by someone else, never by Emi on a new row.
+# Filled by someone else, never by Emi on a new row. tracy_status was deleted from the live sheet on 12/10
+# (Tracy audit 29/10): the build tool filling pdf_link is what marks a row built. The SANDBOX still has it.
 NOT_EMI = ("ezfolio_group_code", "tracy_status", "pdf_link")
+BUILT_STATUSES = ("Entered", "Problem")
 # Filled later from payment slips (sheet-update), not when the booking first arrives.
 PAYMENT = ("COD", "Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time")
 
@@ -40,10 +42,11 @@ PREFIX_ENUMS = {"prepaid": ("Yes", "No")}  # "Yes (paid on OTA)", "No (agency in
 DATES = ("arrival", "departure", "hold_until")
 DATETIMES = ("received_at",)
 INTEGERS = ("nights", "rooms", "adults", "children")
-AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "Surcharge amount", "total_vnd",
+AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "total_vnd",
            "Payment 1", "Payment 2", "Remaining amount")
+# Surcharge amount carries the rounding difference too, which can be negative (Tracy audit 29/10: "-3").
+SIGNED_AMOUNTS = ("Surcharge amount",)
 AGENCY_CHANNELS = ("TA", "Tour operator")
-RATE_FLOOR = 1_000_000  # VND per room-night; an OTA rate under it is flagged (MEMORY, inbox-triage.md §3)
 NEVER_FOR_AGENCIES = ("TW-DLX",)  # MEMORY: never TW-DLX or APT to agencies
 # Where the detail goes instead, added to an enum error ("Tour operator (Anex)", "OTA net (Expedia remittance)").
 ENUM_HINTS = {"channel_type": "; the operator's or OTA's name goes in company",
@@ -79,7 +82,8 @@ CANONICAL_COMPANIES = {
 # Dropped from the end of a company name before matching: "BOOKING.COM BV", "Agoda Company Pte Ltd".
 LEGAL_SUFFIXES = {"bv", "ltd", "llc", "inc", "pte", "co", "company", "limited", "jsc", "gmbh", "corp",
                   "corporation", "plc", "sa", "ag"}
-# nationality: full English country name. Codes seen or likely on vouchers, for the error message.
+# nationality: a 3-letter code, e.g. VNM (Karen, 29/10, via Tracy's audit). Codes and names seen or likely on
+# vouchers, to suggest the code when a name or a 2-letter code is written.
 COUNTRY_CODES = {
     "VN": "Vietnam", "VNM": "Vietnam", "IN": "India", "IND": "India", "RU": "Russia", "RUS": "Russia",
     "KR": "South Korea", "KOR": "South Korea", "CN": "China", "CHN": "China", "TW": "Taiwan", "TWN": "Taiwan",
@@ -92,8 +96,13 @@ COUNTRY_CODES = {
     "UZB": "Uzbekistan", "IR": "Iran", "IRN": "Iran", "IL": "Israel", "ISR": "Israel",
     "AE": "United Arab Emirates", "ARE": "United Arab Emirates", "UAE": "United Arab Emirates",
 }
+# country name -> its 3-letter code: 'Vietnam' -> 'VNM'
+NATIONALITY_CODES = {name.lower(): code for code, name in COUNTRY_CODES.items() if len(code) == 3 and code != "GER"}
+NATIONALITY_CODES.update({"viet nam": "VNM", "korea": "KOR", "england": "GBR", "united states of america": "USA"})
+NATIONALITY_FALLBACK = "VNM"  # no nationality and no clue in the names (Rules tab)
 REF_EXAMPLE = "'1783017402 / 92777EF002717'"
 NOTES_EXAMPLE = "'1. Booking.com – Ref 5374635524'"
+NOTES_ITEMS = 8  # the EZFOLIO Notice, items 1-8; item 8 = VAT invoice (Tracy audit 29/10)
 
 
 def _norm(name):
@@ -144,12 +153,15 @@ def _ref_problems(ref):
 
 
 def _notes_problems(rec, g):
-    """NOTES RULE: exactly 7 lines, numbered 1. to 7., item 1 = '<company> – Ref <booking_ref>'."""
+    """NOTES RULE: exactly 8 lines, numbered 1. to 8., item 1 = '<company> – Ref <booking_ref>',
+    item 8 = '8. VAT invoice: …' or '8. No VAT info'."""
     lines = [x.strip() for x in g("notes").splitlines() if x.strip()]
     nums = [m.group(1) for m in (re.match(r"([0-9]+)\.\s", x) for x in lines) if m]
-    if nums != list("1234567") or len(lines) != 7:
-        return [f"notes: NOTES RULE wants exactly 7 lines numbered '1. ' to '7. ', one item per line "
-                f"(found {len(lines)} line(s), numbered {nums or 'none'}); format in booking-intake.md"]
+    if nums != [str(i) for i in range(1, NOTES_ITEMS + 1)] or len(lines) != NOTES_ITEMS:
+        return [f"notes: NOTES RULE wants exactly {NOTES_ITEMS} lines numbered '1. ' to '{NOTES_ITEMS}. ', one item "
+                f"per line (found {len(lines)} line(s), numbered {nums or 'none'}); format in booking-intake.md"]
+    if not re.match(r"8\.\s+(VAT invoice:\s*\S|No VAT info\s*$)", lines[7]):
+        return ["notes: item 8 is '8. VAT invoice: <company, MST, address, invoice email>' or '8. No VAT info'"]
     want = []
     if g("company") and not lines[0][3:].startswith(g("company")):
         want.append(f"start with the company {g('company')!r}")
@@ -162,6 +174,26 @@ def _notes_problems(rec, g):
 
 def _blank(v):
     return not str(v if v is not None else "").strip()
+
+
+def is_built(rec):
+    """The build tool has been at this row: pdf_link filled (live sheet), or tracy_status Entered/Problem
+    (SANDBOX, which still has the column)."""
+    return bool(str(rec.get("pdf_link") or "").strip()) or str(rec.get("tracy_status") or "").strip() in BUILT_STATUSES
+
+
+def nationality_problem(value):
+    """None if every part is a 3-letter code ('VNM', 'VNM; RUS'), else what to write instead."""
+    for part in (p for p in re.split(r"\s*[;,/]\s*", str(value).strip()) if p):
+        if re.fullmatch(r"[A-Z]{3}", part):
+            continue
+        if re.fullmatch(r"[A-Za-z]{2,3}", part) and part.upper() in COUNTRY_CODES:
+            code = NATIONALITY_CODES.get(COUNTRY_CODES[part.upper()].lower())
+        else:
+            code = NATIONALITY_CODES.get(part.lower())
+        return (f"nationality: {part!r} — write the 3-letter code" + (f" {code!r}" if code else ", e.g. 'VNM'")
+                + " (the booking's nationality, else the passport, else the guest's name, else VNM)")
+    return None
 
 
 def _date(v, fmt):
@@ -177,7 +209,7 @@ def check_row(rec, room_codes=None):
     g = lambda k: str(rec.get(k, "") if rec.get(k) is not None else "").strip()
     action = g("action")
     note = g("missing_info")
-    built = g("tracy_status") in ("Entered", "Problem")  # the build tool has been at this row
+    built = is_built(rec)
 
     # 2026-10-22, row 79: only source_email "s", typed by hand. Not a booking; say so instead of 9 errors.
     filled = [k for k in rec if k != "_row" and g(k) and not (k == "tracy_status" and g(k) == "Pending")]
@@ -189,14 +221,11 @@ def check_row(rec, room_codes=None):
     for k in ALWAYS:
         if k == "booking_ref" and g("channel_type") == "Direct":
             continue  # a direct guest has no agency code
-        if k == "nationality" and "nationality" in note.lower():
-            continue  # only a source market / residence given: blank, named in missing_info
         if _blank(rec.get(k)):
             errors.append(f"{k}: never blank" + {
                 "guest_names": " (TBA if names not given)",
-                "nationality": " — from the passport or nationality field (or the names); if the email gives "
-                               "only a market or country of residence, write 'nationality – only source market "
-                               "<X> given' in missing_info"}.get(k, ""))
+                "nationality": f" — the booking's nationality, else the passport, else inferred from the guest's "
+                               f"name; no clue at all: {NATIONALITY_FALLBACK}"}.get(k, ""))
     direct = g("channel_type") == "Direct"
     if direct and g("company"):
         # 2026-10-22: row 57 had the guest's own name as company and "new company" in missing_info
@@ -237,6 +266,10 @@ def check_row(rec, room_codes=None):
     for k in AMOUNTS:
         if g(k) and not g(k).isdigit():
             errors.append(f"{k}: {g(k)!r} must be digits only, VND, no dots/commas (e.g. 2000000)")
+    for k in SIGNED_AMOUNTS:
+        if g(k) and not re.fullmatch(r"-?\d+", g(k)):
+            errors.append(f"{k}: {g(k)!r} must be digits only, VND, a minus sign allowed for a rounding "
+                          f"difference (e.g. 1050000, -3)")
 
     a, d = _date(g("arrival"), "%d/%m/%Y"), _date(g("departure"), "%d/%m/%Y")
     if a and d:
@@ -261,7 +294,9 @@ def check_row(rec, room_codes=None):
     for k in NOT_EMI:
         # Once the build tool has set Entered/Problem its own cells are filled; a later sheet-update
         # (a payment slip) must still pass. intake_sheet refuses Emi writing tracy_status/pdf_link anyway.
-        if g(k) and not (k == "tracy_status" and g(k) == "Pending") and action == "NEW" and not built:
+        # A row read from the sheet carries _row; a row about to be written doesn't, so its pdf_link is Emi's.
+        on_sheet = "_row" in rec or g("tracy_status") in BUILT_STATUSES
+        if g(k) and not (k == "tracy_status" and g(k) == "Pending") and action == "NEW" and not on_sheet:
             errors.append(f"{k}: filled by the build tool, leave blank on a NEW row")
 
     # booking_ref: the reference number(s) only, so the duplicate check (exact match) and sheet-find
@@ -288,17 +323,6 @@ def check_row(rec, room_codes=None):
     if canon and re.search(r"\bnew company\b", note, re.I):
         errors.append(f"missing_info: no 'new company' — {canon} is a known channel already in EZFOLIO")
 
-    # MEMORY rate floor: an OTA rate under 1,000,000 VND/room-night is likely a promotion mistake
-    # (2026-10-22, rows 58 and 76: MG at 935,000 and 841,500, not flagged).
-    if g("channel_type") == "OTA" and action in ("NEW", "CHANGE"):
-        low = sorted({int(g(k)) for k in ("rate_per_night_vnd", "Average rate per night after discount")
-                      if g(k).isdigit() and int(g(k)) < RATE_FLOOR
-                      and not (int(g(k)) == 0 and canon == "Wyndham")})  # a points night is 0 on purpose
-        if low and "rate floor" not in note.lower():
-            msg = (f"missing_info: OTA rate {' / '.join(f'{x:,}' for x in low)} VND/night is under the "
-                   f"{RATE_FLOOR:,} floor; add 'rate floor: <rate> VND/night under 1,000,000 – likely "
-                   f"promotion mistake' to missing_info so it reaches Karen")
-            (warnings if built else errors).append(msg)
     if action in ("NEW", "CHANGE") and g("rate_source") in ("OTA net", "Booking.com guest total"):
         want = "Booking.com guest total" if canon == "Booking.com" else "OTA net"
         if g("rate_source") != want:
@@ -312,11 +336,10 @@ def check_row(rec, room_codes=None):
     if action in ("NEW", "CHANGE") and g("status") == "Tentative" and not g("hold_until"):
         warnings.append("status: Tentative is only for a hold the sender asked for, with its time limit in "
                         "hold_until; a booking request or voucher is Definite")
-    for part in re.split(r"\s*[;,/]\s*", g("nationality")):
-        if re.fullmatch(r"[A-Za-z]{2,3}", part):
-            name = COUNTRY_CODES.get(part.upper())
-            errors.append(f"nationality: {part!r} is a code; write the full English country name"
-                          + (f" ({name!r})" if name else ""))
+    nat = nationality_problem(g("nationality")) if g("nationality") else None
+    if nat:
+        # rows written before 29/10 carry the full name: a CHANGE copying it is not blocked
+        (errors if action == "NEW" and not built else warnings).append(nat)
 
     if action in ("NEW", "CHANGE") and g("notes"):
         warnings += _notes_problems(rec, g)
@@ -325,12 +348,14 @@ def check_row(rec, room_codes=None):
                         "VND — <days> days before check-in, <rule>. Paid: <amount>.' (booking-intake.md)")
     avg, rooms, nights, total = (g("Average rate per night after discount"), g("rooms"), g("nights"), g("total_vnd"))
     extra = g("Surcharge amount") or "0"
-    if all(x.isdigit() for x in (avg, rooms, nights, total, extra)):
+    if all(x.isdigit() for x in (avg, rooms, nights, total)) and re.fullmatch(r"-?\d+", extra):
         want = int(avg) * int(rooms) * int(nights) + int(extra)
         if want != int(total):
             plus = f" + surcharge {extra}" if extra != "0" else ""
-            warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights{plus} "
-                            f"= {want}; fine only if the email states a different total")
+            diff = int(total) - want
+            warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights{plus} = {want}. If "
+                            f"{total} is the email's or contract's exact total, the {diff:+d} is rounding: add it "
+                            f"to 'Surcharge amount' and 'Rounding {diff:+d}' to surcharge (booking-intake.md)")
     return errors, warnings
 
 

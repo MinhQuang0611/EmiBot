@@ -121,6 +121,13 @@ class SimMail:
             return self._write_draft("reply", message_id, list(to), text, cc=list(cc or []),
                                      subject=reply_subject(m["subject"]))
         sender = m["from"]["emailAddress"]["address"]
+        if reply_all:
+            # as Graph's createReplyAll: the sender plus the other To, the Cc kept, the mailbox itself left out
+            ours = os.environ.get("EMI_MAILBOX", "sales@haya-hotels.com").lower()
+            to = [sender] + [a for a in (r["emailAddress"]["address"] for r in m.get("toRecipients", []))
+                             if a.lower() not in (ours, sender.lower())]
+            cc = [a for a in (r["emailAddress"]["address"] for r in m.get("ccRecipients", [])) if a.lower() != ours]
+            return self._write_draft("reply", message_id, to, text, cc=cc)
         return self._write_draft("reply", message_id, [sender], text)
 
     def forward_draft_with_text(self, message_id, to, text):
