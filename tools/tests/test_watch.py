@@ -53,6 +53,34 @@ class WatchTest(unittest.TestCase):
         self.assertEqual(self.check(True), "started")
         self.assertEqual(len(self.calls), 3)
 
+    def with_runs(self, entries):
+        def run(argv, **kw):
+            self.calls.append(argv)
+            if "runs" in argv:
+                return SimpleNamespace(returncode=0, stdout="banner\n" + json.dumps({"entries": entries}), stderr="")
+            return SimpleNamespace(returncode=0, stdout="{ok: true}", stderr="")
+        self.fake_run = run
+
+    def test_next_batch_starts_once_a_run_ended_with_progress(self):
+        # 30/10: runs took 3-10 of 17 emails each, then the lock held the rest for 25 minutes
+        self.st.data["processed"] = {}
+        self.check(True)
+        self.st.data["processed"] = {"m1": {}, "m2": {}}
+        self.with_runs([])  # still running: no finished run since the start
+        self.clock[0] += 120
+        self.assertEqual(self.check(True), "running")
+        self.with_runs([{"runAtMs": 1000 * 1000 + 500}])
+        self.assertEqual(self.check(True), "started")
+        self.assertEqual(self.calls[-1][-3:], ["automations", "run", "job-1"])
+
+    def test_run_without_progress_waits_out_the_window(self):
+        self.st.data["processed"] = {"m1": {}}
+        self.check(True)
+        self.with_runs([{"runAtMs": 1000 * 1000 + 500}])  # finished, but handled nothing
+        self.clock[0] += 120
+        self.assertEqual(self.check(True), "running")
+        self.assertFalse(any("runs" in c for c in self.calls))
+
     def test_failed_start_is_an_error_and_leaves_no_lock(self):
         def bad(argv, **kw):
             return SimpleNamespace(returncode=1, stdout="", stderr="gateway unreachable")

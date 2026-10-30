@@ -86,3 +86,4 @@ Chờ Karen: …
 - Every email gets a `Draft:` line: its number (`#12`, the notice is already on Telegram), exactly as the `draft-*` command printed it for this email (never another email's: 29/10 23:34 named #182 for two bookings), or "không có" plus the reason in a few words. A draft with a CHECK BEFORE SENDING line: say so and the E-0nn asked.
 - No line about the steps that have no command yet (Sent folder, flags, 40-hour reminders). They go in the daily report, not in every scan report.
 - Under 25 lines. Several emails of the same kind (OTA notices, noise): one line with the count.
+- Emails left for the next run (a run takes 5, `schedule.md` job 1 step 4): last line `Còn N mail, lượt sau tiếp tục.` That is a normal end; `AUTOMATION_FAILED` only for a command that failed and couldn't be run again.
