@@ -117,7 +117,7 @@ class NationalityTest(unittest.TestCase):
 
     def test_names_pass(self):
         for n in ("Vietnam", "United Kingdom", "India; Vietnam", "Iran", "Laos", "South Korea"):
-            self.assertFalse(has(check(nationality=n)[0], "nationality"), n)
+            self.assertFalse(has(check(nationality=n, guest_names="Nguyễn Văn An")[0], "nationality"), n)
 
     def test_never_blank(self):
         self.assertTrue(has(check(nationality="")[0], "nationality: never blank"))

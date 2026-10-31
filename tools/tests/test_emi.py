@@ -354,8 +354,8 @@ class FollowUpRowsTest(unittest.TestCase):
         rows = appended(http)
         self.assertEqual([(r["company"], r["channel_type"], r["ezfolio_group_code"], r["adults"],
                            r["rate_per_night_vnd"], r["Payment 1"]) for r in rows],
-                         [("Công ty TEST Travel", "TA", "30255", "4", "2000000", "4000000"),
-                          ("Công ty TEST Travel", "TA", "30255", "4", "2300000", "4000000")])
+                         [("Công ty TEST Travel", "TA", "30255", "4", "2000000", "2539683"),
+                          ("Công ty TEST Travel", "TA", "30255", "4", "2300000", "1460317")])
         self.assertTrue(any("blanks copied from row 3" in x for x in lines))
 
     def test_change_without_its_own_notes_and_rate_refused(self):

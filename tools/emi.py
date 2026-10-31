@@ -508,7 +508,60 @@ def verify_appended(sheet, records):
                       f"before writing again, never append twice")
 
 
+def split_payments(data, out=print):
+    """A slip in `booking` is one payment for the whole booking: each room row gets its share by total_vnd (the
+    rounding on the first row) and its own Remaining amount. Tracy 31/10, Footprint 141C0127Y rows 845-847: the
+    15,825,000 slip was on all three rows, three times what was paid. A share given per room line stays."""
+    if not isinstance(data, dict) or len(data.get("room_lines") or []) < 2:
+        return data
+    shared, lines = data.get("booking") or {}, data["room_lines"]
+    pays = [p for p in ("Payment 1", "Payment 2") if not _blank(shared.get(p))
+            and all(_blank(line.get(p)) for line in lines)]
+    if not pays:
+        return data
+    totals = [str(line.get("total_vnd") or "").strip() for line in lines]
+    if not all(t.isdigit() and int(t) > 0 for t in totals):
+        raise Refused(f"{pays[0]} {shared[pays[0]]} is one slip for {len(lines)} room rows: give every room line its "
+                      f"total_vnd so the slip can be shared out, or write each room line's share in {pays[0]}")
+    totals = [int(t) for t in totals]
+    lines = [dict(line) for line in lines]
+    for p in pays:
+        amount = str(shared[p]).strip()
+        if not amount.isdigit():
+            raise Refused(f"{p}: VND digits only, not {amount!r}")
+        shares = [int(amount) * t // sum(totals) for t in totals]
+        shares[0] += int(amount) - sum(shares)
+        for line, s in zip(lines, shares):
+            line[p] = str(s)
+            line[f"{p} date + time"] = line.get(f"{p} date + time") or shared.get(f"{p} date + time", "")
+    for line, t in zip(lines, totals):
+        line["Remaining amount"] = str(t - sum(int(line[p]) for p in ("Payment 1", "Payment 2")
+                                               if str(line.get(p) or "").isdigit()))
+    out(f"{' + '.join(pays)} shared out over the {len(lines)} room rows by total_vnd: "
+        + "; ".join(f"{line.get('room_code') or '?'} " + " / ".join(line[p] for p in pays)
+                    + f", remaining {line['Remaining amount']}" for line in lines))
+    drop = set(pays) | {f"{p} date + time" for p in pays}
+    return {**data, "booking": {k: v for k, v in shared.items() if k not in drop}, "room_lines": lines}
+
+
+def _rooms(rows):
+    return sum(int(r["rooms"]) if str(r.get("rooms") or "").strip().isdigit() else 1 for r in rows)
+
+
+def rooms_still_booked(rows, ref):
+    """Rooms of the booking not cancelled yet: the last booking email's rooms minus the CANCEL rows after it.
+    Tracy 31/10, Sobiesiak 5714547701: two SynXis numbers (003106, 003107), one cancel email each; the first
+    CANCEL made the second one look like a duplicate."""
+    mine = [r for r in rows if _parts(r.get("booking_ref")) & _parts(ref)]
+    last = max((i for i, r in enumerate(mine) if r.get("action") != "CANCEL"), default=None)
+    if last is None:
+        return 0
+    return _rooms(booking_state(mine[:last + 1], ref)) - _rooms(
+        [r for r in mine[last + 1:] if r.get("action") == "CANCEL"])
+
+
 def sheet_append(sheet, data, out=print, live=None):
+    data = split_payments(data, out)
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
@@ -553,8 +606,10 @@ def sheet_append(sheet, data, out=print, live=None):
                               f"copied from the old rows. The build tool copies only the latest CHANGE row's notes "
                               f"into the Notice: notes 1-8 in full, rate fields as the booking now stands "
                               f"(tour operator: to-price)")
-        if rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL":
-            # 2026-10-27: operators' cancel notices for bookings already closed as declined on request
+        if (rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL"
+                and rooms_still_booked(rows if booking_state(rows, ref) else elsewhere, ref) <= 0):
+            # 2026-10-27: operators' cancel notices for bookings already closed as declined on request.
+            # A booking with rooms still open (one of two SynXis numbers cancelled) takes the next CANCEL.
             raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
                           f"{state[0].get('received_at', '')}): no second CANCEL row; mark the email done")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):

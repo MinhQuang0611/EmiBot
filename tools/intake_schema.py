@@ -6,6 +6,7 @@ This file holds only what code can check: which columns are per booking or per r
 allowed values, formats, and the required-field rule from the Rules tab.
 """
 import re
+import unicodedata
 import urllib.parse
 from datetime import datetime
 
@@ -177,6 +178,30 @@ def _notes_problems(rec, g):
     if want:
         return [f"notes: item 1 should " + " and ".join(want) + f", e.g. {NOTES_EXAMPLE}"]
     return []
+
+
+def _vat_line_problems(g):
+    """Item 8 carries the VAT details from invoice_details: Tracy 31/10, Footprint rows 845-847 had MST
+    0101148059 in invoice_details and item 7 but '8. VAT invoice: record booking code 141C0127Y'."""
+    lines = [x.strip() for x in g("notes").splitlines() if x.strip()]
+    tax_ids = re.findall(r"\b\d{10}(?:-\d{3})?\b", g("invoice_details"))
+    if len(lines) != NOTES_ITEMS or not tax_ids or all(t in lines[7] for t in tax_ids):
+        return []
+    return [f"notes: item 8 is the VAT line from invoice_details — '8. VAT invoice: {g('invoice_details')}' "
+            f"(company, MST {tax_ids[0]}, address, invoice email)"]
+
+
+VN_SURNAMES = set("nguyen tran le pham hoang huynh phan vu vo dang bui do ho ngo duong ly truong dinh lam mai "
+                  "trinh doan luong cao ha quach ta thai tang chau la luu ton kieu lai mac to au quan van thi minh anh "
+                  "thanh ngoc huu duc quang tuan huong linh hai hung dung hoa lan phuong thu trang hien".split())
+
+
+def _foreign_names(names):
+    """True when the names hold a real name and not one Vietnamese name part (diacritics stripped)."""
+    plain = "".join(c for c in unicodedata.normalize("NFD", names) if unicodedata.category(c) != "Mn")
+    words = set(re.findall(r"[a-z]+", plain.lower().replace("đ", "d"))) - {"tba", "guest", "guests", "adult",
+                                                                            "adults", "of", "child", "mr", "mrs", "ms"}
+    return bool(words) and not words & VN_SURNAMES
 
 
 def _blank(v):
@@ -373,6 +398,21 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
 
     if action in ("NEW", "CHANGE") and g("notes"):
         warnings += _notes_problems(rec, g)
+    if not built and g("notes"):
+        # Tracy 31/10, row 870: '1 adults' went into the EZFOLIO Notice
+        for word in re.findall(r"\b1 (adults|children|rooms|nights|guests)\b", g("notes")):
+            errors.append(f"notes: '1 {word}' — write '1 {word[:-3] if word == 'children' else word[:-1]}'")
+        errors += _vat_line_problems(g)
+    # Tracy 31/10, row 868: MG's "REMINDER - AGIN… does not have Hotel Confirmation" is MG's own chaser to enter
+    # the confirmation number on its site, not a booking email (booking-intake.md, "One email, one set of rows")
+    if action in ("NEW", "CHANGE") and re.match(r"\s*REMINDER\b.*Hotel Confirmation", g("source_email"), re.I):
+        errors.append("source_email: an MG 'REMINDER - … does not have Hotel Confirmation' is no row — a report "
+                      "line (the confirmation number goes in on MG's site); done <id> \"MG reminder\"")
+    if g("nationality") == NATIONALITY_FALLBACK and not built and _foreign_names(g("guest_names")):
+        # Tracy 31/10, rows 860-861: NISAR KHAN, HAROON OMAR went in as Vietnam; Rules tab: infer from the names
+        errors.append(f"nationality: {NATIONALITY_FALLBACK} for {g('guest_names')!r} — no Vietnamese name in "
+                        f"it. Vietnam is only for no clue at all: infer the country from the names (Khan, Omar, "
+                        f"Malik → Pakistan; Kim → South Korea), or from the guest's earlier rows")
     # dev 30/10: the live sheet writes COD with every row (645 of 818), as text
     if "COD" in rec and action in ("NEW", "CHANGE", "CANCEL") and not built and not g("COD"):
         # rows already on the sheet from before 30/10: a warning
