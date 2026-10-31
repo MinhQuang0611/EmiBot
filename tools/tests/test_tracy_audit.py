@@ -116,7 +116,7 @@ class SheetWithoutTracyStatusTest(unittest.TestCase):
         header = ["action", "booking_ref", "ezfolio_group_code", "pdf_link"]
         sh, http = self.sheet(header)
         sh.append_rows([{"action": "NEW", "booking_ref": "X1", "tracy_status": "Pending"}])
-        call = next(c for c in http.calls if ":append" in c[1])
+        call = next(c for c in http.calls if c[0] == "PUT")
         self.assertEqual(call[2]["values"], [["NEW", "X1", "", ""]])
 
     def test_ez_columns_never_written(self):

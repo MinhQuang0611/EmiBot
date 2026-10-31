@@ -127,17 +127,38 @@ class IntakeSheetTest(unittest.TestCase):
         sh, http = sheet_with([])
         sh.append_rows([{"booking_ref": "SB-1", "company": "Sao Bien", "action": "NEW"}])
         method, url, body = http.calls[-1]
-        self.assertIn(":append?valueInputOption=RAW", url)
+        self.assertEqual(method, "PUT")
+        self.assertIn("!A3:", url)
+        self.assertIn("?valueInputOption=RAW", url)
         row = body["values"][0]
         self.assertEqual(row[:3], ["NEW", "SB-1", "Sao Bien"])
         self.assertEqual(row[HEADER.index("tracy_status")], "Pending")
 
     def test_append_goes_after_the_last_row_not_after_a_blank_one(self):
         sh, http = sheet_with([["NEW", "SB-1"], [], ["CHANGE", "AN-2"]])  # data rows 3, (blank 4), 5
+        sh.append_rows([{"booking_ref": "SB-3", "action": "NEW"}, {"booking_ref": "SB-3", "action": "NEW"}])
+        method, url, _ = http.calls[-1]
+        url = urllib.parse.unquote(url)
+        self.assertEqual(method, "PUT")
+        self.assertIn(f"!A6:{col_letter(len(HEADER) - 1)}7?", url)
+        self.assertNotIn(":append", url)
+
+    def test_append_starts_in_column_a_below_a_row_with_only_ez_cells(self):
+        # 31/10: the build tool's ez_* cells on the last row made values.append start at ez_note (BB)
+        ez_only = [""] * (len(HEADER) - 1) + ["2026-10-31T03:00:54"]
+        sh, http = sheet_with([["NEW", "SB-1"], ez_only])
         sh.append_rows([{"booking_ref": "SB-3", "action": "NEW"}])
-        url = urllib.parse.unquote(http.calls[-1][1])
-        self.assertIn("!A5:", url)
-        self.assertIn(":append?", url)
+        method, url, body = http.calls[-1]
+        self.assertIn("!A5:", urllib.parse.unquote(url))
+        self.assertEqual(body["values"][0][:2], ["NEW", "SB-3"])
+
+    def test_append_grows_the_grid_when_full(self):
+        sh, http = sheet_with([["NEW", "SB-1"]], extra_rules=[("GET", "fields=sheets.properties", {"sheets": [
+            {"properties": {"title": "Intake", "sheetId": 77, "gridProperties": {"rowCount": 3}}}]})])
+        sh.append_rows([{"booking_ref": "SB-3", "action": "NEW"}, {"booking_ref": "SB-4", "action": "NEW"}])
+        grow = next(c[2] for c in http.calls if c[1].endswith(":batchUpdate"))
+        self.assertEqual(grow["requests"][0]["appendDimension"], {"sheetId": 77, "dimension": "ROWS", "length": 2})
+        self.assertEqual(http.calls[-1][0], "PUT")
 
     def test_append_rejects_unknown_and_build_tool_columns(self):
         sh, _ = sheet_with([])

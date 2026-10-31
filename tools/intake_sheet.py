@@ -155,15 +155,29 @@ class IntakeSheet:
             else:
                 rec = {k: v for k, v in rec.items() if k != "tracy_status"}
             values.append(self._to_values(rec))
-        # Anchored on the last data row, not A1: from A1 Sheets takes the first "table", which on the live sheet
-        # ended at a blank row (then 139), so rows were inserted mid-sheet and every row below moved down (30/10).
+        # Written to explicit cells A<n>:<last><m> below the last filled row, never with values.append: append
+        # guesses a "table" from the anchor and starts at that table's first column. From A1 it stopped at a blank
+        # row (139, 30/10, rows inserted mid-sheet); anchored on a row where the build tool had filled only ez_*,
+        # it started at ez_note (BB), so every row from 872 on went 53 columns right, was never read back, and
+        # each retry wrote it again (31/10).
         last = col_letter(len(self.header) - 1)
         filled = self.call("GET", f"{self.base}/values/{self._range(f'A{FIRST_DATA_ROW}:{last}')}").get("values", [])
-        anchor = f"A{FIRST_DATA_ROW + len(filled) - 1}:{last}{FIRST_DATA_ROW + len(filled) - 1}" if filled else "A1"
-        return self.call("POST",
-                         f"{self.base}/values/{self._range(anchor)}:append"
-                         f"?valueInputOption={self.value_input}&insertDataOption=INSERT_ROWS",
+        start = FIRST_DATA_ROW + len(filled)
+        end = start + len(values) - 1
+        self._ensure_rows(end)
+        return self.call("PUT",
+                         f"{self.base}/values/{self._range(f'A{start}:{last}{end}')}"
+                         f"?valueInputOption={self.value_input}",
                          body={"values": values})
+
+    def _ensure_rows(self, row_number):
+        """Grow the tab's grid when a write would go past its last row (values.update refuses to)."""
+        meta = self.call("GET", f"{self.base}?fields=sheets.properties")
+        props = next((s["properties"] for s in meta.get("sheets", []) if s["properties"]["title"] == self.tab), {})
+        have = props.get("gridProperties", {}).get("rowCount", row_number)
+        if have < row_number:  # no size given: leave the grid alone, the write itself says if it doesn't fit
+            self.call("POST", f"{self.base}:batchUpdate", body={"requests": [{"appendDimension": {
+                "sheetId": props["sheetId"], "dimension": "ROWS", "length": row_number - have}}]})
 
     def update_cells(self, row_number, fields):
         """Update named cells on one row, leaving every other cell as it is."""

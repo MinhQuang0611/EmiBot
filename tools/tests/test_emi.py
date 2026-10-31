@@ -146,7 +146,7 @@ def real_sheet(data_rows=(), codes=True):
             store[i][col - 1] = d["values"][0][0]
         return {}
 
-    rules = [("POST", ":append", append), ("POST", "values:batchUpdate", batch),
+    rules = [("PUT", "?valueInputOption=", append), ("POST", "values:batchUpdate", batch),
              ("GET", "!1:1", {"values": [REAL_HEADER]}), ("GET", "!A3:", lambda _: {"values": [list(r) for r in store]})]
     if codes:
         rules.insert(0, ("GET", "Room codes", {"values": ROOM_CODES}))
@@ -155,7 +155,7 @@ def real_sheet(data_rows=(), codes=True):
 
 
 def appended(http):
-    call = next((c for c in http.calls if ":append" in c[1]), None)
+    call = next((c for c in http.calls if c[0] == "PUT"), None)
     return None if call is None else [dict(zip(REAL_HEADER, v)) for v in call[2]["values"]]
 
 
