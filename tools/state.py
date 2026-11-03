@@ -122,6 +122,9 @@ class State:
         entry = self.data["confirmations"].pop(key, None)
         if entry:
             self.data["drafts"].pop(entry.get("draft_id"), None)
+            for n, r in self.data["reviews"].items():
+                if r.get("draft_id") == entry.get("draft_id") and r.get("status") in (REVIEW_OPEN, "approved"):
+                    self.close_review(n, "gone", "forget-confirmation: a person deleted it")
         return entry is not None
 
     def confirmation_drafted(self):

@@ -17,7 +17,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
-    python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N]
+    python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N] [--replaces N]
                                                           # reply all by default, To and Cc kept
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi draft-attach <draft_id> <file>
@@ -518,7 +518,7 @@ def split_payments(data, out=print):
     pays = [p for p in ("Payment 1", "Payment 2") if not _blank(shared.get(p))
             and all(_blank(line.get(p)) for line in lines)]
     if not pays:
-        return data
+        return _split_remaining(data, out)
     totals = [str(line.get("total_vnd") or "").strip() for line in lines]
     if not all(t.isdigit() and int(t) > 0 for t in totals):
         raise Refused(f"{pays[0]} {shared[pays[0]]} is one slip for {len(lines)} room rows: give every room line its "
@@ -540,8 +540,29 @@ def split_payments(data, out=print):
     out(f"{' + '.join(pays)} shared out over the {len(lines)} room rows by total_vnd: "
         + "; ".join(f"{line.get('room_code') or '?'} " + " / ".join(line[p] for p in pays)
                     + f", remaining {line['Remaining amount']}" for line in lines))
-    drop = set(pays) | {f"{p} date + time" for p in pays}
+    drop = set(pays) | {f"{p} date + time" for p in pays} | {"Remaining amount"}
     return {**data, "booking": {k: v for k, v in shared.items() if k not in drop}, "room_lines": lines}
+
+
+def _split_remaining(data, out=print):
+    """A `Remaining amount` in `booking` with no slip is what is left on the whole booking: each room row gets its
+    share by total_vnd. Audit 03/11, PMQ Loan1107TUS rows 1090-1091: 12,450,000 left on the booking, written on
+    both room rows."""
+    shared, lines = data["booking"] or {}, data["room_lines"]
+    left = str(shared.get("Remaining amount") or "").strip()
+    if not left or not all(_blank(line.get("Remaining amount")) for line in lines):
+        return data
+    totals = [str(line.get("total_vnd") or "").strip() for line in lines]
+    if not left.isdigit() or not all(t.isdigit() and int(t) > 0 for t in totals):
+        raise Refused(f"Remaining amount {left} is for the whole booking: give every room line its total_vnd so it "
+                      f"can be shared out, or write each room line's own Remaining amount")
+    totals = [int(t) for t in totals]
+    shares = [int(left) * t // sum(totals) for t in totals]
+    shares[0] += int(left) - sum(shares)
+    lines = [dict(line, **{"Remaining amount": str(s)}) for line, s in zip(lines, shares)]
+    out(f"Remaining amount {left} shared out over the {len(lines)} room rows by total_vnd: "
+        + "; ".join(f"{line.get('room_code') or '?'} {line['Remaining amount']}" for line in lines))
+    return {**data, "booking": {k: v for k, v in shared.items() if k != "Remaining amount"}, "room_lines": lines}
 
 
 def _rooms(rows):
@@ -612,6 +633,18 @@ def sheet_append(sheet, data, out=print, live=None):
             # A booking with rooms still open (one of two SynXis numbers cancelled) takes the next CANCEL.
             raise Refused(f"booking_ref {ref!r} is already cancelled (row {state[0]['_row']}, "
                           f"{state[0].get('received_at', '')}): no second CANCEL row; mark the email done")
+    if rows is not None and any(r.get("action") == "CHANGE" and any(r.get(p) for p in schema.PAYMENT)
+                                for r in records):
+        # Audit 03/11, PMQ Loan1107TUS row 1097: the balance slip went on the DLX-SV row only and the TPL-SV row
+        # dropped out of the booking. A payment changes no room: the CHANGE repeats every room type.
+        ref0 = records[0].get("booking_ref")
+        state = booking_state(rows, ref0) or booking_state(elsewhere, ref0)
+        left_out = sorted({r.get("room_code") for r in state if r.get("action") != "CANCEL" and r.get("room_code")}
+                          - {r.get("room_code") for r in records})
+        if left_out:
+            raise Refused(f"{ref0}: a payment CHANGE repeats every room type of the booking; {', '.join(left_out)} "
+                          f"missing ({_where(state[0])}). One room_lines entry per room type, the slip in `booking` "
+                          f"(shared out by total_vnd)")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
         ref0 = records[0].get("booking_ref")
         records = carry_over(records, booking_state(rows, ref0) or booking_state(elsewhere, ref0), out=out)
@@ -783,6 +816,8 @@ GAP = re.compile(r"\[[^\]\n]*(?:to confirm|xác nhận)[^\]\n]*\]", re.I)
 # Tracy audit 29/10: the uncertain part of a best-answer draft is named in one first line, bold red in Outlook.
 CHECK_LINE = re.compile(r"^\[CHECK BEFORE SENDING:[^\]\n]+\]$")
 KAREN = re.compile(r"\bKaren\b", re.I)
+HTML_TAG = re.compile(r"</?(?:p|br|b|i|u|div|span|table|tr|td|th|ul|ol|li|strong|em|a|font|html|body|h[1-6])\b[^>]*>",
+                      re.I)
 
 
 def check_no_gaps(text, message_id="<message_id>"):
@@ -804,6 +839,11 @@ def check_no_gaps(text, message_id="<message_id>"):
     if KAREN.search(text):
         raise Refused("the draft names Karen: never put Karen's name in a draft (Tracy audit 29/10). The sign-off "
                       "is Reservations Team; an internal note says 'khách sạn' / 'sales'.")
+    tags = sorted(set(HTML_TAG.findall(text)))
+    if tags:
+        # Audit 03/11, Midzio: tags written into the text showed as '<br>' in the email
+        raise Refused(f"the text has HTML tags ({', '.join(tags)}): write plain text — a blank line for a new "
+                      f"paragraph, '• ' for a list, **label** for bold; the HTML is made from it")
 
 
 def reply_all_default(args, to):
@@ -819,7 +859,7 @@ def draft_reply(mail, st, args, tg=None, out=print):
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
-    note_pending_same(st, "reply", args.kind, args.ref, to, out=out)
+    older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
@@ -827,12 +867,14 @@ def draft_reply(mail, st, args, tg=None, out=print):
         st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
         out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
             + _to_line(to, cc))
+        close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
     d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to))
     out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    close_replaced(mail, st, tg, older, n, out=out)
     return d
 
 
@@ -860,6 +902,47 @@ def note_pending_same(st, how, kind, ref, to, out=print):
         out(f"NOTE: {', '.join('#' + n for n in older)} still pending for {ref} ({how}, {kind}). If this draft "
             f"replaces it, say in the report: 'deny {', '.join('#' + n for n in older)}, replaced by the new one'")
     return older
+
+
+def _replaces(args):
+    return [_review_n(x) for x in re.split(r"[,\s]+", getattr(args, "replaces", "") or "") if x.strip()]
+
+
+def check_one_open_draft(mail, st, how, kind, ref, to, source, replaces):
+    """Audit 03/11: three Odeon drafts for one booking, and an old 'not received yet' reply sent after the new
+    decision. A guest or agency gets one open draft per booking (or per email when there is no ref): an older one
+    still waiting or accepted but unsent is refused unless the new one replaces it (--replaces N)."""
+    if kind not in GUEST_KINDS + ("reply", "decline"):
+        return []
+    lower = {a.lower() for a in to or []}
+    older = []
+    for n, r in st.data["reviews"].items():
+        if r.get("status") not in (REVIEW_OPEN, "approved") or r.get("how") not in ("reply", "new"):
+            continue
+        same = (r.get("ref") or "") == ref if ref else r.get("source") == source
+        if not same or r.get("kind") != kind or (lower and not lower & {a.lower() for a in r.get("to") or []}):
+            continue
+        if review.in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
+            st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+            continue
+        older.append(n)
+    unnamed = [n for n in older if n not in replaces]
+    if unnamed:
+        names = ", ".join("#" + n for n in unnamed)
+        raise Refused(f"{names} ({kind}, {ref or 'same email'}) is still in Drafts or waiting on Telegram. One open "
+                      f"draft per booking: if this one replaces it, add --replaces {','.join(unnamed)} (the old one "
+                      f"goes to Deleted Items); if it says the same thing, don't write it again. Answering a "
+                      f"second email of the same booking: one draft that answers both, --replaces the old one")
+    stray = [n for n in replaces if n not in older]
+    if stray:
+        raise Refused(f"--replaces {', '.join('#' + n for n in stray)}: not an open {kind} draft for "
+                      f"{ref or 'this email'}")
+    return older
+
+
+def close_replaced(mail, st, tg, older, n, out=print):
+    for old in older:
+        review.replaced(mail, st, tg, old, n, out=out)
 
 
 def draft_forward(mail, st, args, tg=None, out=print):
@@ -939,9 +1022,10 @@ def load_availability(out=print):
         return None
 
 
-AVAILABILITY_GAP_NEXT = ("AVAILABILITY NOT CHECKED: write the row as the email asks, with 'availability: not checked "
-                         "– Future Availability sheet not readable' in missing_info, and carry on with the run "
-                         "(mark-scanned as usual); one line for Karen at the top of the report")
+AVAILABILITY_GAP_NEXT = ("AVAILABILITY NOT CHECKED: a direct booking — write the row as the email asks, with "
+                         "'availability: not checked – Future Availability sheet not readable' in missing_info, and "
+                         "carry on with the run (mark-scanned as usual); one line for Karen at the top of the report. "
+                         "TA, OTA and B2B bookings need no check (Karen, 04/11)")
 
 
 def run_availability(args, data, out=print):
@@ -1111,6 +1195,25 @@ def check_operator_confirmation(body, ref="", group=""):
                       f"{', '.join(missing)}. No draft made.")
 
 
+CANCEL_WORDS = re.compile(r"cancel|hủy|huỷ|отмен|аннул", re.I)
+DAYS = re.compile(r"(\d{1,3})\s*(?:days?|ngày|дн|сут)", re.I)
+
+
+def _cancellation_days(text):
+    return {int(m.group(1)) for line in re.split(r"[\n.;]", text or "") if CANCEL_WORDS.search(line)
+            for m in DAYS.finditer(line)}
+
+
+def check_cancellation_days(body, pdf_text):
+    """Audit 03/11: the email said free cancellation 7 days before arrival, the EZFOLIO PDF 3 days. The PDF is the
+    booking as built: the email's cancellation days are the PDF's."""
+    said, built = _cancellation_days(body), _cancellation_days(pdf_text)
+    if said and built and not said <= built:
+        raise Refused(f"the email gives cancellation {', '.join(f'{d} days' for d in sorted(said - built))} but the "
+                      f"EZFOLIO PDF says {', '.join(f'{d} days' for d in sorted(built))}: write the PDF's terms. If "
+                      f"the PDF is wrong, it goes to Karen (ask-karen), no draft. No draft made.")
+
+
 def confirmation_check(row):
     """The text check for this row's confirmation: tour operator or agency/guest."""
     if row.get("channel_type") == "Tour operator":
@@ -1162,10 +1265,11 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
                           f"\"{odeon['confirm_subject'].format(ref=ref.split('/')[0].strip())}\" "
                           f"--attach Invoice_<ref>.pdf (invoice-data {ref})")
     extra = read_pdfs(attach)
-    _, name, mime, data = pdf_fetch(sheet, args.row, out=out)
+    path, name, mime, data = pdf_fetch(sheet, args.row, out=out)
     if mime != "application/pdf":
         raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                       f"exported from EZFOLIO. No draft made.")
+    check_cancellation_days(body, attachments.extract_text(path, data))
     files = [(name, data, "application/pdf")] + extra
     if subject:
         to, cc = new_recipients(args)
@@ -1174,6 +1278,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         to, cc = reply_recipients(mail, args, "confirmation")
         args.all = reply_all_default(args, to)
         how = "reply"
+    older = check_one_open_draft(mail, st, how, "confirmation", ref, to, args.message_id, _replaces(args))
     # kept on the review so a Rewrite is checked the same way
     meta = {"operator": company if r.get("channel_type") == "Tour operator" else "",
             "group": r.get("ezfolio_group_code", "")}
@@ -1185,6 +1290,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation")
         out(f"confirmation draft #{n} sent to Telegram for review with {len(files)} PDF(s), not in Outlook until "
             f"Accept: {review.PENDING}{n}")
+        close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
     if how == "new":
         d = mail.create_new_draft(to, subject, body, cc=cc)
@@ -1198,6 +1304,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
                       attachments=[f[0] for f in files])
     st.data["reviews"][n].update(meta)
     out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc))
+    close_replaced(mail, st, tg, older, n, out=out)
     return d
 
 
@@ -1210,6 +1317,7 @@ def draft_new(mail, st, args, tg=None, out=print):
     check_no_gaps(text, args.message_id)
     to, cc = new_recipients(args)
     files = read_pdfs(args.attach)
+    older = check_one_open_draft(mail, st, "new", args.kind, args.ref, to, args.message_id, _replaces(args))
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="new", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, to=to, cc=cc, files=files,
@@ -1217,6 +1325,7 @@ def draft_new(mail, st, args, tg=None, out=print):
         st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
         out(f"new email draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
             + _to_line(to, cc))
+        close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
     d = mail.create_new_draft(to, args.subject, text, cc=cc)
     for fname, fdata, ctype in files:
@@ -1225,6 +1334,7 @@ def draft_new(mail, st, args, tg=None, out=print):
     n = review.opened(mail, st, tg, d["id"], how="new", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, to=to, cc=cc, attachments=[f[0] for f in files])
     out(f"new email draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    close_replaced(mail, st, tg, older, n, out=out)
     return d
 
 
@@ -1463,6 +1573,7 @@ def parser():
                             "inquiry, request")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
+        s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
     s = sub.add_parser("quote", help="price a stay and suggest rooms from the TA or direct-guest table")
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
@@ -1493,6 +1604,7 @@ def parser():
     _recipient_args(s)
     s.add_argument("--subject", default="", help="a new email with this subject instead of a reply (Odeon)")
     s.add_argument("--attach", action="append", default=[], help="another PDF to attach, e.g. our proforma invoice")
+    s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("draft-new", help="a new email, not a reply (Odeon decline)")
     s.add_argument("message_id", help="the email this is about")
     s.add_argument("to", help="comma-separated addresses")
@@ -1501,6 +1613,7 @@ def parser():
     s.add_argument("--kind", default="reply", help="decline, reply, forward …")
     s.add_argument("--ref", default=""); s.add_argument("--row", default="")
     s.add_argument("--attach", action="append", default=[], help="a PDF to attach")
+    s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("to-info", help="a tour operator's steps and what differs for it")
     s.add_argument("operator")
     s = sub.add_parser("to-price", help="price a tour operator booking from its own contract")

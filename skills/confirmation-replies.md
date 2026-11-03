@@ -19,6 +19,8 @@ Use the templates in `email-templates.md`. They are built from confirmations alr
 ## Before drafting — check the PDF against the row
 Open the PDF from the Drive confirmations folder (`1UDpbCxxj2EiIy_YSWK5CI4JRECVu-A3P`) and check: group code, agency, confirmation number, room type, dates, number of rooms, rate, surcharges (each printed once), grand total. If anything differs from the row or the original email, stop and report it to Karen. I never fix, regenerate, or edit a PDF.
 
+**Not a mismatch (Karen, 04/11):** the build tool's `ez_note` "hết STD, xếp phòng hạng DLX-SV; hợp đồng vẫn ghi STD" — the booked type was full and the guests sit in a higher room inside EZFOLIO. The PDF and the confirmation say the booked type; the placement is never mentioned to the agency or guest. An old `availability: DOES NOT FIT` in a TA row's `missing_info` (written before 04/11) doesn't hold the confirmation either.
+
 ## New booking
 Reply on the original thread, in the sender's language. Include:
 - Confirmation number and group code.
@@ -27,6 +29,8 @@ Reply on the original thread, in the sender's language. Include:
 - **Deposit:** 50% due within 48 hours of receiving the confirmation, written as an exact date and time, "Vietnam time (UTC+7)" (Vietnamese email: "giờ Việt Nam, UTC+7"). Remaining 50% due 7 days before check-in, also as an exact date. Use the contract's terms instead if the agency has its own.
 - Bank details for payment, exactly as in `email-templates.md` (taken from confirmations already sent).
 - The original confirmation PDF attached, unaltered.
+- **Cancellation terms exactly as the PDF prints them** (audit 03/11: the email said 7 days, the EZFOLIO PDF 3 days). `draft-confirmation` reads the PDF and refuses an email whose cancellation days aren't the PDF's. If the PDF itself looks wrong (not the agency's contract), no draft: `ask-karen`.
+- **One confirmation per booking**, not one per room row: a booking of several room types has one PDF and one email. `draft-confirmation` refuses a second one while the first is still in Drafts; a new PDF after a change → `--replaces <n>`.
 
 ## Change
 Same thread. State what changed (old → new), the new total, and attach the new PDF. Say plainly that it replaces the earlier confirmation.

@@ -6,7 +6,7 @@ import unittest
 from tools import intake_schema as schema
 
 NOTES = ("1. Booking.com – Ref 92777EF002985\n2. AbdolAziz Yary – UZB\n3. 22/10/2026 – 24/10/2026\n"
-         "4. 1 Standard Garden – 1 adult, 0 children\n5. Non-smoking room\n"
+         "4. 1 Standard Garden – 1 adult, 0 children, BB\n5. Non-smoking room\n"
          "6. 1,408,000 × 1 room × 2 nights = 2,816,000\n7. Invoice: prepaid on Booking.com\n8. No VAT info")
 ROW = {"action": "NEW", "received_at": "22/10/2026 13:40", "property": "HAYA", "channel_type": "OTA",
        "source_email": "SynXis Res Confirmed (92777EF002985 )", "company": "Booking.com",

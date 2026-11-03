@@ -16,17 +16,21 @@
 - English, agency: `Dear Ms. [Name],` · `Dear Mr. [Name] and [Agency] team,` · `Dear [Agency] team,` · a desk: `Dear Rezlive Confirmations Team,` / `Dear Anex Reservation Team,`
 - Guest: `Dear Ms [Surname],` / `Dear Mr. [Surname],` · title unknown: `Dear Ms/Mr [Surname],` · no usable name: `Dear Guest,` / `Kính gửi Quý khách,`
 - **Never guess chị/anh or Ms./Mr.** Use one only when the thread shows it (signature title, how they write about themselves, an earlier HAYA email to them). Otherwise `Kính gửi anh/chị [Tên],` and `Anh/Chị vui lòng…`; English `Dear [Name],`.
+- **The name is the person who wrote the email I'm answering**: the signature of the latest message in the thread, not the first one and not the booking's `contact_person` (audit 03/11, Travel Concierge: the greeting named the colleague who sent the booking, while accounting had written the latest email). An accounts desk with no name → `Kính gửi Phòng Kế toán [Đại lý],` / `Dear [Agency] Accounts Team,`.
 
 **Opening line — one sentence, thanking them for what they just did**
 - Vietnamese: `HAYA Hotel Phu Quoc, Trademark Collection by Wyndham xin (chân thành) cảm ơn [chị / Quý Đối tác / Quý Công ty] đã [gửi booking cho khách sạn / gửi ủy nhiệm chi / phản hồi / quan tâm và liên hệ với khách sạn].`
 - English, booking: `Thank you for choosing HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.` · desks and enquiries: `Greetings from HAYA Hotel Phu Quoc, Trademark Collection by Wyndham, and thank you for your email.` · guests: `Thank you for your message.` / `Thank you for your email.`
 - Then straight into the answer. Never restate their email back to them.
+- **Never ask for what the thread or the sheet already has** (audit 03/11: number of guests and a phone number asked again). Before any ask, look in the whole thread, the attachments and the booking's rows; ask only for what is in none of them.
 
 **Voice**
 - Vietnamese, to a partner or guest: the hotel is `Khách sạn` ("Khách sạn xin xác nhận…", "Khách sạn đã chuyển…"). `HAYA` only inside the full name in the opening line. Internal mail (accounting, front office): `em`, `nhờ chị`.
 - English: `we`.
 - Requests are one sentence: `Chị vui lòng gửi giúp khách sạn danh sách tên khách và quốc tịch của đoàn.` / `Please send us the guest names when available.`
 - Not in HAYA's mail: "Please be informed that", "We would like to inform you", "Kindly note", "I hope this email finds you well", emoji.
+- **A no or a condition is said warmly, never bare** (audit 03/11, the airport pick-up replies to Serena and Mark Cleary read as curt). One sentence of thanks or understanding before it, what we *can* do right after it, and `please` / `vui lòng` on every ask: `Thank you for sharing your flight details. Airport pick-up is complimentary for one way on stays over USD 250; for your booking it is VND 200,000 one way, and we would be happy to arrange it.` — not `Pick-up is not free for your booking. It costs 200,000.`
+- **What is left to pay comes from the row, never from memory**: the booking's `COD` and `Remaining amount`, and for an OTA notes item 7. If they disagree with each other, or say both "prepaid" and "collect at hotel", the reply says nothing about payment and the question goes to Karen (audit 03/11: Jimit Gathani was told "nothing to pay" while his row showed 7,387,200 left).
 
 **Closing line — one sentence, fitted to the reader**
 - Guest coming: `We look forward to welcoming you.` / `…welcoming you and your family to HAYA Hotel Phu Quoc.` / `We wish you a safe trip and look forward to seeing you soon.`

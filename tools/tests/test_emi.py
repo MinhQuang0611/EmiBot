@@ -165,7 +165,7 @@ BOOKING = {"action": "NEW", "received_at": "15/10/2026 11:56", "source_email": "
            "departure": "22/11/2026", "nights": "2", "status": "Tentative", "priority": "Normal",
            "missing_info": "Full guest names; adults per room"}
 NOTES8 = ("1. Công ty TEST Travel – Ref TEST-1510\n2. Nguyễn Văn Test – VNM\n3. 20/11/2026 – 22/11/2026\n"
-          "4. 2 Deluxe Seaview – 4 adults, 0 children\n5. None\n6. 2,000,000 × 2 nights × 2 rooms = 8,000,000\n"
+          "4. 2 Deluxe Seaview – 4 adults, 0 children, BB\n5. None\n6. 2,000,000 × 2 nights × 2 rooms = 8,000,000\n"
           "7. Invoice: agency pays by transfer\n8. No VAT info")
 DLX = {"room_code": "DLX-SV", "rooms": "2", "adults": "4", "meal_plan": "BB", "rate_source": "TA card",
        "rate_per_night_vnd": "2000000", "Average rate per night after discount": "2000000", "total_vnd": "8000000",
@@ -291,7 +291,9 @@ class SheetCommandsTest(unittest.TestCase):
             emi.sheet_update(sh, 3, {"arrival": "20-11-2026"}, out=lambda *_: None)
         lines = []
         with tempfile.TemporaryDirectory() as d:
-            emi.sheet_update(sh, 3, {"guest_names": "Nguyễn Văn Test; Trần Thị Test"}, work_dir=d, out=lines.append)
+            emi.sheet_update(sh, 3, {"guest_names": "Nguyễn Văn Test; Trần Thị Test",
+                                     "notes": NOTES8.replace("2. Nguyễn Văn Test –", "2. Nguyễn Văn Test; Trần Thị Test –")},
+                             work_dir=d, out=lines.append)
             backups = os.listdir(os.path.join(d, "sheet-backup"))
         self.assertTrue(any("values:batchUpdate" in c[1] for c in http.calls))
         self.assertIn("read back OK", lines[-1])

@@ -89,8 +89,8 @@ class ReplyAllTest(Base):
                             out=self.lines.append)
         self.assertTrue(self.st.data["reviews"]["1"]["reply_all"])
         self.assertEqual(self.mail._meta(d["id"])["to"][0], "sim-guest-kr@example.com")
-        d = emi.draft_reply(self.mail, self.st, args(self.body(GOOD), message_id="sim-01-request", sender_only=True),
-                            out=self.lines.append)
+        d = emi.draft_reply(self.mail, self.st, args(self.body(GOOD), message_id="sim-01-request", sender_only=True,
+                                                     replaces="1"), out=self.lines.append)
         self.assertFalse(self.st.data["reviews"]["2"]["reply_all"])
 
 

@@ -191,6 +191,52 @@ def _vat_line_problems(g):
             f"(company, MST {tax_ids[0]}, address, invoice email)"]
 
 
+# Audit 03/11: the build tool copies notes 1-8 into the EZFOLIO Notice word for word, so what is for Karen or
+# accounting (a dispute, "verify", "pending reconciliation") reached front office. That goes in internal_notes
+# or missing_info.
+INTERNAL_WORDS = re.compile(r"\b(verify|verification|dispute[sd]?|complain(?:s|ed|ts?)?|Karen|sign-off|approval|"
+                            r"asks? whether|asked whether|needs? (?:checking|confirmation|approval)|not opened|"
+                            r"inferred|pending accounting|reconciliation)\b", re.I)
+MEAL_WORDS = re.compile(r"\b(BB|RO|HB|FB|AI|breakfast|room only|ăn sáng)\b", re.I)
+# Jimit Gathani, live row 1093: '6. … Hotel collects' and '7. OTA prepaid; no payment due at hotel' on one row,
+# and the guest was told there was nothing to pay
+COLLECT_WORDS = re.compile(r"collect(?:s|ed)? at (?:the )?(?:hotel|property)|hotel collects|"
+                           r"pay(?:s|ment)? at (?:the )?(?:hotel|property)", re.I)
+PREPAID_WORDS = re.compile(r"\bprepaid\b|no payment due|nothing (?:to pay|due)", re.I)
+NOT_A_NAME = re.compile(r"^(?:(?:\d+\s+)?(?:guests?|adults?|child(?:ren)?)\b.*|.*\bTBA\b.*)$", re.I)
+
+
+def _notice_problems(rec, g, canon):
+    """The notes as they land in the EZFOLIO Notice (audit 03/11)."""
+    lines = [x.strip() for x in g("notes").splitlines() if x.strip()]
+    if len(lines) != NOTES_ITEMS:
+        return []  # the 8-item format is warned about in _notes_problems
+    errors = []
+    hits = sorted({m.group(0) for line in lines for m in INTERNAL_WORDS.finditer(line)}, key=str.lower)
+    if hits:
+        errors.append(f"notes: {', '.join(repr(h) for h in hits)} — the notes go into the EZFOLIO Notice that front "
+                      f"office reads. A dispute, a question for Karen, what to verify or what accounting still "
+                      f"checks goes in internal_notes (or missing_info), not in items 1-8")
+    if not MEAL_WORDS.search(lines[3]):
+        errors.append(f"notes: item 4 names the meal plan, e.g. '4. 1 Deluxe Seaview – 2 adults, 0 children, "
+                      f"{g('meal_plan') or 'BB'}'")
+    names = [n.strip() for n in g("guest_names").split(";") if n.strip() and not NOT_A_NAME.match(n.strip())]
+    missing = [n for n in names if n.lower() not in lines[1].lower()]
+    if missing:
+        errors.append(f"notes: item 2 has every guest named in guest_names, ';' between — missing "
+                      f"{'; '.join(missing)}")
+    if canon == "Booking.com" and re.search(r"\bnet\b|what Booking\.com pays", lines[5], re.I):
+        errors.append("notes: item 6 on a Booking.com row is the guest total ('Booking.com guest total 2,462,400 × "
+                      "3 nights × 1 room = 7,387,200 VND'), not a net — Booking.com's commission is billed monthly")
+    money = " ".join([g("notes"), g("COD"), g("prepaid")])
+    if COLLECT_WORDS.search(money) and PREPAID_WORDS.search(money):
+        errors.append(f"notes/COD: say both that the hotel collects ({COLLECT_WORDS.search(money).group(0)!r}) and "
+                      f"that it is prepaid ({PREPAID_WORDS.search(money).group(0)!r}). One of them: the OTA notice's "
+                      f"payment line decides; not stated → missing_info 'payment: prepaid or collect at hotel not "
+                      f"stated' and the reply says nothing about what is left to pay")
+    return errors
+
+
 VN_SURNAMES = set("nguyen tran le pham hoang huynh phan vu vo dang bui do ho ngo duong ly truong dinh lam mai "
                   "trinh doan luong cao ha quach ta thai tang chau la luu ton kieu lai mac to au quan van thi minh anh "
                   "thanh ngoc huu duc quang tuan huong linh hai hung dung hoa lan phuong thu trang hien".split())
@@ -444,6 +490,8 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
         if g("Remaining amount") not in ("", "0"):
             errors.append(f"Remaining amount: {g('Remaining amount')} on a CANCEL row — write 0 (nothing more to pay; "
                           "a charge goes in Cancellation Amount / notes item 6)")
+    if action in ("NEW", "CHANGE") and not built and g("notes"):
+        errors += _notice_problems(rec, g, canon)
     avg, rooms, nights, total = (g("Average rate per night after discount"), g("rooms"), g("nights"), g("total_vnd"))
     extra = g("Surcharge amount") or "0"
     if all(x.isdigit() for x in (avg, rooms, nights, total)) and re.fullmatch(r"-?\d+", extra):

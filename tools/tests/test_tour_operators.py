@@ -176,8 +176,8 @@ class OperatorChangeRowTest(unittest.TestCase):
 
     def test_change_with_rate_and_notes_written(self):
         sh, http = real_sheet([sheet_row(**ODEON_BOOKING, pdf_link="https://drive.google.com/built")])
-        notes = "\n".join(["1. Odeon – Ref TEST-OD-4609701", "2. TEST GUEST – RUS", "3. 21/11/2026 – 23/11/2026",
-                           "4. 2 Deluxe Sea View – 4 adults, 0 children", "5. None",
+        notes = "\n".join(["1. Odeon – Ref TEST-OD-4609701", "2. Nguyễn Văn Test – Vietnam", "3. 21/11/2026 – 23/11/2026",
+                           "4. 2 Deluxe Sea View – 4 adults, 0 children, BB", "5. None",
                            "6. Odeon contract: 2,200,000 × 2 night(s) = 4,400,000; = 4,400,000, BB, incl. tax",
                            "7. Invoice: Odeon pays under its contract", "8. No VAT info"])
         line = {"room_code": "DLX-SV", "rate_source": "Odeon contract", "rate_per_night_vnd": "2200000",

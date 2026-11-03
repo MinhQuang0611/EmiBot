@@ -294,6 +294,21 @@ def deny(mail, st, tg, n, reason="", by="", out=print):
     out(msg)
 
 
+def replaced(mail, st, tg, n, by_n, out=print):
+    """An older draft the new #by_n replaces: out of Drafts and closed, even if already accepted, so it can't be
+    sent after the new decision (audit 03/11: the 'not received yet' reply to chị Lai went out at 11:18)."""
+    n, r = st.review(n)
+    if r["status"] not in (REVIEW_OPEN, "approved"):
+        return
+    if in_outlook(r) and mail.get_draft(r["draft_id"]) is not None:
+        mail.delete_draft(r["draft_id"])
+    st.close_review(n, "replaced", f"by #{by_n}")
+    _done_waiting(st, n)
+    msg = f"#{n} đã thay bằng #{by_n}: draft cũ chuyển vào Deleted Items, đừng gửi bản cũ."
+    _mark(tg, r, esc(msg))
+    out(msg)
+
+
 def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     n, r = _pending(mail, st, n)
     if check:

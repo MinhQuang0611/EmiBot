@@ -17,7 +17,7 @@ from tools import config, emi, precheck, sim
 from tools import intake_schema as schema
 from tools.sim_mail import SimMail
 from tools.state import State
-from tools.tests.test_emi import BOOKING, DLX, REAL_HEADER, appended, real_sheet
+from tools.tests.test_emi import BOOKING, DLX, REAL_HEADER, TPL, appended, real_sheet
 from tools.tests.test_intake_consistency import check, has
 from tools.tests.test_replies import GOOD
 from tools.tests.test_tools import mail_with
@@ -74,14 +74,45 @@ class NoFrontOfficeForwardTest(SimBase):
 class PendingSameDraftTest(SimBase):
     """F-10: #183, #185, #188 — three replies on one booking all left pending."""
 
-    def test_second_reply_names_the_older_one(self):
+    def test_second_reply_refused_unless_it_replaces_the_older_one(self):
+        # audit 03/11 replaces F-10's note: three Odeon drafts, an old reply sent after the new decision
         a = dict(message_id="sim-01-request", all=False, kind="request", ref="TEST-REF-1", row="", to="", cc="",
                  internal=False)
+        old = emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **a), out=self.lines.append)
+        with self.assertRaisesRegex(emi.Refused, "#1 .*--replaces 1"):
+            emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **a), out=self.lines.append)
+        with self.assertRaisesRegex(emi.Refused, "--replaces #7"):
+            emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), replaces="1,7", **a),
+                            out=self.lines.append)
+        emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), replaces="1", **a),
+                        out=self.lines.append)
+        self.assertEqual(self.st.data["reviews"]["1"]["status"], "replaced")
+        self.assertIsNone(self.mail.get_draft(old["id"]))  # out of Drafts, can't be sent by mistake
+        self.assertEqual(self.st.data["reviews"]["2"]["status"], "pending")
+
+    def test_accepted_but_unsent_draft_counts_too(self):
+        a = dict(message_id="sim-01-request", all=False, kind="request", ref="TEST-REF-2", row="", to="", cc="",
+                 internal=False)
         emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **a), out=self.lines.append)
-        self.assertFalse(any(x.startswith("NOTE:") for x in self.lines))
+        self.st.close_review("1", "approved", "Karen")
+        with self.assertRaisesRegex(emi.Refused, "#1"):
+            emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **a), out=self.lines.append)
+
+    def test_other_booking_or_kind_not_blocked(self):
+        a = dict(message_id="sim-01-request", all=False, kind="request", ref="TEST-REF-3", row="", to="", cc="",
+                 internal=False)
         emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **a), out=self.lines.append)
-        self.assertTrue(any(x.startswith("NOTE: #1 still pending for TEST-REF-1") for x in self.lines))
-        self.assertEqual(self.st.data["reviews"]["1"]["status"], "pending")  # nothing changed, only said
+        emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **dict(a, ref="TEST-REF-4")),
+                        out=self.lines.append)
+        emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD), **dict(a, kind="cancellation")),
+                        out=self.lines.append)
+
+    def test_html_tags_refused(self):
+        a = dict(message_id="sim-01-request", all=False, kind="request", ref="TEST-REF-5", row="", to="", cc="",
+                 internal=False)
+        with self.assertRaisesRegex(emi.Refused, "HTML tags"):
+            emi.draft_reply(self.mail, self.st, SimpleNamespace(body=self.body(GOOD.replace("\n\n", "<br><br>", 1)),
+                                                                **a), out=self.lines.append)
 
 
 class ChangeArrivalTest(unittest.TestCase):
@@ -208,3 +239,91 @@ class AvailabilityUnreadableTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def hit(items, needle):
+    return any(needle in x for x in items)
+
+
+class Audit0311RowTest(unittest.TestCase):
+    """Audit 03/11: what landed in the EZFOLIO Notice (Jimit Gathani 1093, Travel Concierge 1119, Booking.com 1099),
+    and the PMQ Loan1107TUS payment rows 1090-1091 and 1097."""
+
+    def notes(self, items=None):
+        base = {1: "Booking.com – Ref Booking.com 5010113979 / SynXis 92777EF002898", 2: "JIMIT GATHANI – India",
+                3: "04/11/2026 – 07/11/2026", 4: "1 Quadruple – 4 adults, 0 children, BB", 5: "Arrival about 15:30",
+                6: "Booking.com guest total 2,462,400 × 3 nights × 1 room = 7,387,200 VND",
+                7: "Invoice: prepaid by Booking.com", 8: "No VAT info"}
+        base.update(items or {})
+        return "\n".join(f"{k}. {v}" for k, v in sorted(base.items()))
+
+    def row(self, **kw):
+        r = dict(schema_row(), company="Booking.com", channel_type="OTA", rate_source="Booking.com guest total",
+                 booking_ref="Booking.com 5010113979 / SynXis 92777EF002898", guest_names="JIMIT GATHANI; guest TBA",
+                 notes=self.notes())
+        r.update(kw)
+        return schema.check_row(r)[0]
+
+    def test_clean_row_passes(self):
+        self.assertFalse(hit(self.row(), "notes"))
+
+    def test_internal_words_refused(self):
+        self.assertTrue(hit(self.row(notes=self.notes(
+            {7: "Payment slip 11,400,000 VND, pending accounting reconciliation"})), "internal_notes"))
+        self.assertTrue(hit(self.row(notes=self.notes({5: "Guest disputes the price; verify the total"})),
+                            "internal_notes"))
+
+    def test_meal_plan_in_item_4(self):
+        self.assertTrue(hit(self.row(notes=self.notes({4: "1 Quadruple – 4 adults, 0 children"})), "item 4"))
+
+    def test_every_guest_in_item_2(self):
+        names = "MR IBADULLA DAMIR; MR SEREDA YEVGENIY"
+        self.assertTrue(hit(self.row(guest_names=names, notes=self.notes({2: "MR IBADULLA DAMIR – Russia"})),
+                            "missing MR SEREDA YEVGENIY"))
+        self.assertFalse(hit(self.row(guest_names=names, notes=self.notes({2: f"{names} – Russia"})), "item 2"))
+
+    def test_booking_com_item_6_not_net(self):
+        net = "Net 2,176,000 × 4 nights × 1 room = 8,704,000 VND (what Booking.com pays the hotel)"
+        self.assertTrue(hit(self.row(notes=self.notes({6: net})), "guest total"))
+        # every other OTA writes the net
+        self.assertFalse(hit(self.row(company="Agoda", rate_source="OTA net", booking_ref="Agoda 1793076340",
+                                      notes=self.notes({1: "Agoda – Ref Agoda 1793076340", 6: net})), "guest total"))
+
+    def test_collect_and_prepaid_on_one_row_refused(self):
+        self.assertTrue(hit(self.row(notes=self.notes({6: "Booking.com guest total 7,387,200 VND. Hotel collects",
+                                                         7: "OTA prepaid; no payment due at hotel"})), "prepaid"))
+        self.assertFalse(hit(self.row(COD="N/A (Booking.com – card guarantee, collect at hotel)",
+                                      notes=self.notes({7: "Invoice: Booking.com – card guarantee, collect at hotel"})),
+                             "prepaid"))
+
+
+class Audit0311PaymentRowsTest(unittest.TestCase):
+    def test_remaining_for_the_booking_shared_over_room_rows(self):
+        data = {"booking": {"Remaining amount": "12450000"},
+                "room_lines": [{"room_code": "DLX-SV", "total_vnd": "18000000"},
+                               {"room_code": "TPL-SV", "total_vnd": "6900000"}]}
+        out = emi.split_payments(data, out=lambda *_: None)
+        left = [int(x["Remaining amount"]) for x in out["room_lines"]]
+        self.assertEqual(sum(left), 12450000)
+        self.assertEqual(left, [9000000, 3450000])
+        self.assertNotIn("Remaining amount", out["booking"])
+
+    def test_payment_change_repeats_every_room_type(self):
+        built = dict(BOOKING, pdf_link="https://drive.google.com/built", missing_info="", ezfolio_group_code="28655")
+        sh, http = real_sheet([[built.get(h, DLX.get(h, "")) for h in REAL_HEADER],
+                               [built.get(h, TPL.get(h, "")) for h in REAL_HEADER]])
+        change = dict(BOOKING, action="CHANGE", received_at="03/11/2026 09:20", what_changed="Balance paid",
+                      missing_info="", **{"Payment 1": "12450000", "Payment 1 date + time": "02/11/2026 10:00"})
+        with self.assertRaisesRegex(emi.Refused, "repeats every room type.*TPL"):
+            emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
+        self.assertFalse(appended(http))
+
+
+class CancellationDaysTest(unittest.TestCase):
+    def test_email_days_must_be_the_pdfs(self):
+        pdf = "Cancellation policy: free cancellation up to 3 days before arrival."
+        with self.assertRaisesRegex(emi.Refused, "7 days.*PDF says 3 days"):
+            emi.check_cancellation_days("Free cancellation until 7 days before arrival.", pdf)
+        emi.check_cancellation_days("Free cancellation until 3 days before arrival.", pdf)
+        emi.check_cancellation_days("Hủy miễn phí trước 3 ngày.", pdf)
+        emi.check_cancellation_days("Thank you for your booking.", pdf)  # no terms in the email: nothing to compare
