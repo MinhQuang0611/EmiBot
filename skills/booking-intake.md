@@ -189,7 +189,12 @@ An OTA writing "Could you please reconfirm and share the hotel confirmation numb
 - OTA: the amount that reaches the hotel's bank. Booking.com = full guest total (commission settled monthly). Expedia/SynXis = the net payment amount: the **"Remittance amount"** line, ÷ nights ÷ rooms for the rate — never "Total Cost with Tax" or the "Expedia Net Rate" per night shown above it (Choong, 2026-10: 5,561,400 = 1,853,800 × 3, not 6,045,000).
 - TA booking whose rate field says "Promotion", "as contract", "TA rate" or has no number: the TA card rate for that room and season (`quote`), `rate_source` TA card, the voucher's word in notes item 6. Not blank (Viet Ban Mai SI781659A: Superior Double Pool View, November → 1,900,000).
 - Average rate = total after promos ÷ nights.
-- **If the rate in the email and the rate table disagree, I don't pick one. I flag it to Karen.**
+- **The email gives no price → the rate table, never a blank rate** (dev, 2026-11-04, rows 1059, 1152, 1153). `sheet-check` refuses a blank.
+  - TA: `quote`. Tour operator: `to-price`. Direct guest: `quote --channel Direct`.
+  - **OTA or bedbank whose voucher hasn't come (MG, say): there is no OTA table, so the TA card stands in, as a provisional figure:** `quote --arrival … --departure … --adults <n> --rooms <n> --room-type <code>`, no Indian +20%. `rate_source` Other; notes item 6 `TA card rate, provisional, no price from <OTA> yet: <rate> × <nights> nights × <rooms> rooms = <total> VND`; `missing_info` `<OTA> voucher not received: rate is the TA card, provisional`.
+  - The OTA's own figure arrives → it replaces the provisional one: `sheet-update` before the build, a CHANGE row after, `rate_source` OTA net. The table figure is not what the OTA pays (row 1059: TA card 2,000,000, EZFOLIO 1,744,200).
+  - Blank only when no table has the room (TW-DLX, APT on an OTA booking): `REQUIRED blank: rate_per_night_vnd – no rate table for <room>`. Fun and Sun: as above.
+- **If the rate in the email and the rate table disagree, I don't pick one. I flag it to Karen.** An OTA's own figure is the exception: it is what the OTA pays.
 
 ## Cancellations — the charge
 Every CANCEL row carries (dev, 2026-10-30, live sheet columns):

@@ -321,6 +321,14 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
             if _blank(rec.get(k)) and k not in note:
                 errors.append(f"{k}: required on a {action} row. Fill it, or write "
                               f"'REQUIRED blank: {k} – <reason>' in missing_info")
+        # dev 04/11, rows 1059, 1152, 1153: an email without a price is no reason for a blank rate
+        priceable = not any(_blank(rec.get(k)) for k in ("room_code", "arrival", "departure"))
+        if (priceable and _blank(rec.get("rate_per_night_vnd")) and not is_built(rec)
+                and "fun and sun" not in str(rec.get("company")).lower() and "no rate table" not in note.lower()):
+            errors.append("rate_per_night_vnd: the email gives no price, so it comes from the rate table "
+                          "(booking-intake.md, Rates): TA and OTA quote, tour operator to-price, direct quote --channel "
+                          "Direct. Blank only when no table has this room: 'REQUIRED blank: rate_per_night_vnd – no rate "
+                          "table for <room>' in missing_info")
     if action in ("CHANGE", "CANCEL"):
         if _blank(rec.get("what_changed")):
             errors.append(f"what_changed: required for {action} (CANCEL: the reason)")

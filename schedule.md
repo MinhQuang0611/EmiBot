@@ -1,14 +1,14 @@
 # Emi — scheduled jobs
 
-Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Switched on (dev, 2026-10-22): job 1 only, 24/7, on real mail.** A watcher (OpenClaw command automation "Emi mail watcher", every minute, no model) runs `tools.watch`, and new mail in sales@ starts job 1 (automation "Emi job 1 - inbox", isolated session, report to the dev's Telegram) within a minute or two. Job 1 also runs every 3 hours as a safety net. **Live from the evening of 2026-10-30 (dev):** rows go straight onto the live intake sheet, drafts straight into Outlook Drafts, each with a Telegram notice; Karen's Accept is her approval and a person presses Send (`skills/telegram-review.md`). **Built 2026-11-04, on once the dev adds the automations below: jobs 2 and 3.** Job 4 is not switched on. All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
+Drafted by Monica 2026-10-08, times for jobs 1–3 set by Karen the same day. **Switched on (dev, 2026-10-22): job 1 only, 24/7, on real mail.** A watcher (OpenClaw command automation "Emi mail watcher", every minute, no model) runs `tools.watch`, and new mail in sales@ starts job 1 (automation "Emi job 1 - inbox", isolated session, report to the dev's Telegram) within a minute or two. Job 1 also runs every 3 hours as a safety net. **Live from the evening of 2026-10-30 (dev):** rows go straight onto the live intake sheet, drafts straight into Outlook Drafts, each with a Telegram notice; Karen's Accept is her approval and a person presses Send (`skills/telegram-review.md`). **Jobs 2 and 3 on since 2026-11-04 (dev).** Job 4 is not switched on. All times are Vietnam time: set the scheduler's timezone to `Asia/Ho_Chi_Minh` (on a server running UTC, subtract 7 hours).
 
 Runs every day including weekends — agencies email on Saturdays and Sundays.
 
 | # | Job | Cron (Vietnam time) | Runs |
 |---|---|---|---|
 | 1 | Inbox scan | watcher + every 3 h | On new mail, within a minute or two |
-| 2 | Confirmation drafts | `30 7-21 * * *` command check, starts the job when there is work | Hourly, no model when quiet |
-| 3 | Payments | `0 8,15 * * *`, plus `5 7-21 * * *` command check for a reminder due | 08:00 and 15:00, and hourly when a reminder falls due |
+| 2 | Confirmation drafts | `30 7-21 * * *` command check, starts the job when there is work; the job itself also at 22:00 | Hourly, no model when quiet |
+| 3 | Payments | `0 8,15 * * *`, plus `35 7-21 * * *` command check for a reminder due | 08:00 and 15:00, and hourly when a reminder falls due |
 | 4 | Daily report to Karen | `30 21 * * *` | 21:30 |
 
 ## 1. Inbox scan
@@ -65,19 +65,19 @@ Skills: `confirmation-replies.md`, `email-templates.md`.
 Hourly because this is the step the agency is waiting on. It does nothing on a run where no row has changed.
 
 ### Job 2 — the commands (confirmation for one row)
-**Automation, set up with the dev:** "Emi job 2 - confirmations" (isolated agent run, report to the dev's Telegram) and a command job `30 7-21 * * *` Asia/Ho_Chi_Minh: `sh -lc 'cd /data/emi && .venv/bin/python -m tools.precheck confirmations && openclaw automations run <job 2 id> || true'`.
+**Automations:** "Emi job 2 - confirmations" `571e5a23-…` (isolated agent run, 22:00, report to Telegram) and "Emi confirmation check" (command job, `30 7-21 * * *` Asia/Ho_Chi_Minh, no model when quiet): `tools.precheck confirmations`, and on work `openclaw automations run <job 2 id>`.
 
 0. `py -m tools.emi confirmations-due` → every TA, direct and tour operator booking built since 30/10 with no mail from sales@ carrying its group code. The first **5**; the rest wait for the next run. `py -m tools.emi mail-find <ref>` gives the original email's id (a booking sent in by front office: the reply still goes to the operator or agency).
-1. `py -m tools.emi pdf-fetch <row>` → the PDF behind `pdf_link`, saved, its text printed next to the row. Compare every date, room, rate and total. Mismatch → report to Karen, stop for this booking.
+1. `py -m tools.emi pdf-fetch <row>` → the PDF behind `pdf_link`, saved, its text printed next to the row. Compare every date, room, rate and total, **against all the booking's rows together** (`confirmations-due` lists them with their total): one PDF covers every room type, so a single row's total never matches it (Threeland, 04/11, a false alarm). A real mismatch → report to Karen, stop for this booking, and `py -m tools.emi confirmation-hold <ref> <row> "<what differs>"`, so the hourly check doesn't bring it back: a new PDF on the row does. An Odeon or Crystal Bay booking waiting on its invoice: the same; `confirmation-hold <ref> 0 --clear` when the invoice is ready.
 2. Write the confirmation text (`skills/email-templates.md`, sender's language, deposit deadline as exact date, time and "Vietnam time (UTC+7)") to `emi-work/out/<ref>-confirmation.txt`.
 3. `py -m tools.emi draft-confirmation <message_id of the agency's email> <row> emi-work/out/<ref>-confirmation.txt` → reply draft on the agency's thread with the PDF attached. It refuses a row with no `pdf_link`, a file that isn't a PDF, and a booking that already has a confirmation draft.
 4. Tour operators (`skills/tour-operators.md`): no deposit block. Odeon and Crystal Bay need our invoice first (`py -m tools.emi invoice-data <ref>`; the template isn't connected, so a person makes the PDF — until it is in `emi-work/out/`, report "chờ invoice <ref>"). Odeon: a new email, `--to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation <ref>" --attach emi-work/out/Invoice_<ref>.pdf`. Report line for Odeon: Confirm on the extranet still to be pressed.
 
 ## 3. Payments — `0 8,15 * * *`, and whenever a reminder falls due
-**Automation, set up with the dev:** "Emi job 3 - payments" (isolated agent run at 08:00 and 15:00, report to the dev's Telegram) and a command job `5 7-21 * * *` Asia/Ho_Chi_Minh: `sh -lc 'cd /data/emi && .venv/bin/python -m tools.precheck payments && openclaw automations run <job 3 id> || true'`, because the 40-hour mark can land at any hour. The 21:00 run also takes any 40-hour mark falling before the 07:00 run.
+**Automations:** "Emi job 3 - payments" `6353f4da-…` (isolated agent run at 08:00 and 15:00, report to Telegram) and "Emi payment check" (command job, `35 7-21 * * *` Asia/Ho_Chi_Minh, no model when quiet): `tools.precheck payments`, and on work `openclaw automations run <job 3 id>`, because the 40-hour mark can land at any hour. Minute 35, so it doesn't start a second run on top of the 08:00 or 15:00 one. The 21:35 run also takes any 40-hour mark falling before the 07:35 run.
 
 ### Job 3 — the commands
-1. `py -m tools.emi payments-due`. One line per booking, each `REMIND` / `READ FIRST` with its `draft-reply` command.
+1. `py -m tools.emi payments-due`. One line per booking, each `REMIND` / `READ FIRST` with its `draft-reply` command. No `END payments-due` line = the command hadn't finished: run it again on its own. Never read an empty output as "nothing due" (04/11, first run).
 2. `READ FIRST`: `show` the mail it names. A slip → job 1's payment step, no reminder. Not a slip → the reminder.
 3. `REMIND`, the first **5**, soonest arrival first; the rest wait for the next run: `show <id>` for the thread's language and greeting, write the reminder (`skills/email-templates.md` 4a) from the line's numbers to the file it names, run its `draft-reply` as printed, one command per shell call. A first reminder marked `LATE` still goes.
 4. Report: reminders drafted by number, then `OVERDUE`, `SHORT NOTICE`, `NO CONFIRMATION FOUND` and `PAID, REMINDER STILL IN DRAFTS` lines as printed, in Vietnamese. Nothing is cancelled and no cancellation notice is drafted.

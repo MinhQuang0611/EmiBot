@@ -95,16 +95,19 @@ def _list(recipients):
     return [r["emailAddress"]["address"] for r in recipients or [] if r.get("emailAddress", {}).get("address")]
 
 
-def find_confirmation(mail, code, mailbox):
+def find_confirmation(mail, code, mailbox, parts=()):
     """{id, sent_at, to, cc, slips} for the first mail sales@ sent with this group code, or None. slips = what the
-    agency has sent since with an attachment, which may be a payment the sheet doesn't show yet."""
+    agency has sent since with an attachment, which may be a payment the sheet doesn't show yet. The code may be only
+    in the PDF (Anex 112970549, 04/11: the mail search finds it there, the body doesn't have it): then the mail must
+    have an attachment and name the booking (parts = its reference numbers)."""
     hits = [m for m in mail.search(code, top=SEARCH_TOP)]
     when = lambda m: m.get("sentDateTime") or m.get("receivedDateTime") or ""
     ours = sorted((m for m in hits if _addr(m) == mailbox.lower()), key=lambda m: (not m.get("hasAttachments"), when(m)))
     for m in ours:
         full = mail.get_message_bodies(m["id"])
-        if code not in _text(full):  # the number can match inside something else
-            continue
+        words = f"{m.get('subject', '')} {_text(full)}".lower()
+        if code not in _text(full) and not (m.get("hasAttachments") and any(p in words for p in parts)):
+            continue  # the number matched inside something else
         sent = _when(when(m))
         slips = [x["id"] for x in hits if x.get("hasAttachments") and not is_internal(_addr(x))
                  and _addr(x) != mailbox.lower() and _when(when(x)) > sent]
@@ -157,7 +160,7 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now):
             which = "deposit"
         else:
             continue
-        sent = find_confirmation(mail, code, mailbox)
+        sent = find_confirmation(mail, code, mailbox, mine)
         if sent is None:
             out["no_confirmation"].append(item)
             continue
@@ -214,9 +217,13 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
         code = _group(hits)
         if not code or not received or received < CONFIRM_FROM:
             continue
-        if find_confirmation(mail, code, mailbox) is None:
+        hold = st.data["confirmation_holds"].get(ref)
+        if hold and hold.get("pdf_link") == new.get("pdf_link"):
+            continue  # job 2 stopped on this PDF (a mismatch, an invoice awaited) and told Karen: not every hour
+        if find_confirmation(mail, code, mailbox, mine) is None:
             out.append({"ref": ref, "row": new["_row"], "company": head.get("company", ""), "group": code,
-                        "arrival": arrival, "subject": new.get("source_email", ""), "channel": channel})
+                        "arrival": arrival, "subject": new.get("source_email", ""), "channel": channel,
+                        "rows": [r["_row"] for r in state], "total": total_of(state)})
     return sorted(out, key=lambda i: i["arrival"])
 
 
@@ -269,5 +276,6 @@ def render_confirmations(items):
     out = [f"CONFIRMATIONS DUE: {len(items)} booking(s) built and never confirmed from sales@"]
     for i in items:
         out.append(f"CONFIRM | {i['channel']} | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']} | "
-                   f"arrival {i['arrival']:%d/%m/%Y} | original email: {i['subject']}")
+                   f"arrival {i['arrival']:%d/%m/%Y} | booking rows {', '.join(map(str, i['rows']))}, total "
+                   f"{money(i['total'])}: the PDF covers all of them | original email: {i['subject']}")
     return "\n".join(out)

@@ -96,6 +96,17 @@ class DirectTest(unittest.TestCase):
         self.assertEqual(o["room_total"], 3000000 * 16)  # no ROH, no +20%, no 1-night surcharge
         self.assertEqual(o["one_night_surcharge"], 0)
 
+    def test_an_ordinary_night_in_2027_has_no_holiday_gap(self):
+        # Footprint 061P0127J, 14-16/01/2027: left blank on rows 1152 and 1153 because of a warning on every 2027 night
+        text = q.render(q.quote(date(2027, 1, 14), date(2027, 1, 16), 5, alloc={"STD": 1, "TPL": 1}))
+        self.assertIn("8.000.000", text)
+        self.assertNotIn("may be a holiday", text)
+
+    def test_a_likely_holiday_in_2027_still_goes_to_karen(self):
+        for a, b in ((date(2027, 2, 5), date(2027, 2, 7)), (date(2027, 4, 25), date(2027, 4, 27)),
+                     (date(2027, 12, 30), date(2028, 1, 2))):
+            self.assertIn("may be a holiday", q.render(q.quote(a, b, 2)), a)
+
     def test_table_runs_on_past_its_printed_end_and_full_payment_in_render(self):
         # Karen 04/11, Aya Batyrova 26-30/12: "Giá thì Emi có rồi", no check on the price
         text = q.render(q.quote(date(2026, 12, 26), date(2026, 12, 30), 2, data=self.data))

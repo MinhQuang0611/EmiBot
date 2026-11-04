@@ -66,6 +66,7 @@ front office (haya@): requests go in the row's notes, which front office reads i
 Exit 0 = done, 2 = refused or failed (reason on stderr).
 """
 import argparse
+import functools
 import json
 import mimetypes
 import re
@@ -390,6 +391,8 @@ def sheet_audit(sheet, first_row=3, out=print):
     return bad
 
 
+# Cached: one payments-due over 1,060 rows made 1.1 million calls, 17 s, and the host's shell calls stop at 30 s.
+@functools.lru_cache(maxsize=None)
 def _parts(ref):
     """The reference numbers in a booking_ref, for matching. Rows written the live sheet's way name the channel
     before each number ('Booking.com 5486733008 / SynXis 92777EF003114', 'SynXis 92777EF002779 (Booking.com
@@ -400,7 +403,7 @@ def _parts(ref):
     if re.match(r"[^\d\s]+\s", ref):
         out |= {n.lower() for n in schema.ref_numbers(ref)
                 if re.search(r"[A-Za-z]", n) or len(re.sub(r"\D", "", n)) >= 6}
-    return out
+    return frozenset(out)
 
 
 def booking_state(rows, ref):
@@ -1503,6 +1506,18 @@ def run_confirmations_due(mail, sheet, st, out=print):
     return items
 
 
+def run_confirmation_hold(sheet, st, args, out=print):
+    if args.clear:
+        st.data["confirmation_holds"].pop(args.ref, None)
+        out(f"{args.ref}: back on confirmations-due")
+        return
+    if not args.reason:
+        raise Refused("say why: confirmation-hold <ref> <row> <reason>")
+    st.data["confirmation_holds"][args.ref] = {"pdf_link": _row(sheet, args.row).get("pdf_link", ""),
+                                               "reason": " ".join(args.reason)}
+    out(f"{args.ref}: held, off confirmations-due until a new PDF lands or --clear")
+
+
 def run_checkouts(sheet, args, out=print):
     if args.last_week:
         first = _monday_last_week(_today_vn())
@@ -1705,6 +1720,10 @@ def parser():
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
     sub.add_parser("payments-due", help="TA deposits and balances: reminders to draft now, overdue, never confirmed")
     sub.add_parser("confirmations-due", help="bookings built since 30/10 with no confirmation from sales@")
+    s = sub.add_parser("confirmation-hold", help="leave a booking out of confirmations-due: its PDF doesn't match, or "
+                                                 "it waits on an invoice. A new PDF on the row brings it back")
+    s.add_argument("ref"); s.add_argument("row", type=int); s.add_argument("reason", nargs="*")
+    s.add_argument("--clear", action="store_true", help="bring it back now, e.g. the invoice is ready")
     s = sub.add_parser("quote", help="price a stay and suggest rooms from the TA or direct-guest table")
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
@@ -1859,6 +1878,9 @@ def main(argv=None):
             run_payments_due(config.mail(), config.sheet(), st)
         elif c == "confirmations-due":
             run_confirmations_due(config.mail(), config.sheet(), st)
+        elif c == "confirmation-hold":
+            run_confirmation_hold(config.sheet(), st, args)
+            st.save()
         elif c == "quote":
             run_quote(args, availability=load_availability())
         elif c == "availability":

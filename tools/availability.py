@@ -46,11 +46,12 @@ def latest_haya(call, folder_id):
     none rather than guess at another file."""
     q = urllib.parse.quote(f"'{folder_id}' in parents and trashed=false "
                            "and mimeType='application/vnd.google-apps.spreadsheet'")
-    files = call("GET", f"{DRIVE}?q={q}&fields=files(id,name)&pageSize=50"
+    files = call("GET", f"{DRIVE}?q={q}&fields=files(id,name)&orderBy=createdTime%20desc&pageSize=50"
                         "&supportsAllDrives=true&includeItemsFromAllDrives=true").get("files", [])
     haya = [f for f in files if is_haya(f.get("name", "")) and window(f["name"])]
     if not haya:
         raise AvailabilityError(f"no HAYA Future Availability sheet in Drive folder {folder_id}")
+    # max keeps the first of equals: the hourly export repeats the same name, and the list is newest first
     return max(haya, key=lambda f: window(f["name"]))
 
 

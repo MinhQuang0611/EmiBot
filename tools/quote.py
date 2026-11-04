@@ -45,6 +45,18 @@ def _iso(s):
     return date.fromisoformat(s)
 
 
+# Days that may be holidays once the table's own list ends. Any other night simply takes its month's season: the
+# blanket warning on every night after 02/01/2027 left Footprint 14-16/01/2027 unpriced (rows 1152, 1153, 04/11).
+LIKELY_HOLIDAYS = ((4, 26), (4, 30), (5, 1), (9, 2), (12, 24), (12, 25), (12, 26), (12, 31), (1, 1))
+TET_2027 = (date(2027, 2, 3), date(2027, 2, 11))  # 3 days before Tết to 5 after, as in 2026 (inquiries-and-quotes.md)
+
+
+def likely_holiday(night):
+    if night.year > 2027 and night.month in (1, 2):  # Tết's date is known for 2027 only
+        return True
+    return (night.month, night.day) in LIKELY_HOLIDAYS or TET_2027[0] <= night <= TET_2027[1]
+
+
 def nights(arrival, departure, data):
     """[(night_date, season, holiday_name)], gaps."""
     if departure <= arrival:
@@ -59,10 +71,11 @@ def nights(arrival, departure, data):
         hol = next((name for a, b, name in hols if a <= d <= b), None)
         out.append((d, "holiday" if hol else by_month[d.month], hol))
         d += timedelta(days=1)
-    if any(n > known_until for n, _, _ in out):
-        gaps.append(f"holiday dates after {known_until:%d/%m/%Y} are not on the TA table: nights after that are "
-                    f"priced by the month's season. If any falls on a likely holiday (Tết, 26/4, 30/4–1/5, 2/9, "
-                    f"24–26/12, 31/12), Karen must confirm the holiday rate before quoting")
+    maybe = [n for n, _, _ in out if n > known_until and likely_holiday(n)]
+    if maybe:
+        gaps.append(f"{', '.join(f'{n:%d/%m/%Y}' for n in maybe)} may be a holiday, and holiday dates after "
+                    f"{known_until:%d/%m/%Y} are not on the table: priced by the month's season. Karen must confirm "
+                    f"the holiday rate of these nights before quoting")
     label = data.get("label", "TA table")
     if arrival < _iso(data["valid_from"]):
         gaps.append(f"arrival is before the {label} starts ({_iso(data['valid_from']):%d/%m/%Y})")
