@@ -74,7 +74,7 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 
 **Deadline passed, still nothing:** I report it to Karen. The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
 
-**A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): write the CHANGE row with the payment, forward the slip to accounting (`department-forwards.md`, `email-templates.md` 4c) and, for an agency or guest, draft the thank-you that confirms the slip (`email-templates.md` 4b) in the same run (dev, 2026-10-30). No reminder goes out. An OTA payout advice gets no thank-you (no-reply sender). If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
+**A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): write the CHANGE row with the payment, send the slip to accounting with `forward-slip` (`department-forwards.md`, `email-templates.md` 4c) and, for an agency or guest, draft the thank-you that confirms the slip (`email-templates.md` 4b) in the same run (dev, 2026-10-30). No reminder goes out. An OTA payout advice gets no thank-you (no-reply sender). If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
 
 **The accountant answers that the money didn't arrive or is short:** to Karen; nothing more to the agency until she decides. No answer means the payment is fine (Tracy's audit, 29/10).
 

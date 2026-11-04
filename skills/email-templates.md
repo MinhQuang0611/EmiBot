@@ -346,7 +346,7 @@ sales@haya-hotels.com
 
 English: `Dear [Agency] Accounts Team,` / `Thank you for sending the payment slip. We confirm receipt of your transfer slip for VND [amount] ([bank], [DD/MM/YYYY], reference "[reference]"), the [50% deposit / balance] for the following booking(s):` / `BK [ref] – Group code #[code] – [guests] ([DD/MM] – [DD/MM/YYYY]): deposit VND [amount]; balance VND [amount], due by [DD/MM/YYYY]` / `VAT invoice details noted: …` / `When paying the balance, please include your company name and the group code in the transfer reference and send us the slip.` / `Best regards,` / `Reservations Team` …
 
-### 4c. Slip forwarded to accounting (`draft-forward accountant@palmahotel.vn --kind forward`)
+### 4c. Slip forwarded to accounting (`forward-slip <id> <note> --ref R --row N`, sent at once)
 Subject: `Fw: [original subject] – UNC cọc #[mã đoàn]` (or `– UNC thanh toán #[mã đoàn]`).
 ```
 Mã đoàn: #[mã đoàn]

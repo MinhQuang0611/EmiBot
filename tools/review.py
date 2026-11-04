@@ -6,7 +6,8 @@ Two modes (EMI_DRAFT_MODE):
     outlook  -> the draft is saved in Outlook Drafts at once and the notice points at it.
 
     accept  -> the draft is in Outlook Drafts with the 'Emi approved' category. It is NOT sent: a person still
-               opens Drafts and presses Send (AGENTS.md rule 1; the mail token has no Mail.Send).
+               opens Drafts and presses Send (AGENTS.md rule 1). The one thing that goes out without this is a
+               payment slip to accounting (forward-slip): no buttons, the notice only says it went (sent()).
     deny    -> the draft is dropped (an Outlook draft goes to Deleted Items, recoverable). A denied confirmation
                or reminder is not proposed again by the next run; Rewrite is the way to correct one.
     rewrite -> the reviewer's comments, written in by Emi; same #n, version + 1, same Telegram message.
@@ -72,9 +73,10 @@ def as_email(text):
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc(text))
 
 
-def notify(tg, n, r, note="", in_place=False):
+def notify(tg, n, r, note="", in_place=False, held=""):
     """Send the notice for #n, or with in_place=True rewrite the existing one (text and buttons) so one
-    draft keeps one message. Falls back to a new message if the old one can't be edited."""
+    draft keeps one message. Falls back to a new message if the old one can't be edited. held = why a slip
+    forward was kept as a draft instead of going to accounting."""
     if tg is None:
         return None
     text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + f"\n… (nhắn: xem {n} để đọc hết)"
@@ -87,6 +89,8 @@ def notify(tg, n, r, note="", in_place=False):
         lines.append(f"<b>Đính kèm:</b> {esc(', '.join(r['attachments']))}")
     if note:
         lines.append(f"<b>Đã sửa theo:</b> {esc(note)}")
+    if held:
+        lines.append(f"<b>Chưa tự gửi:</b> {esc(held)}")
     where = ("Đã nằm trong Outlook Drafts. Accept = duyệt (vẫn phải bấm Send trong Outlook)." if in_outlook(r) else
              "Chưa có trong Outlook. Accept = lưu vào Outlook Drafts (vẫn phải bấm Send).")
     lines += ["", "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
@@ -118,16 +122,36 @@ def _mark(tg, r, note):
 # --- a new draft ---
 
 def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-           cc=None, override=False, attachments=()):
+           cc=None, override=False, attachments=(), notice=True):
     """Outlook mode: called right after the draft is saved in Outlook. Returns the review number.
-    override=True: a reply whose recipients were set by --to (the draft is rebuilt with them on rewrite)."""
+    override=True: a reply whose recipients were set by --to (the draft is rebuilt with them on rewrite).
+    notice=False: forward-slip tells Telegram itself, once it knows whether the forward went."""
     d = mail.get_draft(draft_id) or {}
     n = st.open_review(draft_id, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
                        to=_addresses(d.get("toRecipients")) or list(to or []),
                        cc=_addresses(d.get("ccRecipients")) or list(cc or []), to_override=bool(override),
                        subject=d.get("subject", ""), text=text, attachments=list(attachments), files=[])
-    notify(tg, n, st.data["reviews"][n])
+    if notice:
+        notify(tg, n, st.data["reviews"][n])
     return n
+
+
+def sent(st, tg, n):
+    """A payment slip went to accounting (forward-slip): closed as sent, a notice with nothing left to press."""
+    n, r = st.review(n)
+    st.close_review(n, "sent", "forward-slip")
+    if tg is None:
+        return
+    text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + f"\n… (nhắn: xem {n} để đọc hết)"
+    ref = f" · {r['ref']}" + (f" (dòng {r['row']})" if r.get("row") else "") if r.get("ref") else ""
+    try:
+        r["tg"] = tg.send("\n".join([f"📤 <b>#{n} — Đã chuyển kế toán{esc(ref)}</b>",
+                                     f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
+                                     f"<b>Tiêu đề:</b> {esc(r['subject'])}", "",
+                                     "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
+                                     "Đã gửi, không cần duyệt. Thư nằm trong Outlook › Sent Items."]))
+    except Exception as e:  # the forward went either way
+        r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
 
 
 def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,

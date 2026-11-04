@@ -1,6 +1,6 @@
 """Acceptance tests from openclaw-setup-brief.md, run against the real mailbox and sheet.
 
-    python -m tools.acceptance mail-login-start          # EMI_AUTH=delegated: print a sign-in code for sales@
+    python -m tools.acceptance mail-login-start [--send] # EMI_AUTH=delegated: print a sign-in code for sales@ (--send: + Mail.Send)
     python -m tools.acceptance mail-login-finish         # after signing in: save the token, then mail-read
     python -m tools.acceptance mail-read                 # test 2: 5 newest inbox emails
     python -m tools.acceptance attachments <message_id>  # test 3: list attachments of one email
@@ -38,15 +38,17 @@ def mail_read():
         print(m["receivedDateTime"], m["from"]["emailAddress"]["address"], "|", m["subject"])
 
 
-def mail_login_start():
-    config.mail().token.start()
-    print("Sign in as", config.MAILBOX, "then run: python -m tools.acceptance mail-login-finish")
+def mail_login_start(*flags):
+    # --send: also asks for Mail.Send, for payment slips to accounting (forward-slip). Karen signs in herself.
+    send = "--send" in flags
+    config.mail().token.start(send=send)
+    print("Sign in as", config.MAILBOX, "(with Mail.Send)" * send, "then run: python -m tools.acceptance mail-login-finish")
 
 
 def mail_login_finish():
     if not config.mail().token.finish():
         sys.exit("NOT YET: sign-in not finished in the browser. Finish it, then run this again.")
-    print("PASS: signed in, refresh token saved")
+    print("PASS: signed in, refresh token saved; Mail.Send:", "yes" if config.mail().token.can_send() else "no")
     mail_read()
 
 
@@ -68,7 +70,7 @@ def send_blocked():
     missing = [n for n in ("send", "send_mail", "reply", "forward") if hasattr(GraphMail, n)]
     if missing:
         sys.exit(f"FAIL: GraphMail has send-like methods {missing}")
-    print("PASS: every send endpoint is refused and GraphMail has no send method")
+    print("PASS: every send endpoint is refused; the only send is send_slip_forward, to accounting alone")
 
 
 def draft_reply(message_id):

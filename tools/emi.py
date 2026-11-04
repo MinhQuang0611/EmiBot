@@ -20,6 +20,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N] [--replaces N]
                                                           # reply all by default, To and Cc kept
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
+    python -m tools.emi forward-slip <message_id> <body.txt> [--ref R --row N]   # a payment slip to accounting: SENT at once
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
@@ -71,7 +72,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive
-from .graph_mail import is_internal
+from .graph_mail import ACCOUNTING, CHECK_LINE as CHECK_MARK, SendBlocked, clean_subject, is_internal
+from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
 from . import operator_rates as op_rates
@@ -945,9 +947,8 @@ def close_replaced(mail, st, tg, older, n, out=print):
         review.replaced(mail, st, tg, old, n, out=out)
 
 
-def draft_forward(mail, st, args, tg=None, out=print):
-    to = _addresses(args.to)
-    text = read_text(args.body)
+def check_forward(mail, st, args, to, text, out=print):
+    """What every forward must pass, drafted or sent."""
     check_no_gaps(text, args.message_id)
     sender = _sender_of(mail, args.message_id)
     if is_internal(sender) and sender.lower() in [a.lower() for a in to]:
@@ -962,6 +963,14 @@ def draft_forward(mail, st, args, tg=None, out=print):
                 and lower & {a.lower() for a in r.get("to") or []}):
             raise Refused(f"this email already has a forward to {', '.join(sorted(lower & {a.lower() for a in r['to']}))}"
                           f" (draft #{n}, {r.get('status')}): never forward twice")
+
+
+def draft_forward(mail, st, args, tg=None, out=print):
+    to = _addresses(args.to)
+    text = read_text(args.body)
+    check_forward(mail, st, args, to, text, out=out)
+    if ACCOUNTING in {a.lower() for a in to}:
+        out("NOTE: a payment slip goes with forward-slip, not draft-forward (department-forwards.md)")
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="forward", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, to=to)
@@ -974,6 +983,64 @@ def draft_forward(mail, st, args, tg=None, out=print):
     n = review.opened(mail, st, tg, d["id"], how="forward", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, to=to)
     out(f"forward draft #{n} saved in Drafts: {d['id']} (to {', '.join(to)})")
+    return d
+
+
+def send_slips():
+    """EMI_SEND_SLIPS=1 (dev, 2026-11-04): forward-slip sends. Needs Karen's Mail.Send sign-in. Off = a draft."""
+    return os.environ.get("EMI_SEND_SLIPS", "") == "1"
+
+
+def in_sent_items(mail, message_id):
+    """A forward of this email to accounting already in Sent Items, by subject, since the email arrived: a person's
+    own forward, or a run that stopped after sending. A second slip with the same subject can match too, which is
+    why this holds the forward as a draft instead of refusing it."""
+    src = mail.get_message_text(message_id)
+    subject = clean_subject(src.get("subject", "")).lower()
+    for m in mail.list_sent_since(src.get("receivedDateTime", "")):
+        to = {x["emailAddress"]["address"].lower() for x in m.get("toRecipients") or []}
+        if ACCOUNTING in to and subject in clean_subject(m.get("subject", "")).lower():
+            return True
+    return False
+
+
+def slip_hold(mail, args, text):
+    """Why this slip must wait for a person, or '' to send it. Unsure = hold: an unsent draft costs a click, a
+    wrong send can't be taken back."""
+    if CHECK_MARK.lower() in text.lower():
+        return "còn dòng [CHECK BEFORE SENDING], một người phải xem trước"
+    try:
+        if in_sent_items(mail, args.message_id):
+            return "Sent Items đã có forward cùng tiêu đề cho kế toán, kiểm tra xem có trùng không"
+    except (OSError, httpjson.HttpError) as e:
+        return f"không đọc được Sent Items ({type(e).__name__})"
+    return ""
+
+
+def forward_slip(mail, st, args, tg=None, out=print):
+    """A payment slip to accounting, sent with nobody pressing Send (dev, 2026-11-04, Karen's OK). The one exception
+    to AGENTS.md rule 1: a fixed address, no --to. Anything that stops the send leaves a normal draft in Outlook
+    with the reason on Telegram, so a slip is never lost. Always through Outlook, whatever EMI_DRAFT_MODE says."""
+    to = [ACCOUNTING]
+    text = read_text(args.body)
+    check_forward(mail, st, args, to, text, out=out)
+    auto = send_slips()
+    held = slip_hold(mail, args, text) if auto else ""
+    d = mail.forward_draft_with_text(args.message_id, to, text)
+    _record(st, d, args)
+    n = review.opened(mail, st, tg, d["id"], how="forward", source=args.message_id, kind=args.kind, ref=args.ref,
+                      row=int(args.row or 0), text=text, to=to, notice=False)
+    st.save()  # before the send: a run that stops after it must not forward the slip again
+    if auto and not held:
+        try:
+            mail.send_slip_forward(d["id"])
+            review.sent(st, tg, n)
+            out(f"forward #{n} SENT to {ACCOUNTING}, no review needed")
+            return d
+        except (SendBlocked, OSError, httpjson.HttpError) as e:
+            held = f"gửi lỗi ({type(e).__name__}: {str(e)[:120]})"
+    review.notify(tg, n, st.data["reviews"][n], held=held)
+    out(f"forward draft #{n} saved in Drafts: {d['id']} (to {ACCOUNTING})" + (f", NOT sent: {held}" if held else ""))
     return d
 
 
@@ -1524,6 +1591,8 @@ def status(st, out=print):
     out("telegram notices: " + ("on" if os.environ.get("EMI_TELEGRAM_CHAT_ID") else "off (EMI_TELEGRAM_CHAT_ID not set)"))
     out("draft mode: " + ("telegram (Outlook only on Accept)" if os.environ.get("EMI_DRAFT_MODE", "").lower() == "telegram"
                           else "outlook (saved in Drafts at once)"))
+    out("payment slips: " + (f"SENT to {ACCOUNTING} (needs Karen's Mail.Send sign-in)" if send_slips()
+                             else "drafts, a person sends"))
 
 
 def _recipient_args(s):
@@ -1555,6 +1624,12 @@ def parser():
     s = sub.add_parser("sheet-audit", help="check rows already on the sheet with the sheet-check rules")
     s.add_argument("--from-row", type=int, default=3)
     s = sub.add_parser("sheet-append"); s.add_argument("file")
+    s = sub.add_parser("forward-slip", help="a payment slip to accounting: sent at once with EMI_SEND_SLIPS=1")
+    s.add_argument("message_id")
+    s.add_argument("body", help="UTF-8 text file with the note (email-templates.md 4c)")
+    s.add_argument("--ref", default="")
+    s.add_argument("--row", default="")
+    s.set_defaults(kind="forward")
     s = sub.add_parser("sheet-update"); s.add_argument("row", type=int); s.add_argument("file")
     for name in ("draft-reply", "draft-forward"):
         s = sub.add_parser(name)
@@ -1714,6 +1789,9 @@ def main(argv=None):
             st.save()
         elif c == "draft-forward":
             draft_forward(config.mail(), st, args, tg=config.telegram())
+            st.save()
+        elif c == "forward-slip":
+            forward_slip(config.mail(), st, args, tg=config.telegram())
             st.save()
         elif c.startswith("review-"):
             run_review(config.mail(), st, config.telegram(), args)

@@ -8,6 +8,8 @@ Outlook Drafts at once, and the Telegram notice points at it. In my reports I sa
 Drafts, chờ Karen duyệt". Deny moves it to Deleted Items. Drafts #199–#217 were written before the switch and
 still live only on Telegram (`pending-<n>`); Accept puts those into Outlook as before.
 
+**A payment slip to accounting has no review (dev, 2026-11-04).** `forward-slip` sends it and its notice has no buttons: there is nothing to accept, deny or rewrite. In my reports I say "#12 đã chuyển kế toán". A notice with `Chưa tự gửi: <lý do>` is an ordinary draft with buttons.
+
 **Only Karen accepts (dev, 2026-10-30).** `review-accept` refuses anyone not in `EMI_APPROVERS` and the draft
 stays pending. `--by` is the Telegram sender's name or @username exactly as the message shows it, never a name
 I assume. A refusal is the answer: I reply with its line and don't retry under another name. Deny and Rewrite

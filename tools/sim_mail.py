@@ -15,7 +15,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from datetime import timezone
 
-from .graph_mail import reply_subject, text_to_html
+from .graph_mail import ACCOUNTING, CHECK_LINE, SendBlocked, reply_subject, text_to_html
 
 
 def _thread_key(subject):
@@ -36,6 +36,7 @@ class SimMail:
     def __init__(self, folder):
         self.folder = folder
         self.drafts = os.path.join(folder, "drafts")
+        self.sent_by_hand = []  # tests: what a person forwarded in Outlook
         self._messages = None
 
     # --- reading ---
@@ -158,7 +159,7 @@ class SimMail:
 
     def get_draft(self, draft_id):
         meta = self._meta(draft_id)
-        if meta is None or meta.get("deleted"):
+        if meta is None or meta.get("deleted") or meta.get("sent"):
             return None
         return {"id": draft_id, "subject": meta["subject"], "isDraft": True,
                 "toRecipients": [{"emailAddress": {"address": a}} for a in meta["to"]],
@@ -171,6 +172,28 @@ class SimMail:
             raise PermissionError(f"{draft_id} is no longer in Drafts")
         meta["categories"] = ["Emi", "Emi approved"]
         self._save(meta)
+
+    def send_slip_forward(self, draft_id):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted") or meta.get("sent"):
+            raise PermissionError(f"{draft_id} is no longer in Drafts")
+        if [a.lower() for a in meta["to"]] != [ACCOUNTING] or meta.get("cc"):
+            raise SendBlocked(f"{draft_id} is not addressed to {ACCOUNTING} alone; not sent")
+        if CHECK_LINE.lower() in meta.get("text", "").lower():
+            raise SendBlocked(f"{draft_id} still has its {CHECK_LINE}] line; not sent")
+        meta["sent"] = True  # kept on disk, like Outlook's Sent Items
+        self._save(meta)
+
+    def list_sent_since(self, since_iso):
+        """Sent Items: the forwards sent here, plus what a test says a person forwarded by hand."""
+        out = list(self.sent_by_hand)
+        for path in sorted(glob.glob(os.path.join(self.drafts, "*.json"))):
+            with open(path, encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("sent"):
+                out.append({"subject": meta["subject"],
+                            "toRecipients": [{"emailAddress": {"address": a}} for a in meta["to"]]})
+        return out
 
     def delete_draft(self, draft_id):
         meta = self._meta(draft_id)
