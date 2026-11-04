@@ -4,12 +4,12 @@
   "label": "direct-guest table",
   "valid_from": "2026-03-01",
   "valid_to": "2026-05-31",
-  "valid_after_end": false,
+  "valid_after_end": true,
   "currency": "VND",
   "includes": "8% VAT and card fee; in-room water, tea and coffee; wifi, pool and gym",
   "seasons_by_month": {"normal": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]},
   "holidays_from": "ta-rates.json",
-  "holidays_note": "The direct table has a 'Ngày Lễ, Tết' column but no dates: quote uses the TA table's holiday list. Karen to confirm.",
+  "holidays_note": "The direct table has a 'Ngày Lễ, Tết' column but no dates: quote uses the TA table's holiday list.",
   "rooms": [
     {"code": "STD", "name_vi": "Standard Garden", "name_en": "Standard Garden", "beds": "1×1m6", "persons": 2,
      "rates": {"normal": 2150000, "holiday": 2800000}},
@@ -33,7 +33,7 @@
     "surcharge_per_night": {"normal": 350000, "holiday": 500000}
   },
   "adult_breakfast_per_night": {"normal": 500000, "holiday": 600000},
-  "breakfast_note": "The PDF lists a breakfast surcharge but never says the room rate includes breakfast. quote assumes breakfast is included for the room's persons and a child sharing a bed pays the child breakfast surcharge. Karen to confirm.",
+  "breakfast_note": "The PDF lists a breakfast surcharge but never says the room rate includes breakfast. quote assumes breakfast is included for the room's persons and a child sharing a bed pays the child breakfast surcharge. Open with Karen: don't write 'breakfast included' in a direct reply yet. It doesn't hold the price.",
   "check_in": "14:00",
   "check_out": "12:00",
   "early_late_charges": [

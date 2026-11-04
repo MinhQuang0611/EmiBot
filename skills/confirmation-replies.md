@@ -53,12 +53,12 @@ I save the reply as a draft on the original thread in sales@haya-hotels.com and 
 No reply. The OTA confirms to the guest itself.
 
 ## Payment reminders (Karen, 2026-10-08)
-I follow up on unpaid bookings myself. Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
+I follow up on unpaid bookings myself, **TA bookings only**: `py -m tools.emi payments-due` (job 3, `schedule.md`) works out who is due and prints the draft command. Tour operators pay under their contract, OTAs are paid by the OTA, and direct guests pay 100% before check-in with no reminder rule (open with Karen). Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
 
 **"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the booking's latest row (a payment arrives as a CHANGE row). I check both before every reminder.
 
 **Deposit — 50%, due 48 hours after the client received the confirmation.**
-- The clock starts at the real sent time of the confirmation, read from the Sent folder.
+- The clock starts at the real sent time of the confirmation: the first mail from sales@ carrying the booking's group code, whoever sent it. None found → `NO CONFIRMATION FOUND`, the clock hasn't started, nothing is chased: report line. A COD that is only a date is the agreed deadline instead of the 48 hours.
 - At **40 hours** with no deposit seen → draft the deposit reminder, stating the exact deadline (time, date, Vietnam time).
 - If the 40-hour mark falls overnight, between my last run of the day and my first run the next morning, I draft the reminder at the last run before it. Waiting for morning could put it past the deadline.
 - One reminder per deadline. No second chaser unless Karen asks.
@@ -72,7 +72,9 @@ I follow up on unpaid bookings myself. Reminders are drafted from `email-templat
 
 **Agency asks to move a deadline** (deposit or balance): I never decide it. It goes to Karen as a question, at the top of the scan report (by Telegram once that channel exists). The intake row keeps the current deadline and notes the requested one as awaiting Karen. No reply to the agency until she has decided — and no holding reply either.
 
-**Deadline passed, still nothing:** I report it to Karen. The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
+**Deadline passed and no reminder ever went** (`LATE` in `payments-due`, Karen 2026-11-04: bookings went unchased from 08/10 until this was built): the one reminder still goes, with the deadline as it stood.
+
+**Deadline passed after the reminder, still nothing:** I report it to Karen (`OVERDUE`). The confirmation says the booking is released automatically, but nothing is cancelled in EZFOLIO without her OK, and I don't draft a cancellation notice on my own.
 
 **A slip arrives** (UNC, remittance, or an OTA payout advice such as Citi Paylink for Traveloka): write the CHANGE row with the payment, send the slip to accounting with `forward-slip` (`department-forwards.md`, `email-templates.md` 4c) and, for an agency or guest, draft the thank-you that confirms the slip (`email-templates.md` 4b) in the same run (dev, 2026-10-30). No reminder goes out. An OTA payout advice gets no thank-you (no-reply sender). If a reminder for that booking is still sitting unsent in Drafts, I flag it for deletion so it isn't sent by mistake.
 

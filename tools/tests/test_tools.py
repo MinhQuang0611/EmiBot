@@ -187,11 +187,6 @@ class IntakeSheetTest(unittest.TestCase):
         req = http.calls[-1][2]["requests"][0]["deleteDimension"]["range"]
         self.assertEqual((req["sheetId"], req["startIndex"], req["endIndex"]), (77, 3, 4))
 
-    def test_awaiting_confirmation_skips_drafted(self):
-        r = ["NEW", "SB-1", "", "", "", "", "", "", "", "Entered", "https://drive/x"]
-        sh, _ = sheet_with([r, r[:1] + ["AN-2"] + r[2:]])
-        self.assertEqual([x["booking_ref"] for x in sh.rows_awaiting_confirmation({("SB-1", 3)})], ["AN-2"])
-
     def test_missing_required(self):
         self.assertEqual(missing_required({"company": "A", "arrival": "1", "departure": "2",
                                            "rate_per_night_vnd": "", "room_code": "SD", "rooms": "2"}),
@@ -242,14 +237,6 @@ class PrecheckTest(unittest.TestCase):
         self.assertFalse(precheck.inbox_has_work(mail, st))
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [{"id": "a"}]})])
         self.assertTrue(precheck.inbox_has_work(mail, st))
-
-    def test_confirmations(self):
-        st = State(os.devnull + "-none")
-        r = ["NEW", "SB-1", "", "", "", "", "", "", "", "Entered", "https://drive/x"]
-        sh, _ = sheet_with([r])
-        self.assertTrue(precheck.confirmations_have_work(sh, st))
-        st.record_draft("d1", "SB-1", 3, "confirmation")
-        self.assertFalse(precheck.confirmations_have_work(sh, st))
 
 
 if __name__ == "__main__":

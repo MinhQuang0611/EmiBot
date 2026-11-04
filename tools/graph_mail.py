@@ -333,8 +333,8 @@ class GraphMail:
 
     def search(self, text, top=10):
         """Messages anywhere in the mailbox matching text (subject, body, sender), newest first."""
-        q = self._query(search=f'"{text.replace(chr(34), "")}"', select="id,subject,from,receivedDateTime,isDraft",
-                        top=str(top))
+        q = self._query(search=f'"{text.replace(chr(34), "")}"', select="id,subject,from,receivedDateTime,sentDateTime,"
+                                                                         "hasAttachments,isDraft", top=str(top))
         return [m for m in self._call("GET", f"/messages?{q}").get("value", []) if not m.get("isDraft")]
 
     def has_new_inbox_mail(self, since_iso):
@@ -412,7 +412,7 @@ class GraphMail:
         content = original[:m.end()] + ours + original[m.end():] if m else ours + original
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
 
-    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None):
+    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None, subject_suffix=""):
         """Reply draft on the sender's thread with a multi-line plain-text answer on top.
         to=[...] replaces the recipients Graph picked (createReply answers whoever sent the message, which for a
         mail forwarded in by our own front office is front office): To and Cc become exactly to / cc, and the
@@ -421,6 +421,8 @@ class GraphMail:
         fields = {"toRecipients": _recipients(to), "ccRecipients": _recipients(cc or [])} if to else {}
         if draft.get("subject") and reply_subject(draft["subject"]) != draft["subject"]:
             fields["subject"] = reply_subject(draft["subject"])
+        if subject_suffix:
+            fields["subject"] = f"{fields.get('subject') or draft.get('subject', '')} {subject_suffix}".strip()
         if fields:
             self._call("PATCH", f"/messages/{draft['id']}", body=fields)
         self._prepend_text(draft["id"], text)

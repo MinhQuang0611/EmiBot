@@ -68,7 +68,10 @@ Nguồn: FAQ "Booking confirmation (OTA)", "Payment".
 ## Đưa đón sân bay / bến tàu
 - **Đại lý (TA)**, giá 1 chiều từ `ta.md`: sân bay–Haya ngày thường 200.000 (4 chỗ) / 250.000 (7 chỗ) / 400.000 (16 chỗ); ngày lễ 300.000 / 400.000 / 650.000. Bến tàu: xem `ta.md` (cột ngày lễ in sai, ⚠ hỏi Karen). Không miễn phí.
 - **Khách lẻ / khách OTA** (FAQ "Airport pick-up (charge)", "Reservation welcome message"): sân bay 200.000 VND/chiều. Để đặt: số hiệu chuyến bay, giờ hạ cánh, số vali, số WhatsApp.
-- **Miễn phí 1 chiều cho booking trên 250 USD** (FAQ "Booking confirmation (OTA)", "Free airport pick up"): chỉ **một chiều** — đón ở sân bay khi đến **hoặc** tiễn ra sân bay khi về, khách chọn một. Đây là chính sách in sẵn của HAYA, nên Emi được nói khi khách hỏi; nhưng chỉ khi tổng booking trên row (đổi ra USD) rõ ràng trên 250 USD. Không chắc (tỷ giá, booking sát ngưỡng, không có tổng) → Karen.
+- **Miễn phí 1 chiều cho booking trên 250 USD** (FAQ "Booking confirmation (OTA)", "Free airport pick up"): chỉ **một chiều** — đón ở sân bay khi đến **hoặc** tiễn ra sân bay khi về, khách chọn một. Áp cho khách lẻ và khách OTA.
+  - **250 USD tính trên số tiền khách trả, không phải số tiền khách sạn thu về (Karen, 04/11/2026).** Không dùng `total_vnd` net của Expedia/SynXis/Agoda. Lấy, theo thứ tự: số khách tự nêu trong thư (Yan Yang Ang: SGD 352,20 ≈ USD 275, được miễn phí dù net chỉ 6.118.016 VND); tổng có thuế trên voucher / thông báo SynXis (`internal_notes`, "SynXis total with tax"); `total_vnd` của Booking.com (đã là tổng khách trả).
+  - Đổi ra USD: khách đã tự đổi thì dùng số đó. Tiền VND: từ 6.750.000 trở lên là trên ngưỡng, dưới 6.000.000 là dưới ngưỡng (khoảng này vẫn đúng dù tỷ giá 24.000–27.000). Trên ngưỡng → xác nhận đón miễn phí luôn, không hỏi Karen, không CHECK BEFORE SENDING, không cần bố mẹ duyệt: đây là chính sách in sẵn.
+  - Chỉ hỏi Karen khi không có số khách trả, hoặc số đó nằm giữa hai mốc trên.
 - Không **hỏi** khách có cần đưa đón không, không hỏi giờ đến (`skills/email-templates.md`, luật đã tạm dừng — FAQ có mẫu "Arrival time" và lời mời đặt dịch vụ, Emi **không** dùng). Khách tự hỏi → trả lời theo trên.
 
 ## Hủy, đổi booking OTA — chỉ để Karen quyết (AGENTS.md luật 7, 8)

@@ -45,7 +45,7 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `stop_sales` — the stop-sales email to the B2B and OTA sites (`stop-sales`, `inquiries-and-quotes.md`).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
 
-**Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. Drafts are HTML.
+**Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. The draft file is plain text, never HTML tags (`email-templates.md`).
 
 **Rates another agency gets** ("same rate as Aurora Travel", "as our partner X"): never quoted or compared (`inquiries-and-quotes.md`). The row's rate waits in `missing_info` and the question goes to Karen.
 

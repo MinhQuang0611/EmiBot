@@ -51,7 +51,7 @@ Internal forward: `Trân trọng,` / `Reservations team / HAYA Hotel Phu Quoc` /
   - **OTA relays** (Booking.com, Agoda, Trip.com messages): the wrapper and the OTA's **preset questions** are printed in the extranet's language, Vietnamese, not the guest's. "Ivan Petrov đã nhắn: Tôi có thể nhận phòng vào 12:00 - 13:00 được không?" is a Booking.com preset, not a Vietnamese guest (audit 30/10, F-14: #117 and #170 answered in Vietnamese). Go by what the guest typed themselves, in this message or an earlier one on the booking (`mail-find <ref>`). Only presets, nothing typed → English, or Vietnamese for a VNM guest, with `[CHECK BEFORE SENDING: guest wrote only Booking.com presets; replied in <language>]`.
 - **Fields from the intake row and the PDF; hotel facts from `docs/rate-knowledge/hotel-info.md`.** Every email that needs an answer gets a complete best-answer draft (Tracy's audit, 29/10). What I'm not sure of goes in one first line, `[CHECK BEFORE SENDING: <what to check>]`, shown bold red in Outlook (no highlight), and to Karen with `ask-karen`; the person sending deletes the line. Never a `[…: hotel to confirm]` gap inside the text; the draft commands refuse one.
 - **Never write about what I can or can't see** ("not shown in the information available to us", "we will check and revert", "our team is checking and will send … as soon as possible"). Write the best answer and put the doubt in the CHECK line.
-- **Never Karen's name in a draft** (the commands refuse it). **Reply all**, To and Cc kept. Drafts are HTML.
+- **Never Karen's name in a draft** (the commands refuse it). **Reply all**, To and Cc kept. **The draft file is plain text, never HTML** (a blank line for a new paragraph, `• ` for a list, `**label**` for bold): the command makes the email's HTML from it, and a `<p>` or `<br>` written in the file would show as those characters in Outlook (Midzio, 03/11). The commands refuse tags.
 - **Deposit deadline (AGENTS.md rule 6):** exact time, date and Vietnam time: `trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7)` / `by [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)`. 48 hours after the agency receives the hotel's confirmation (Karen, 2026-10-08). Balance: 7 days before check-in, with the date.
 - **Total line:** Vietnamese `Tổng tiền: [tổng] VND (đã bao gồm ăn sáng và 8% VAT)`; English `Total: VND [total], including breakfast, VAT and service charge.` A surcharge is a line of its own with its reason (`Phụ thu trẻ em (ngủ chung giường với bố mẹ): 350.000 VND × 03 trẻ × 3 đêm = 3.150.000 VND`), or named in brackets on the rate line (`(đã bao gồm phụ thu 20% áp dụng cho khách quốc tịch Ấn Độ)`). Service charge is never a line of its own.
 - **Bank details** — always the new name, even if their slip shows the old one:
@@ -314,7 +314,8 @@ HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
 English: `Dear Ms. [Name],` / `Greetings from HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.` / `This is a friendly payment reminder for the booking below. Our accounting team has not yet received [the deposit / the remaining 50%]:` then the same lines (Group code, Confirmation number, Agency reference, Guests, Stay, Room, Total, Paid to date, Amount due, Deadline: [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7)), bank details, `Please include your company name + group code #[code] in the transfer reference, and email us the payment slip after the transfer so we can verify receipt.` / `If payment has already been made, please send us the slip and disregard this reminder.`
-- One reminder per deadline (Monica's default). A second or "final" reminder, and any "the booking will be cancelled if…" line, is Karen's decision: report, don't draft.
+- Balance reminder: the deadline line is the date the confirmation gave, `Hạn thanh toán: trước ngày [DD/MM/YYYY]` / `Deadline: before [DD/MM/YYYY]`. Amount, deadline and recipients come from `payments-due`; the subject ending goes in `--subject-suffix`.
+- One reminder per deadline (Monica's default; `draft-reply` refuses a second). A second or "final" reminder, and any "the booking will be cancelled if…" line, is Karen's decision: report, don't draft.
 
 ### 4b. Payment slip received — thanks to the agency (`--kind reply`)
 Drafted in the same run as the forward to accounting (4c), as soon as the slip arrives (dev, 2026-10-30). Form from the dev's own reply to Travel Concierge, 30/10 (one UNC, three bookings):
@@ -519,7 +520,7 @@ Cancellation of an operator booking: section 3.
 
 ## 7. Airport transfer asked for (`--kind request`)
 Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
-- **Qualifies for the free one-way transfer** (booking total above USD 250, `hotel-info.md`; Karen when unclear):
+- **Qualifies for the free one-way transfer** (the amount **the guest paid** is above USD 250, never the hotel's net: `hotel-info.md`, Karen 04/11). Confirm it outright, no CHECK BEFORE SENDING line and no "being verified":
   ```
   We are pleased to confirm that we can arrange your complimentary airport pick-up from Phu Quoc International Airport to the hotel:
 
@@ -535,7 +536,7 @@ Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
 
   Our driver will meet you in the arrival hall after you have cleared immigration and collected your baggage.
   ```
-- **Doesn't qualify:** `Complimentary one-way airport pick-up applies only when the booking total is above USD 250. Your booking is below that threshold, so pick-up is available as a paid transfer at [price] VND one way.` Price from `hotel-info.md` (200.000 VND, 4-seat car); a larger car's price → Karen until it's in `hotel-info.md`. Then `If you would like us to arrange it, please reply to confirm and send your flight number and landing time.`
+- **Doesn't qualify:** `Complimentary one-way airport pick-up applies when the amount paid for the booking is above USD 250. Your booking is below that amount, so pick-up is available as a paid transfer at [price] VND one way.` Price from `hotel-info.md` (200.000 VND, 4-seat car); a larger car's price → Karen until it's in `hotel-info.md`. Then `If you would like us to arrange it, please reply to confirm and send your flight number and landing time.`
 - Asking for the flight here is fine: they asked for the transfer.
 
 ## 8. Reconfirmation / hotel confirmation number (HCN) request — bedbanks, OTAs, B2B desks (`--kind reply`)

@@ -1,7 +1,7 @@
 # Direct — Bảng giá khách lẻ (đặt thẳng với khách sạn)
 
 Nguồn: `docs/RATE TABLES/HAYA HOTEL - DIRECT BOOKINGS.pdf` (1 trang, có text layer; kiểm lại bằng ảnh trang). Chép lại 2026-10-19.
-Hiệu lực in trên file: **01/03/2026 – 31/05/2026**. ⚠ Đã hết hạn so với mọi ngày ở hiện tại — Karen chưa nói bảng này còn dùng được. Cho tới khi Karen xác nhận, không đưa giá trong file này vào thư gửi khách.
+Hiệu lực in trên file: 01/03/2026 – 31/05/2026, **nhưng bảng này vẫn dùng sau ngày đó (Karen, 04/11/2026: "giá thì Emi có rồi")**: báo giá thẳng từ `quote --channel Direct`, không cần dòng CHECK BEFORE SENDING về giá, không hỏi Karen.
 Dùng cho: `channel_type = Direct` (cá nhân, không qua công ty). Không dùng cho TA, tour operator, OTA.
 
 ## Giá phòng (VND / phòng / đêm)
@@ -17,7 +17,7 @@ Dùng cho: `channel_type = Direct` (cá nhân, không qua công ty). Không dùn
 | QUADRUPLE FAMILY | QPL | 4 | 4.450.000 | 5.800.000 |
 
 - Chỉ có 2 cột giá: ngày thường và ngày Lễ, Tết. Không chia mùa như bảng TA.
-- File không ghi ngày nào là "Ngày Lễ, Tết". `quote` dùng danh sách ngày lễ của bảng TA (giả định — cần Karen xác nhận).
+- File không ghi ngày nào là "Ngày Lễ, Tết". `quote` dùng danh sách ngày lễ của bảng TA.
 - Không có TW-DLX, APT trên file. Khách lẻ hỏi các hạng này → chuyển Karen.
 - Không có tối thiểu số đêm, không có phụ thu ở 1 đêm, không có ưu đãi đoàn / đặt sớm / ở dài.
 
@@ -28,7 +28,7 @@ Dùng cho: `channel_type = Direct` (cá nhân, không qua công ty). Không dùn
 | Trẻ em 3 – dưới 12 tuổi | 350.000 | 500.000 |
 | Trẻ em dưới 3 tuổi | Miễn phí | Miễn phí |
 
-⚠ File không ghi giá phòng đã gồm ăn sáng hay chưa. `quote` đang hiểu: giá phòng gồm ăn sáng cho số khách của phòng (cột Khách); bé ngủ chung giường trả phụ thu trẻ em ở bảng trên — giống cách bảng TA tính. Cần Karen xác nhận trước khi báo giá.
+⚠ File không ghi giá phòng đã gồm ăn sáng hay chưa. `quote` đang hiểu: giá phòng gồm ăn sáng cho số khách của phòng (cột Khách); bé ngủ chung giường trả phụ thu trẻ em ở bảng trên — giống cách bảng TA tính. Điểm này còn mở với Karen: chưa viết "bao gồm ăn sáng" trong thư, nhưng không giữ báo giá.
 
 ## Nhận phòng sớm / trả phòng muộn
 Nhận phòng sau 14:00, trả phòng trước 12:00.
@@ -51,4 +51,4 @@ Nước suối, trà, cà phê trong phòng; wifi, hồ bơi, phòng gym.
 ## Không có trên file — chuyển Karen
 - **Chính sách hủy cho khách lẻ.** `cancel-fee` từ chối booking Direct; khách lẻ hủy → Karen. (Thư thật duy nhất gửi khách lẻ — Mr. Hindol Roy, 07/10/2026, xem `skills/email-templates.md` — ghi "thanh toán toàn bộ trước ngày hủy miễn phí, 7 ngày trước check-in". Một thư không phải là chính sách.)
 - Giá đưa đón cho khách lẻ (bảng TA có, nhưng là giá cho đại lý).
-- Giá TW-DLX, APT; giá cho ngày sau 31/05/2026.
+- Giá TW-DLX, APT.

@@ -96,13 +96,14 @@ class DirectTest(unittest.TestCase):
         self.assertEqual(o["room_total"], 3000000 * 16)  # no ROH, no +20%, no 1-night surcharge
         self.assertEqual(o["one_night_surcharge"], 0)
 
-    def test_out_of_date_and_full_payment_in_render(self):
-        text = q.render(q.quote(date(2026, 11, 20), date(2026, 11, 22), 2, data=self.data))
-        self.assertIn("RATES OUT OF DATE", text)
+    def test_table_runs_on_past_its_printed_end_and_full_payment_in_render(self):
+        # Karen 04/11, Aya Batyrova 26-30/12: "Giá thì Emi có rồi", no check on the price
+        text = q.render(q.quote(date(2026, 12, 26), date(2026, 12, 30), 2, data=self.data))
+        self.assertNotIn("OUT OF DATE", text)
+        self.assertNotIn("Karen to confirm", text)
+        self.assertIn("9.250.000", text)  # STD: 2.800.000 on the holiday night + 3 × 2.150.000
         self.assertIn("100% before check-in", text)
         self.assertNotIn("deposit 50%", text)
-        inside = q.render(q.quote(date(2026, 4, 10), date(2026, 4, 12), 2, data=self.data))
-        self.assertNotIn("OUT OF DATE", inside)
 
     def test_rooms_not_on_the_direct_table(self):
         with self.assertRaises(q.QuoteError):

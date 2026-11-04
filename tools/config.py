@@ -78,14 +78,14 @@ def live_sheet():
                                      tab=LIVE_SHEET_TAB))
 
 
-# HAYA's Future Availability sheet: rooms free per room type per night (dev, 2026-10-27).
-AVAILABILITY_SHEET_ID = os.environ.get("EMI_AVAILABILITY_SHEET_ID", "1PxW_60FveCEcOjwQ4u6gj9pEszHlVYkoJrCQMtzMN_U")
+# The Drive folder of the Future Availability exports, HAYA's and Palma's; each export is a new file (dev, 2026-11-04).
+AVAILABILITY_FOLDER_ID = os.environ.get("EMI_AVAILABILITY_FOLDER_ID", "1b8Op1fjbUgtXRiY60uqRv3cy8-xMfQ_Q")
 
 
 def availability():
     from .availability import load
     from .intake_sheet import google_service_account_transport
-    return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_SHEET_ID)
+    return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_FOLDER_ID)
 
 
 def telegram():

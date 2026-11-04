@@ -36,6 +36,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
                                  [--rooms N] [--meal BB|HB|FB] --booked D [--spo "EB,FS001"]  # contract price
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
+    python -m tools.emi payments-due       # job 3: TA deposits and balances, reminders to draft now
+    python -m tools.emi confirmations-due  # job 2: built since 30/10, no confirmation from sales@
     python -m tools.emi invoice-data <booking_ref>        # proforma figures: number, due date, lines
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
@@ -78,6 +80,7 @@ from . import quote as quoting
 from . import cancel_fee as cancelling
 from . import operator_rates as op_rates
 from . import operators
+from . import payments
 from . import availability as avail
 from . import review, sim
 from . import intake_schema as schema
@@ -772,6 +775,7 @@ def _sender_of(mail, message_id):
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
 GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder")
+REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
                 "{sender}. If it is a forward (Fw:), the real sender is the 'From:' line in the quoted header: "
@@ -857,6 +861,12 @@ def reply_all_default(args, to):
 def draft_reply(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
+    if args.kind in REMINDERS:
+        if not (args.ref and args.row):
+            raise Refused(f"a {args.kind} draft needs --ref and --row: take them from payments-due")
+        if st.reminder_drafted(args.ref, args.kind.split("_")[0]) and not _replaces(args):
+            raise Refused(f"{args.ref} already had its {args.kind}: one reminder per deadline. Overdue → report to "
+                          f"Karen (confirmation-replies.md)")
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
@@ -871,7 +881,8 @@ def draft_reply(mail, st, args, tg=None, out=print):
             + _to_line(to, cc))
         close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
-    d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc)
+    suffix = {"subject_suffix": args.subject_suffix} if getattr(args, "subject_suffix", "") else {}
+    d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc, **suffix)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to))
@@ -1093,6 +1104,14 @@ AVAILABILITY_GAP_NEXT = ("AVAILABILITY NOT CHECKED: a direct booking — write t
                          "'availability: not checked – Future Availability sheet not readable' in missing_info, and "
                          "carry on with the run (mark-scanned as usual); one line for Karen at the top of the report. "
                          "TA, OTA and B2B bookings need no check (Karen, 04/11)")
+STALE_NEXT = ("Its figures can miss recent bookings: don't tell anyone a room is free or full from it. Inquiry: "
+              "the full best answer with prices, 'subject to availability', and first line '[CHECK BEFORE SENDING: "
+              "availability – sheet {age}]', plus ask-karen. Direct booking: 'availability: not checked – sheet "
+              "{age}' in missing_info. One line for Karen at the top of the report.")
+
+
+def _stale(data):
+    return avail.stale(data, datetime.now(VN))
 
 
 def run_availability(args, data, out=print):
@@ -1101,16 +1120,26 @@ def run_availability(args, data, out=print):
     except (avail.AvailabilityError, quoting.QuoteError) as e:
         raise Refused(str(e)) from None
     out(avail.render(data, result))
+    age = _stale(data)
+    if age:
+        out(f"AVAILABILITY STALE: sheet {age}. " + STALE_NEXT.format(age=age))
     if args.alloc:
         alloc = {k.strip(): int(v) for k, v in (part.split(":") for part in args.alloc.split(","))}
         problems = avail.fits(result, alloc)
-        out("FITS: " + args.alloc if not problems else "DOES NOT FIT: " + "; ".join(problems))
+        if problems:
+            out("DOES NOT FIT: " + "; ".join(problems))
+        else:
+            out(("NOT VERIFIED (stale sheet): " if age else "FITS: ") + args.alloc)
     return result
 
 
 def run_stop_sales(data, out=print):
     """Room types down to 1 room or fewer on a night (Tracy audit 29/10): close them on the B2B and OTA sites
     with a stop-sales email drafted in sales@, in the form and to the recipients of HAYA's past ones."""
+    age = _stale(data)
+    if age:
+        out(f"STOP SALES NOT CHECKED: availability sheet {age}. One line in the report; carry on with the run")
+        return {}
     low = avail.low_inventory(data, _today_vn())
     out(avail.render_low(data, low))
     if low:
@@ -1151,13 +1180,19 @@ def run_quote(args, out=print, availability=None):
             q["gaps"] = [g for g in q["gaps"] if not g.startswith("availability")]
     out(quoting.render(q))
     if result is not None:
+        if args.channel != "TA":  # the stop-sale is for travel agencies' room requests only (MEMORY.md, Stop-sale)
+            result = {**result, "stop_sale": []}
+        age = _stale(availability)
         out("\n" + avail.render(availability, result))
+        if age:
+            out(f"AVAILABILITY STALE: sheet {age}. " + STALE_NEXT.format(age=age))
         for label, o in q["options"]:
             problems = avail.fits(result, o["alloc"])
             if result["stop_sale"]:
                 # rooms may be free, but the rule says the dates are not offered at all
                 problems = [f"stop-sale on {', '.join(f'{n:%d/%m}' for n in result['stop_sale'])}"] + problems
-            out(f"OPTION {label}: " + ("AVAILABLE" if not problems else "NOT AVAILABLE — " + "; ".join(problems)))
+            state = "NOT VERIFIED (stale sheet)" if age else "AVAILABLE"
+            out(f"OPTION {label}: " + (state if not problems else "NOT AVAILABLE — " + "; ".join(problems)))
     q["availability"] = result
     return q
 
@@ -1436,6 +1471,9 @@ def run_on_request(args, data, out=print):
     alloc = {k.strip(): int(v) for k, v in (part.split(":") for part in args.alloc.split(","))}
     verdict, why = operators.on_request(result, avail.fits(result, alloc), quoting.parse_date(args.arrival),
                                         _today_vn())
+    age = _stale(data)
+    if age:  # a decline or an accept on old figures is not Emi's to make
+        verdict, why = "ASK KAREN", [f"availability sheet {age}"] + why
     out(f"\nON REQUEST: {verdict} — {'; '.join(why)}")
     if verdict == "REJECT":
         out(f"Next: CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\"), then the decline "
@@ -1450,6 +1488,19 @@ def run_on_request(args, data, out=print):
 
 def _monday_last_week(today):
     return today - timedelta(days=today.weekday() + 7)
+
+
+def run_payments_due(mail, sheet, st, out=print, now=None):
+    now = now or datetime.now(VN)
+    result = payments.due(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, now)
+    out(payments.render(result, now))
+    return result
+
+
+def run_confirmations_due(mail, sheet, st, out=print):
+    items = payments.needs_confirmation(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, _today_vn())
+    out(payments.render_confirmations(items))
+    return items
 
 
 def run_checkouts(sheet, args, out=print):
@@ -1643,6 +1694,8 @@ def parser():
             _recipient_args(s)
             s.add_argument("--internal", action="store_true",
                            help="the reply really is for our own colleague (haya@, palmahotel.vn); kind reply only")
+            s.add_argument("--subject-suffix", default="", help="added to the end of the subject, e.g. a reminder's "
+                                                                "'- PAYMENT REMINDER #30742'")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
                             "inquiry, request")
@@ -1650,6 +1703,8 @@ def parser():
         s.add_argument("--row", default="")
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
+    sub.add_parser("payments-due", help="TA deposits and balances: reminders to draft now, overdue, never confirmed")
+    sub.add_parser("confirmations-due", help="bookings built since 30/10 with no confirmation from sales@")
     s = sub.add_parser("quote", help="price a stay and suggest rooms from the TA or direct-guest table")
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
@@ -1800,6 +1855,10 @@ def main(argv=None):
                 raise Refused(f"no confirmation draft recorded for {args.ref} row {args.row}")
             st.save()
             print(f"forgot the confirmation draft for {args.ref} row {args.row}; delete the draft itself in Outlook")
+        elif c == "payments-due":
+            run_payments_due(config.mail(), config.sheet(), st)
+        elif c == "confirmations-due":
+            run_confirmations_due(config.mail(), config.sheet(), st)
         elif c == "quote":
             run_quote(args, availability=load_availability())
         elif c == "availability":

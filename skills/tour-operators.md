@@ -17,6 +17,7 @@ Rules from the dev, 2026-10-29. They sit on top of `booking-intake.md`: everythi
    - Every `GAP:` line goes in `missing_info` and the report.
    - `AFTER RELEASE` in the output = the cut-off has passed: treat the booking as on request even if the voucher says allotment, and say so in the report.
 4. **Allotment → NEW rows**, one row per room type. `rate_source` "<Operator> contract", `channel_type` Tour operator, `company` the fixed spelling (`booking-intake.md` Company). `COD` = the contract's payment date (below), never the TA 48 hours.
+   **An allotment booking is ours to honour, so it gets no "received" note** (Karen, 2026-11-04, Anex 112970549: "ghi allotment mà sao Emi báo là chúng tôi tiếp nhận thông tin"). No draft at this step, no `[CHECK BEFORE SENDING]` about the PDF: `done <id> "allotment, confirmation once pdf_link is there"`. Its reply is the confirmation of step 7, drafted by job 2 as soon as `pdf_link` lands. The Anex contract asks for an answer within 24 hours: a booking still unbuilt near that goes in the report.
 5. **On request** (release passed or allotment used up): `py -m tools.emi on-request --arrival … --departure … --alloc "<code>:<rooms>,…"`
    - `REJECT` — no availability; or occupancy over 60% on a night of the stay **and** check-in more than 30 days away. Then:
      - **CANCEL rows** (not NEW): `status` Cancelled, `what_changed` "On request booking cannot be accommodated" (the same as Anex's declined bookings, `booking-intake.md` "One email, one set of rows").
@@ -40,7 +41,7 @@ The 40-hour deposit reminder and the 7-day balance reminder (`confirmation-repli
 
 ## Anex (contract 81/26-27)
 - Emails come from a no-reply robot (`vn.robot@ms.anextour.com`). **Replies go to reservation@anexvietnam.com** — `draft-reply` on a robot email addresses it there by itself.
-- **Every Anex email gets a reply draft**, including the NEW, CHANGED and CANCELLED robot emails.
+- **Every Anex email gets its reply, at the step its kind says:** NEW inside the allotment → the confirmation once `pdf_link` is there (step 4, step 7); CANCELLED → at once; CHANGED → the confirmation once the change is built; on request → step 5. Never a "we have recorded the reservation" note.
 - The robot email also asks us to confirm through a link. Someone still has to click it; an email reply doesn't count. Report line: "Anex <ref>: bấm link xác nhận trong email robot".
 - "On request" and "Partly Allotment" go through step 5.
 - **Every day:** an e-invoice for that day's check-outs to hotelaccount.vn@anextour.com. **Every Monday:** the previous week's check-outs (Monday to Sunday) to the same address; once Anex confirms, hard copies of the VAT invoice, folio and reservation go by post.

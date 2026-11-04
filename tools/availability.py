@@ -11,6 +11,12 @@ import urllib.parse
 from datetime import date, timedelta
 
 SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
+DRIVE = "https://www.googleapis.com/drive/v3/files"
+# Each export is a new file, so the sheet is found in its Drive folder, never by a fixed ID: Emi read the trashed copy
+# of 30/10 for days and told Aya Batyrova rooms were free that had gone (Karen, 04/11). The file's name says the day
+# it starts from (dev, 04/11); a newest file dated before yesterday says nothing about what is free today.
+MAX_AGE_DAYS = 1
+WINDOW = re.compile(r"(\d{4})-(\d{2})-(\d{2})_(\d{4})-(\d{2})-(\d{2})")
 # inquiries-and-quotes.md: a night over 50% occupancy is not offered when check-in is more than 14 days away.
 STOP_SALE_OCCUPANCY = 50.0
 STOP_SALE_DAYS = 14
@@ -20,13 +26,51 @@ class AvailabilityError(Exception):
     pass
 
 
-def load(call, sheet_id):
-    """Read the first tab of the sheet with the service-account transport and parse it."""
-    meta = call("GET", f"{SHEETS}/{sheet_id}?fields=properties.title,sheets.properties.title")
-    title = meta["properties"]["title"]
+def is_haya(name):
+    """The folder holds Palma's export beside HAYA's, and other files. Only HAYA's is ever read (dev, 2026-11-04)."""
+    return (bool(re.search(r"\bHAYA\b", name, re.I)) and "future availability" in name.lower()
+            and "palma" not in name.lower())
+
+
+def window(name):
+    """(first night, last night) from a name like '… — 2026-11-04_2027-03-03'; None when it has no such dates."""
+    m = WINDOW.search(name)
+    if not m:
+        return None
+    g = [int(x) for x in m.groups()]
+    return date(*g[:3]), date(*g[3:])
+
+
+def latest_haya(call, folder_id):
+    """The HAYA export whose name starts latest (dev, 04/11: the dates in the file decide). Refuses when there is
+    none rather than guess at another file."""
+    q = urllib.parse.quote(f"'{folder_id}' in parents and trashed=false "
+                           "and mimeType='application/vnd.google-apps.spreadsheet'")
+    files = call("GET", f"{DRIVE}?q={q}&fields=files(id,name)&pageSize=50"
+                        "&supportsAllDrives=true&includeItemsFromAllDrives=true").get("files", [])
+    haya = [f for f in files if is_haya(f.get("name", "")) and window(f["name"])]
+    if not haya:
+        raise AvailabilityError(f"no HAYA Future Availability sheet in Drive folder {folder_id}")
+    return max(haya, key=lambda f: window(f["name"]))
+
+
+def load(call, folder_id):
+    """Read the first tab of the newest HAYA sheet in the folder with the service-account transport and parse it."""
+    f = latest_haya(call, folder_id)
+    meta = call("GET", f"{SHEETS}/{f['id']}?fields=sheets.properties.title")
     tab = meta["sheets"][0]["properties"]["title"]
     rng = urllib.parse.quote(f"'{tab}'!A1:ZZ80", safe="")
-    return parse(title, call("GET", f"{SHEETS}/{sheet_id}/values/{rng}").get("values", []))
+    data = parse(f["name"], call("GET", f"{SHEETS}/{f['id']}/values/{rng}").get("values", []))
+    data["as_of"] = data["start"]
+    return data
+
+
+def stale(data, now):
+    """'' while the sheet is fresh, else the words saying how old it is. now: an aware datetime."""
+    as_of = data.get("as_of")
+    if as_of is None or (now.date() - as_of).days <= MAX_AGE_DAYS:
+        return ""
+    return f"dated {as_of:%d/%m/%Y}, {(now.date() - as_of).days} day(s) ago"
 
 
 def _int(v):
@@ -37,11 +81,10 @@ def _int(v):
 
 
 def parse(title, rows):
-    m = re.search(r"(\d{4})-(\d{2})-(\d{2})_(\d{4})-(\d{2})-(\d{2})", title)
-    if not m:
+    span = window(title)
+    if not span:
         raise AvailabilityError(f"sheet title {title!r} has no date window like 2026-10-27_2027-02-23")
-    g = [int(x) for x in m.groups()]
-    start, end = date(*g[:3]), date(*g[3:])
+    start, end = span
     if not rows or len(rows[0]) < 3:
         raise AvailabilityError("availability sheet is empty")
     dates, year = [], start.year

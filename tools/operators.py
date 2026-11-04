@@ -19,7 +19,8 @@ OPERATORS = {
         "steps": [
             "Emails come from a no-reply robot: every reply goes to reservation@anexvietnam.com "
             "(draft-reply does this by itself).",
-            "Every Anex email gets a reply draft, the NEW, CHANGED and CANCELLED robot emails included.",
+            "Every Anex email gets its reply: a NEW inside the allotment gets the confirmation once pdf_link is there, "
+            "never a 'we have recorded it' note; CANCELLED at once; on request through the on-request rule.",
             "The robot email asks to confirm through a link: someone still has to click it, an email reply "
             "doesn't count. Say so in the scan report.",
             "'On request' and 'Partly Allotment' bookings go through the on-request rule (on-request).",

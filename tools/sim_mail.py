@@ -115,7 +115,7 @@ class SimMail:
                     f"{text_to_html(text)}")
         return {"id": did}
 
-    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None):
+    def reply_draft_with_text(self, message_id, text, reply_all=False, to=None, cc=None, subject_suffix=""):
         """Same as GraphMail: to=[...] replaces the recipients and the subject loses its 'Fw:'."""
         m = self._load()[message_id]
         if to:

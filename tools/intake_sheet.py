@@ -131,11 +131,6 @@ class IntakeSheet:
         text = (cell.get("formattedValue") or "").strip()
         return text if text.startswith("http") else None
 
-    def rows_awaiting_confirmation(self, already_drafted):
-        """Rows with a pdf_link whose (booking_ref, row) has no confirmation draft yet."""
-        return [r for r in self.rows()
-                if r.get("pdf_link", "").strip() and (r.get("booking_ref"), r["_row"]) not in already_drafted]
-
     def _to_values(self, record):
         unknown = set(record) - set(self.header) - {"_row"}
         if unknown:
