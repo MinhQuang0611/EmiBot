@@ -429,6 +429,12 @@ class StateLockTest(unittest.TestCase):
             self.assertEqual(lock.called, taken, cmd)
 
     @unittest.skipIf(state_file.fcntl is None, "flock needs Linux, where Emi runs")
+    def test_the_same_process_never_waits_on_its_own_lock(self):
+        path = os.path.join(tempfile.mkdtemp(), "state.json")
+        state_file.hold_lock(path, wait=0.1)
+        state_file.hold_lock(path, wait=0.1)  # 05/11: emi.main twice in the test run hung the deploy on the host
+
+    @unittest.skipIf(state_file.fcntl is None, "flock needs Linux, where Emi runs")
     def test_a_second_process_waits_and_gives_up(self):
         path = os.path.join(tempfile.mkdtemp(), "state.json")
         code = ("import sys,time;from tools.state import hold_lock;hold_lock(sys.argv[1]);print('held',flush=True);"

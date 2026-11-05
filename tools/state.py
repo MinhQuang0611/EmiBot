@@ -22,27 +22,28 @@ EMPTY = {
     "confirmations": {},     # "booking_ref|row" -> {draft_id, sent_at, cod_deadline, balance_deadline}
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
     "confirmation_holds": {},  # booking_ref -> {pdf_link, reason}: left out of confirmations-due until a new PDF
+    "stop_sales_nights": {},  # room code -> [ISO nights already in a stop-sales draft]: no second draft for them
     "next_review": 1,        # draft #1, #2, ... as shown on Telegram
     "reviews": {},           # "12" -> {draft_id, status, how, source, to, kind, ref, row, text, version, ...}
     "awaiting_feedback": None,  # "12" after Rewrite is pressed, until the rewrite is saved
 }
 
 REVIEW_OPEN = "pending"
-_held = []  # keeps the lock's file open until the process ends, which releases it
+_held = {}  # path -> the lock's open file, kept until the process ends, which releases it
 
 
 def hold_lock(path, wait=120):
     """One command at a time from reading the state to saving it, held until this process ends. Each command loads
     the whole file and saves it whole: on 04/11 a Telegram Deny loaded it, a new draft took #415, and the Deny's save
     wiped that draft's record, so the next draft took #415 again. Raises TimeoutError after `wait` seconds rather than risk that."""
-    if fcntl is None:
+    if fcntl is None or path in _held:  # flock is per open file: a second open in this process would wait on itself
         return
     f = open(path + ".lock", "a")
     deadline = time.time() + wait
     while True:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            _held.append(f)
+            _held[path] = f
             return
         except OSError:
             if time.time() >= deadline:

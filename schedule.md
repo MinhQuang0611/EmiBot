@@ -22,7 +22,7 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 6. Inquiries and quote requests → draft the reply.
 7. Read the Sent folder: for any draft of mine that was sent, record the real sent time and note any edits as corrections.
 8. Palma emails → forward draft to booking@palmahotel.vn (once). Flag money asks and anything unclassified. Phishing senders are dropped by `inbox-new`.
-8a. **Stop sales:** `stop-sales` → any room type at 1 room or fewer on a night → stop-sales draft in the form of HAYA's last one (`skills/inquiries-and-quotes.md`). `STOP SALES NOT CHECKED` (sheet not readable) → one report line, carry on.
+8a. **Stop sales:** `stop-sales` → it lists only nights no earlier stop-sales draft carried → one stop-sales draft in the form of HAYA's last one (`skills/inquiries-and-quotes.md`). `STOP SALES: nothing new` → no draft, nothing in the report. `STOP SALES NOT CHECKED` (sheet not readable) → one report line, carry on.
 9. Payment reminders moved to job 3 (2026-11-04).
 
 ### Job 1 — the commands, in order

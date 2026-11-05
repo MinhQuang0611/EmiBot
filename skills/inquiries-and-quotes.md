@@ -203,7 +203,7 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 
 ## Stop sales on the B2B and OTA sites (Tracy's audit, 29/10)
 A room type with **1 room or fewer** left on a night in the Future Availability sheet (0 and below included) is closed on the B2B and OTA sites. Each scan:
-1. `py -m tools.emi stop-sales` lists the room types and dates.
-2. `mail-find "stop sale"` for HAYA's last stop-sales email in Sent Items: copy its recipients and its form exactly; only the room types and dates change. Dates already closed in an earlier stop-sales email are not sent again.
-3. `draft-new <that email's id> <its recipients> "<its subject form>" <body> --kind stop_sales`. A person presses Send.
+1. `py -m tools.emi stop-sales` lists the room types and dates no earlier stop-sales draft carried. `STOP SALES: nothing new` → stop here, no draft. `draft-new` refuses one too.
+2. `mail-find "stop sale"` for HAYA's last stop-sales email in Sent Items: copy its recipients and its form exactly; only the room types and dates change.
+3. `draft-new <that email's id> <its recipients> "<its subject form>" <body> --kind stop_sales`. One open stop-sales draft at a time: an older one still open goes with `--replaces`. A person presses Send.
 4. No past stop-sales email found → `ask-karen` for the recipients and the form; the draft waits.
