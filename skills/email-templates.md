@@ -520,6 +520,7 @@ Cancellation of an operator booking: section 3.
 
 ## 7. Airport transfer asked for (`--kind request`)
 Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
+- **The guest gets one answer: free or paid (dev, 05/11, Ms. Ip's draft).** First find what this booking cost: `mail-find <ref>`, `show` the booking email, and take the figure as `hotel-info.md` orders it (an Agoda voucher's `Reference sell rate`, not `Total Cost with Tax`, which is the net). Then write one of the two forms below. Never the rule on its own ("applies when the amount paid is above USD 250", "if the booking does not qualify") and never both outcomes in one draft.
 - **Qualifies for the free one-way transfer** (the amount **the guest paid** is above USD 250, never the hotel's net: `hotel-info.md`, Karen 04/11). Confirm it outright, no CHECK BEFORE SENDING line and no "being verified":
   ```
   We are pleased to confirm that we can arrange your complimentary airport pick-up from Phu Quoc International Airport to the hotel:
@@ -537,6 +538,7 @@ Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
   Our driver will meet you in the arrival hall after you have cleared immigration and collected your baggage.
   ```
 - **Doesn't qualify:** `Complimentary one-way airport pick-up applies when the amount paid for the booking is above USD 250. Your booking is below that amount, so pick-up is available as a paid transfer at [price] VND one way.` Price from `hotel-info.md` (200.000 VND, 4-seat car); a larger car's price → Karen until it's in `hotel-info.md`. Then `If you would like us to arrange it, please reply to confirm and send your flight number and landing time.`
+- **No figure after reading the booking email, or it falls between the two marks in `hotel-info.md`:** still one form, with `[CHECK BEFORE SENDING: guest paid <figure or "not shown">, confirm free or paid]` on top and `ask-karen`. Above the upper mark on the net alone → the free form, no check line. Otherwise the paid form.
 - Asking for the flight here is fine: they asked for the transfer.
 
 ## 8. Reconfirmation / hotel confirmation number (HCN) request — bedbanks, OTAs, B2B desks (`--kind reply`)

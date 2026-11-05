@@ -236,6 +236,9 @@ class AvailabilityUnreadableTest(unittest.TestCase):
             self.assertIn("GAP: availability sheet not readable", out.getvalue())
             self.assertIn(word, out.getvalue())
 
+    def test_the_suite_has_no_real_telegram(self):
+        self.assertIsNone(emi.config.telegram())  # this test's stop-sales gap reached the group, 05/11
+
 
 if __name__ == "__main__":
     unittest.main()
