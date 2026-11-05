@@ -22,7 +22,7 @@ EMPTY = {
     "confirmations": {},     # "booking_ref|row" -> {draft_id, sent_at, cod_deadline, balance_deadline}
     "reminders": {},         # "booking_ref|deposit" / "booking_ref|balance" -> {draft_id, drafted_at}
     "confirmation_holds": {},  # booking_ref -> {pdf_link, reason}: left out of confirmations-due until a new PDF
-    "stop_sales_nights": {},  # room code -> [ISO nights already in a stop-sales draft]: no second draft for them
+    "stop_sales_report": {},  # the last daily stop-sell list: {date, rows: [[ISO night, merged room type], ...]}
     "next_review": 1,        # draft #1, #2, ... as shown on Telegram
     "reviews": {},           # "12" -> {draft_id, status, how, source, to, kind, ref, row, text, version, ...}
     "awaiting_feedback": None,  # "12" after Rewrite is pressed, until the rewrite is saved

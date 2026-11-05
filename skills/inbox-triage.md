@@ -42,7 +42,7 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `forward` — every forward: accounting, the VAT address, Palma. Never front office (dev, 2026-10-30).
 - `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
 - `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`).
-- `stop_sales` — the stop-sales email to the B2B and OTA sites (`stop-sales`, `inquiries-and-quotes.md`).
+- `stop_sales` — the daily stop-sell list to the B2B and OTA sites. Job 5 makes it, never job 1 (`inquiries-and-quotes.md`).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
 
 **Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. The draft file is plain text, never HTML tags (`email-templates.md`).

@@ -24,7 +24,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
-    python -m tools.emi stop-sales                        # room types with 1 room or fewer left: stop-sales email due
+    python -m tools.emi stop-sales [--preview]            # daily stop-sell PDF; a draft to the partners only when it changed
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]] [--subject S] [--attach F]
@@ -74,7 +74,7 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import attachments, config, drive
+from . import attachments, config, drive, stop_sales, telegram
 from .graph_mail import ACCOUNTING, CHECK_LINE as CHECK_MARK, SendBlocked, clean_subject, is_internal
 from . import httpjson
 from . import quote as quoting
@@ -872,14 +872,12 @@ def draft_reply(mail, st, args, tg=None, out=print):
         if st.reminder_drafted(args.ref, args.kind.split("_")[0]) and not _replaces(args):
             raise Refused(f"{args.ref} already had its {args.kind}: one reminder per deadline. Overdue → report to "
                           f"Karen (confirmation-replies.md)")
-    stop_nights = check_stop_sales(st) if args.kind == "stop_sales" else None
+    check_not_stop_sales(args.kind)
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
     older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
-    if stop_nights:
-        note_stop_sales(st, stop_nights)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
@@ -929,11 +927,18 @@ def _replaces(args):
     return [_review_n(x) for x in re.split(r"[,\s]+", getattr(args, "replaces", "") or "") if x.strip()]
 
 
+def still_in_drafts(mail, st, n, r):
+    if review.in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
+        st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+        return False
+    return True
+
+
 def check_one_open_draft(mail, st, how, kind, ref, to, source, replaces):
     """Audit 03/11: three Odeon drafts for one booking, and an old 'not received yet' reply sent after the new
     decision. A guest or agency gets one open draft per booking (or per email when there is no ref): an older one
     still waiting or accepted but unsent is refused unless the new one replaces it (--replaces N)."""
-    if kind not in GUEST_KINDS + ("reply", "decline", "stop_sales"):
+    if kind not in GUEST_KINDS + ("reply", "decline"):
         return []
     lower = {a.lower() for a in to or []}
     older = []
@@ -941,15 +946,10 @@ def check_one_open_draft(mail, st, how, kind, ref, to, source, replaces):
         if r.get("status") not in (REVIEW_OPEN, "approved") or r.get("how") not in ("reply", "new"):
             continue
         same = (r.get("ref") or "") == ref if ref else r.get("source") == source
-        if kind == "stop_sales":  # no booking and no one email behind it: one open stop-sales draft, full stop
-            if r.get("kind") != kind:
-                continue
-        elif not same or r.get("kind") != kind or (lower and not lower & {a.lower() for a in r.get("to") or []}):
+        if not same or r.get("kind") != kind or (lower and not lower & {a.lower() for a in r.get("to") or []}):
             continue
-        if review.in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
-            st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
-            continue
-        older.append(n)
+        if still_in_drafts(mail, st, n, r):
+            older.append(n)
     unnamed = [n for n in older if n not in replaces]
     if unnamed:
         names = ", ".join("#" + n for n in unnamed)
@@ -1144,60 +1144,80 @@ def run_availability(args, data, out=print):
     return result
 
 
-def stop_sales_new(st, data):
-    """The room types and nights at 1 room or fewer that no stop-sales draft has carried yet."""
-    closed = st.data.get("stop_sales_nights") or {}
-    new = {}
-    for code, nights in avail.low_inventory(data, _today_vn()).items():
-        fresh = [n for n in nights if n.isoformat() not in closed.get(code, [])]
-        if fresh:
-            new[code] = fresh
-    return new
+def check_not_stop_sales(kind, subject=""):
+    """04/11: 26+ stop-sales drafts in a day, written by job 1 on every run. The list has one maker now."""
+    if kind == "stop_sales" or "stop sale" in subject.lower():
+        raise Refused("the stop-sell list goes out only from the daily stop-sales command, never as a written draft")
 
 
-def check_stop_sales(st):
-    """04/11: 26+ stop-sales drafts in a day, one per run, because every run saw the same low rooms and "dates already
-    closed: not again" was only written in the skill. A stop-sales draft needs a night no earlier one carried."""
-    data = load_availability()
-    age = _stale(data) if data else "not readable"
-    if age:
-        raise Refused(f"no stop-sales draft: availability sheet {age}")
-    new = stop_sales_new(st, data)
-    if not new:
-        raise Refused("no stop-sales draft: every room type and night at 1 room or fewer is already in an earlier "
-                      "stop-sales draft. Nothing new to close")
-    return new
+def stop_sales_gap(tg, why, out=print):
+    out(f"STOP SALES NOT CHECKED: {why}. No list today; the last one stands")
+    if tg is not None:
+        try:
+            tg.send(f"⚠️ Stop sell hôm nay chưa làm được: {telegram.esc(why)}")
+        except Exception as e:  # the line above is still in the job's output
+            out(f"Telegram: {type(e).__name__}")
 
 
-def note_stop_sales(st, new):
-    closed = st.data.setdefault("stop_sales_nights", {})
-    for code, nights in new.items():
-        closed[code] = sorted(set(closed.get(code, [])) | {n.isoformat() for n in nights})
+def draft_stop_sales(mail, st, tg, path, text, subject, out=print):
+    """One open list at a time: today's takes the place of any list nobody has sent yet. The whole list is in every
+    file, so the older one carries nothing the new one lacks."""
+    older = [n for n, r in st.data["reviews"].items() if r.get("kind") == "stop_sales"
+             and r.get("status") in (REVIEW_OPEN, "approved") and still_in_drafts(mail, st, n, r)]
+    files = read_pdfs([path])
+    bcc = list(stop_sales.RECIPIENTS)
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="new", source="", kind="stop_sales", text=text, bcc=bcc,
+                           files=files, new_subject=subject)
+        st.record_draft(review.PENDING + n, "", 0, "stop_sales")
+        out(f"stop-sell draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}")
+    else:
+        d = mail.create_new_draft([], subject, text, bcc=bcc)
+        try:
+            for fname, fdata, ctype in files:
+                mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
+        except Exception:  # a list without its PDF must not sit in Drafts; the second run of the day writes it again
+            mail.delete_draft(d["id"])
+            raise
+        st.record_draft(d["id"], "", 0, "stop_sales")
+        n = review.opened(mail, st, tg, d["id"], how="new", source="", kind="stop_sales", text=text, bcc=bcc,
+                          attachments=[f[0] for f in files])
+        out(f"stop-sell draft #{n} saved in Drafts: {d['id']} (bcc {', '.join(bcc)})")
+    close_replaced(mail, st, tg, older, n, out=out)
+    return n
 
 
-def run_stop_sales(data, st=None, out=print):
-    """Room types down to 1 room or fewer on a night (Tracy audit 29/10): close them on the B2B and OTA sites
-    with a stop-sales email drafted in sales@, in the form and to the recipients of HAYA's past ones.
-    Only nights no earlier stop-sales draft carried: no new night, no draft."""
+def run_stop_sales(mail, st, tg, data, preview=False, out=print):
+    """Job 5: the day's stop-sell PDF, always; a draft to the partners only when it differs from the last list.
+    Once a day: a second run the same day does nothing, so the job can run twice in case the first one fails."""
+    today = _today_vn()
+    last = st.data.get("stop_sales_report") or {}
+    if last.get("date") == today.isoformat() and not preview:
+        out(f"STOP SALES: today's list is already made ({today:%d/%m/%Y})")
+        return None
     age = _stale(data)
-    if age:
-        out(f"STOP SALES NOT CHECKED: availability sheet {age}. One line in the report; carry on with the run")
-        return {}
-    low = avail.low_inventory(data, _today_vn())
-    if low and st is not None:
-        low = stop_sales_new(st, data)
-        if not low:
-            out("STOP SALES: nothing new — every night at 1 room or fewer is already in an earlier stop-sales draft. "
-                "No draft")
-            return {}
-    out(avail.render_low(data, low))
-    if low:
-        out("Next: mail-find \"stop sale\" for HAYA's last stop-sales email (Sent Items): same recipients, same "
-            "form, these room types and dates. draft-new <that email's id> <its recipients> \"<its subject form>\" "
-            "<body> --kind stop_sales, with only the nights above. An older stop-sales draft still open: "
-            "--replaces it. No past "
-            "email found -> ask-karen for the recipients.")
-    return low
+    why = f"availability sheet {age}" if age else stop_sales.code_problem(data)
+    if why:
+        stop_sales_gap(tg, why, out=out)
+        return None
+    now = stop_sales.closed(data, today)
+    before = stop_sales.from_state(last["rows"]) if "rows" in last else None
+    rows = stop_sales.lines(now, before, data, today)
+    path = os.path.join(WORK_DIR, "stop-sales", f"Stop-Sell-HAYA-{today.isoformat()}.pdf")
+    stop_sales.write_pdf(rows, path)
+    new, reopened = stop_sales.counts(rows)
+    out(f"STOP SALES {today:%d/%m/%Y}: {len(now)} line(s) closed, {new} new, {reopened} reopened ({data['title']}). "
+        f"PDF: {os.path.abspath(path)}")
+    if preview:
+        return rows
+    first = before is None
+    if (first and now) or new or reopened:
+        text = stop_sales.body(rows, today, first)
+        draft_stop_sales(mail, st, tg, path, text, stop_sales.subject(today), out=out)
+    else:
+        out("STOP SALES: no change since the last list, nothing to the partners")
+    st.data["stop_sales_report"] = {"date": today.isoformat(), "rows": stop_sales.to_state(now)}
+    return rows
 
 
 def run_quote(args, out=print, availability=None):
@@ -1465,16 +1485,12 @@ def draft_new(mail, st, args, tg=None, out=print):
     if args.kind == "confirmation":
         raise Refused("a confirmation goes through draft-confirmation (it checks the EZFOLIO PDF): "
                       "draft-confirmation <message_id> <row> <body> --to … --subject … --attach …")
-    if "stop sale" in args.subject.lower():
-        args.kind = "stop_sales"
-    stop_nights = check_stop_sales(st) if args.kind == "stop_sales" else None
+    check_not_stop_sales(args.kind, args.subject)
     text = read_text(args.body)
     check_no_gaps(text, args.message_id)
     to, cc = new_recipients(args)
     files = read_pdfs(args.attach)
     older = check_one_open_draft(mail, st, "new", args.kind, args.ref, to, args.message_id, _replaces(args))
-    if stop_nights:
-        note_stop_sales(st, stop_nights)
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how="new", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, to=to, cc=cc, files=files,
@@ -1791,7 +1807,8 @@ def parser():
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
     s.add_argument("--alloc", help="check this allocation fits, e.g. 'STD:3,TPL:1'")
-    sub.add_parser("stop-sales", help="room types with 1 room or fewer left per night: stop-sales email due")
+    s = sub.add_parser("stop-sales", help="daily stop-sell PDF; a draft to the partners only when it changed")
+    s.add_argument("--preview", action="store_true", help="make the PDF only: no draft, nothing remembered")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -1950,11 +1967,14 @@ def main(argv=None):
                 return 0
             run_availability(args, data)
         elif c == "stop-sales":
+            tg = None if args.preview else config.telegram()
             data = load_availability()
             if data is None:
-                print("STOP SALES NOT CHECKED: one line in the report; carry on with the run")
+                stop_sales_gap(tg, "availability sheet not readable")
                 return 0
-            run_stop_sales(data, st)
+            run_stop_sales(None if args.preview else config.mail(), st, tg, data, preview=args.preview)
+            if not args.preview:
+                st.save()
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args, live=config.live_sheet())
         elif c == "pdf-fetch":

@@ -95,7 +95,7 @@ class SimMail:
 
     # --- drafts, to files ---
 
-    def _write_draft(self, kind, message_id, to, text, cc=(), subject=None):
+    def _write_draft(self, kind, message_id, to, text, cc=(), subject=None, bcc=()):
         os.makedirs(self.drafts, exist_ok=True)
         n = len(glob.glob(os.path.join(self.drafts, "*.json"))) + 1
         did = f"sim-draft-{n:03d}"
@@ -106,7 +106,7 @@ class SimMail:
             if not subject.upper().startswith(prefix.strip()):
                 subject = prefix + subject
         meta = {"id": did, "kind": kind, "in_reply_to": message_id, "subject": subject,
-                "to": list(to), "cc": list(cc), "attachments": [], "text": text}
+                "to": list(to), "cc": list(cc), "bcc": list(bcc), "attachments": [], "text": text}
         with open(os.path.join(self.drafts, did + ".json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         cc_line = f"<br><b>Cc:</b> {', '.join(cc)}" if cc else ""
@@ -134,8 +134,8 @@ class SimMail:
     def forward_draft_with_text(self, message_id, to, text):
         return self._write_draft("forward", message_id, list(to), text)
 
-    def create_new_draft(self, to, subject, body_text, cc=()):
-        return self._write_draft("new", None, list(to), body_text, cc=list(cc), subject=subject)
+    def create_new_draft(self, to, subject, body_text, cc=(), bcc=()):
+        return self._write_draft("new", None, list(to), body_text, cc=list(cc), subject=subject, bcc=bcc)
 
     def _meta(self, draft_id):
         path = os.path.join(self.drafts, draft_id + ".json")

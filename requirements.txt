@@ -8,3 +8,5 @@ openpyxl>=3.1
 # Scanned PDFs (no text layer): pages rendered to PNG for the agent to open
 pypdfium2>=4.0
 pillow>=10.0
+# The daily stop-sell PDF (tools/stop_sales.py)
+reportlab>=4.0

@@ -10,6 +10,7 @@ Runs every day including weekends — agencies email on Saturdays and Sundays.
 | 2 | Confirmation drafts | `30 7-21 * * *` command check, starts the job when there is work; the job itself also at 22:00 | Hourly, no model when quiet |
 | 3 | Payments | `0 8,15 * * *`, plus `35 7-21 * * *` command check for a reminder due | 08:00 and 15:00, and hourly when a reminder falls due |
 | 4 | Daily report to Karen | `30 21 * * *` | 21:30 |
+| 5 | Stop-sell list | `0 8,9 * * *` command job, no model | 08:00; 09:00 only makes it if 08:00 failed |
 
 ## 1. Inbox scan
 Hourly (Karen, 2026-10-08). The 06:00–22:00 window is Monica's, matched to job 2.
@@ -22,7 +23,7 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 6. Inquiries and quote requests → draft the reply.
 7. Read the Sent folder: for any draft of mine that was sent, record the real sent time and note any edits as corrections.
 8. Palma emails → forward draft to booking@palmahotel.vn (once). Flag money asks and anything unclassified. Phishing senders are dropped by `inbox-new`.
-8a. **Stop sales:** `stop-sales` → it lists only nights no earlier stop-sales draft carried → one stop-sales draft in the form of HAYA's last one (`skills/inquiries-and-quotes.md`). `STOP SALES: nothing new` → no draft, nothing in the report. `STOP SALES NOT CHECKED` (sheet not readable) → one report line, carry on.
+8a. Stop sales moved to job 5 (2026-11-05): no stop-sales step, no draft, in job 1.
 9. Payment reminders moved to job 3 (2026-11-04).
 
 ### Job 1 — the commands, in order
@@ -108,3 +109,6 @@ Then write the day's log to `memory/YYYY-MM-DD.md`.
 - Where the reports land (Telegram, email, or a tab on the intake sheet).
 - Sheet write access and draft-with-attachment are untested.
 - Job 2 depends on the EZFOLIO build tool being live and on what it writes for cancellations and failures.
+
+## 5. Stop-sell list (dev, 2026-11-05)
+OpenClaw command job, no model: `.venv/bin/python -m tools.emi stop-sales`, from `/data/emi`, `0 8,9 * * *`. One list a day; a second run the same day does nothing. Details: `skills/inquiries-and-quotes.md`, Stop sales.

@@ -30,6 +30,7 @@ KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
     "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
     "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking on request",
+    "stop_sales": "Danh sách stop sell",
 }
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
@@ -84,6 +85,8 @@ def notify(tg, n, r, note="", in_place=False, held=""):
              f"<b>Gửi:</b> {esc(', '.join(r['to']))}"]
     if r.get("cc"):
         lines.append(f"<b>Cc:</b> {esc(', '.join(r['cc']))}")
+    if r.get("bcc"):
+        lines.append(f"<b>Bcc:</b> {esc(', '.join(r['bcc']))}")
     lines.append(f"<b>Tiêu đề:</b> {esc(r['subject'])}")
     if r.get("attachments"):
         lines.append(f"<b>Đính kèm:</b> {esc(', '.join(r['attachments']))}")
@@ -122,14 +125,15 @@ def _mark(tg, r, note):
 # --- a new draft ---
 
 def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-           cc=None, override=False, attachments=(), notice=True):
+           cc=None, bcc=(), override=False, attachments=(), notice=True):
     """Outlook mode: called right after the draft is saved in Outlook. Returns the review number.
     override=True: a reply whose recipients were set by --to (the draft is rebuilt with them on rewrite).
     notice=False: forward-slip tells Telegram itself, once it knows whether the forward went."""
     d = mail.get_draft(draft_id) or {}
     n = st.open_review(draft_id, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
                        to=_addresses(d.get("toRecipients")) or list(to or []),
-                       cc=_addresses(d.get("ccRecipients")) or list(cc or []), to_override=bool(override),
+                       cc=_addresses(d.get("ccRecipients")) or list(cc or []), bcc=list(bcc),
+                       to_override=bool(override),
                        subject=d.get("subject", ""), text=text, attachments=list(attachments), files=[])
     if notice:
         notify(tg, n, st.data["reviews"][n])
@@ -155,12 +159,12 @@ def sent(st, tg, n):
 
 
 def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-            cc=None, files=(), mailbox="", new_subject=""):
+            cc=None, bcc=(), files=(), mailbox="", new_subject=""):
     """Telegram mode: nothing goes to Outlook. The draft (text + files under store/<n>/) waits for Accept.
     files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'.
     A reply with to=[...] goes to exactly to / cc (the real sender of a mail our staff forwarded in), and its
     subject is 'RE: <original subject>' without the 'Fw:'; Accept writes it into Outlook the same way."""
-    src = mail.get_message_text(source)
+    src = mail.get_message_text(source) if how != "new" else {}
     subject = ("FW: " + clean_subject(src.get("subject", ""))) if how == "forward" else reply_subject(src.get("subject", ""))
     override = how == "reply" and bool(to)
     if how == "new":  # a new email, e.g. Odeon's confirmation: the subject and recipients given
@@ -175,7 +179,8 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
             others = _addresses(src.get("toRecipients")) + _addresses(src.get("ccRecipients"))
             recipients += [a for a in others if a.lower() != mailbox.lower() and a not in recipients]
     n = st.open_review(None, how=how, source=source, reply_all=reply_all, kind=kind, ref=ref, row=row,
-                       to=recipients, cc=list(cc or []) if override or how == "new" else [], to_override=override,
+                       to=recipients, cc=list(cc or []) if override or how == "new" else [], bcc=list(bcc),
+                       to_override=override,
                        subject=subject, text=text, attachments=[], files=[])
     r = st.data["reviews"][n]
     r["draft_id"] = PENDING + n
@@ -224,7 +229,7 @@ def _write(mail, r, text):
     if r["how"] == "forward":
         return mail.forward_draft_with_text(r["source"], r["to"], text)
     if r["how"] == "new":
-        return mail.create_new_draft(r["to"], r["subject"], text, cc=r.get("cc") or [])
+        return mail.create_new_draft(r["to"], r["subject"], text, cc=r.get("cc") or [], bcc=r.get("bcc") or [])
     if r.get("to_override"):
         return mail.reply_draft_with_text(r["source"], text, to=r["to"], cc=r.get("cc") or [])
     return mail.reply_draft_with_text(r["source"], text, reply_all=r.get("reply_all", False))
@@ -374,17 +379,20 @@ def info(mail, st, n, out=print):
     out(f"to: {', '.join(r['to'])}")
     if r.get("cc"):
         out(f"cc: {', '.join(r['cc'])}")
+    if r.get("bcc"):
+        out(f"bcc: {', '.join(r['bcc'])}")
     out(f"subject: {r['subject']}")
     if r.get("attachments"):
         out(f"attachments: {', '.join(r['attachments'])}")
     out(f"opened: {_vn(r['opened_at'])} (giờ Việt Nam)")
     try:
-        src = mail.get_message_text(r["source"])
-        frm = src.get("from", {}).get("emailAddress", {})
-        body = (src.get("uniqueBody") or src.get("body") or {}).get("content", "").strip()
-        out(f"\nSOURCE EMAIL: {frm.get('name', '')} <{frm.get('address', '')}> | {src.get('subject', '')} | "
-            f"{src.get('receivedDateTime', '')}")
-        out(body[:1500] + ("\n…" if len(body) > 1500 else ""))
+        if r.get("source"):  # the daily stop-sell list answers no email
+            src = mail.get_message_text(r["source"])
+            frm = src.get("from", {}).get("emailAddress", {})
+            body = (src.get("uniqueBody") or src.get("body") or {}).get("content", "").strip()
+            out(f"\nSOURCE EMAIL: {frm.get('name', '')} <{frm.get('address', '')}> | {src.get('subject', '')} | "
+                f"{src.get('receivedDateTime', '')}")
+            out(body[:1500] + ("\n…" if len(body) > 1500 else ""))
     except Exception as e:
         out(f"\nSOURCE EMAIL: could not read ({type(e).__name__})")
     out("\nDRAFT TEXT:")

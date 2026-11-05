@@ -433,7 +433,7 @@ class GraphMail:
         self._prepend_text(draft["id"], text)
         return draft
 
-    def create_new_draft(self, to, subject, body_text, cc=()):
+    def create_new_draft(self, to, subject, body_text, cc=(), bcc=()):
         """A new email (not a reply): Odeon's confirmation and decline go out this way (tour-operators.md)."""
         html_body = ('<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'
                      + text_to_html(body_text) + "</div>")
@@ -442,6 +442,7 @@ class GraphMail:
             "body": {"contentType": "HTML", "content": html_body},
             "toRecipients": _recipients(to),
             "ccRecipients": _recipients(cc),
+            "bccRecipients": _recipients(bcc),
             "categories": [EMI_CATEGORY],
         })
         return draft

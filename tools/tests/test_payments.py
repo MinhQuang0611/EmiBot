@@ -362,11 +362,6 @@ class StaleSheetTest(unittest.TestCase):
         self.assertIn("NOT VERIFIED (stale sheet): STD:1", text)
         self.assertNotIn("FITS:", text)
 
-    def test_stop_sales_not_checked_on_a_stale_sheet(self):
-        lines = []
-        self.assertEqual(emi.run_stop_sales(self.sheet(datetime(2026, 10, 1, tzinfo=VN)), out=lines.append), {})
-        self.assertIn("STOP SALES NOT CHECKED", lines[0])
-
     def quote_args(self, channel):
         return SimpleNamespace(arrival="30/10/2026", departure="31/10/2026", adults=2, children="", rooms=None,
                                room_type="STD", alloc=None, twin=False, indian=False, channel=channel)

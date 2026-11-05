@@ -201,9 +201,9 @@ Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it 
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.
 
-## Stop sales on the B2B and OTA sites (Tracy's audit, 29/10)
-A room type with **1 room or fewer** left on a night in the Future Availability sheet (0 and below included) is closed on the B2B and OTA sites. Each scan:
-1. `py -m tools.emi stop-sales` lists the room types and dates no earlier stop-sales draft carried. `STOP SALES: nothing new` → stop here, no draft. `draft-new` refuses one too.
-2. `mail-find "stop sale"` for HAYA's last stop-sales email in Sent Items: copy its recipients and its form exactly; only the room types and dates change.
-3. `draft-new <that email's id> <its recipients> "<its subject form>" <body> --kind stop_sales`. One open stop-sales draft at a time: an older one still open goes with `--replaces`. A person presses Send.
-4. No past stop-sales email found → `ask-karen` for the recipients and the form; the draft waits.
+## Stop sales on the B2B and OTA sites (dev, 2026-11-05)
+Job 5 makes this once a day with `py -m tools.emi stop-sales`. I never write a stop-sales email by hand: `draft-new` and `draft-reply` refuse one.
+1. Room types are merged first: Standard Twin into Superior Twin, Twin Deluxe into Deluxe Seaview, Triple Partial Seaview into Triple. Apartments are left out. A merged type with **1 room or fewer** on a night is STOP SELL (`tools/stop_sales.py`).
+2. The PDF follows the agreed list (`docs/Stop-Sell-Room-Types-HAYA--AGENCY-through-Feb2027…pdf`) with a last column NEW UPDATE, filled on the day a line changes: `NEW - <date>`, or `REOPENED - <date>` on a line with status OPEN, shown that one day. It is saved every day in `emi-work/stop-sales/`.
+3. Only a list that differs from the last one becomes a draft: Bcc to the partners, PDF attached, Telegram notice. A person presses Send. An older list nobody sent is replaced. A night that has simply passed is not a change.
+4. `STOP SALES NOT CHECKED` (sheet unreadable, older than yesterday, or room codes changed) → no list, a Telegram line, and the comparison waits for the next good day. New room code → add it to `MAPPED`.
