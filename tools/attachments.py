@@ -36,8 +36,18 @@ def skip(att):
 
 
 def save(folder, att):
+    """Pasted images all arrive as image.png, so a second one with new bytes gets -2, -3..., never overwrites."""
     os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, safe_name(att.get("name")))
+    name = safe_name(att.get("name"))
+    stem, ext = os.path.splitext(name)
+    path = os.path.join(folder, name)
+    n = 1
+    while os.path.exists(path):
+        with open(path, "rb") as f:
+            if f.read() == att["data"]:  # show run again on the same email
+                return path
+        n += 1
+        path = os.path.join(folder, f"{stem}-{n}{ext}")
     with open(path, "wb") as f:
         f.write(att["data"])
     return path

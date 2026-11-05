@@ -95,7 +95,11 @@ def telegram():
     return from_env(SIM_DIR)
 
 
+def state_path():
+    # A simulation never moves the real scan clock or the real processed/draft records.
+    return os.path.join(SIM_DIR, "state.json") if SIM_DIR else STATE_PATH
+
+
 def state():
     from .state import State
-    # A simulation never moves the real scan clock or the real processed/draft records.
-    return State(os.path.join(SIM_DIR, "state.json") if SIM_DIR else STATE_PATH)
+    return State(state_path())

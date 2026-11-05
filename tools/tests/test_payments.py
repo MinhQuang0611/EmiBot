@@ -1,6 +1,8 @@
 """Payment chasing and confirmations due (Karen, 2026-11-04), and the review of 04/11's four drafts:
 a stale availability sheet, direct rates past their printed date, plain-text drafts."""
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
@@ -10,6 +12,7 @@ from unittest import mock
 from tools import availability as avail
 from tools import emi, payments, quote as quoting
 from tools import intake_schema as schema
+from tools import state as state_file
 from tools.state import State
 
 VN = timezone(timedelta(hours=7))
@@ -413,6 +416,28 @@ class NoBlankRateTest(unittest.TestCase):
 
     def test_a_row_already_built_is_not_blocked(self):
         self.assertEqual(self.errors(pdf_link="https://drive/x"), [])
+
+
+class StateLockTest(unittest.TestCase):
+    """04/11: draft-reply and draft-new run side by side both took #415, and one draft's record was lost."""
+
+    def test_a_writing_command_takes_the_lock_and_a_reading_one_does_not(self):
+        for cmd, argv, taken in (("draft-attach", ["draft-attach", "d", "f"], True), ("show", ["show", "m"], False),
+                                 ("payments-due", ["payments-due"], False)):
+            with mock.patch.object(emi, "hold_lock") as lock, mock.patch.object(emi.config, "state", side_effect=KeyError("stop")):
+                emi.main(argv)
+            self.assertEqual(lock.called, taken, cmd)
+
+    @unittest.skipIf(state_file.fcntl is None, "flock needs Linux, where Emi runs")
+    def test_a_second_process_waits_and_gives_up(self):
+        path = os.path.join(tempfile.mkdtemp(), "state.json")
+        code = ("import sys,time;from tools.state import hold_lock;hold_lock(sys.argv[1]);print('held',flush=True);"
+                "time.sleep(5)")
+        p = subprocess.Popen([sys.executable, "-c", code, path], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(p.kill)
+        self.assertEqual(p.stdout.readline().strip(), "held")
+        with self.assertRaises(TimeoutError):
+            state_file.hold_lock(path, wait=0.3)
 
 
 class PlainTextDraftTest(unittest.TestCase):

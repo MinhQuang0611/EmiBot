@@ -101,7 +101,8 @@ class ShowTest(unittest.TestCase):
             {"@odata.type": "#microsoft.graph.fileAttachment", "name": "rooming.csv", "contentBytes": b64(b"name,room\nAn,DLX")},
             {"@odata.type": "#microsoft.graph.fileAttachment", "name": "logo.png", "isInline": True, "contentBytes": b64(b"x" * 100)},
             {"@odata.type": "#microsoft.graph.itemAttachment", "name": "fwd.eml"}]}
-        mail, http = mail_with([("GET", "/messages/m2/attachments", atts), ("GET", "/messages?", thread),
+        mail, http = mail_with([("GET", "/messages/m2/attachments", atts), ("GET", "/messages/m1/attachments", {"value": []}),
+                                ("GET", "/messages?", thread),
                                 ("GET", "/messages/m2", target)])
         lines = []
         with tempfile.TemporaryDirectory() as d:
@@ -117,6 +118,33 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(saved, ["rooming.csv"])           # inline logo skipped
         thread_call = next(c for c in http.calls if "/messages?" in c[1])
         self.assertIn("conversationId eq 'c1'", thread_call[1])
+
+    def test_slip_pasted_in_the_body_is_saved_and_nothing_overwritten(self):
+        # Graph: hasAttachments false when every attachment is inline. Both pasted images are image.png.
+        target = {"id": "m2", "conversationId": "c1"}
+        thread = {"value": [
+            {"id": "m1", "receivedDateTime": "2026-10-14T02:00:00Z", "subject": "Booking", "hasAttachments": False,
+             "from": {"emailAddress": {"address": "sales@haya-hotels.com"}}, "body": {"content": "offer"}},
+            {"id": "m2", "receivedDateTime": "2026-11-05T01:45:00Z", "subject": "RE: Booking", "hasAttachments": False,
+             "from": {"emailAddress": {"address": "ruby@x.vn"}}, "body": {"content": "UNC [image.png]"}}]}
+        pasted = {"value": [
+            {"@odata.type": "#microsoft.graph.fileAttachment", "name": "image.png", "isInline": True,
+             "contentBytes": b64(b"a" * 20000)},
+            {"@odata.type": "#microsoft.graph.fileAttachment", "name": "image.png", "isInline": True,
+             "contentBytes": b64(b"b" * 20000)}]}
+        mail, _ = mail_with([("GET", "/messages/m2/attachments", pasted), ("GET", "/messages/m1/attachments", {"value": []}),
+                             ("GET", "/messages?", thread), ("GET", "/messages/m2", target)])
+        lines = []
+        with tempfile.TemporaryDirectory() as d:
+            emi.show(mail, "m2", work_dir=d, out=lines.append)
+            folder = attachments.message_dir(d, "m2")
+            self.assertEqual(sorted(os.listdir(folder)), ["image-2.png", "image.png"])
+            with open(os.path.join(folder, "image-2.png"), "rb") as f:
+                self.assertEqual(f.read(), b"b" * 20000)
+            self.assertEqual(sum("[attachment saved:" in x for x in lines), 2)
+            lines.clear()
+            emi.show(mail, "m2", work_dir=d, out=lines.append)  # read again: same two files, no copies
+            self.assertEqual(sorted(os.listdir(folder)), ["image-2.png", "image.png"])
 
 
 REAL_HEADER = open(os.path.join(os.path.dirname(__file__), "..", "..", "test", "fixtures", "intake-columns.csv"),

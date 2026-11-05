@@ -5,7 +5,13 @@ Not on the intake sheet: the sheet's columns belong to the EZFOLIO build tool.
 import json
 import os
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
+
+try:
+    import fcntl
+except ImportError:  # the dev's Windows machine; Emi runs on Linux
+    fcntl = None
 
 EMPTY = {
     "last_scan": None,       # ISO UTC of the last inbox scan
@@ -22,6 +28,27 @@ EMPTY = {
 }
 
 REVIEW_OPEN = "pending"
+_held = []  # keeps the lock's file open until the process ends, which releases it
+
+
+def hold_lock(path, wait=120):
+    """One command at a time from reading the state to saving it, held until this process ends. Each command loads
+    the whole file and saves it whole: on 04/11 a Telegram Deny loaded it, a new draft took #415, and the Deny's save
+    wiped that draft's record, so the next draft took #415 again. Raises TimeoutError after `wait` seconds rather than risk that."""
+    if fcntl is None:
+        return
+    f = open(path + ".lock", "a")
+    deadline = time.time() + wait
+    while True:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _held.append(f)
+            return
+        except OSError:
+            if time.time() >= deadline:
+                f.close()
+                raise TimeoutError(f"another command has held {path}.lock for {wait} s; run this one again") from None
+            time.sleep(0.1)
 
 
 def now_iso():

@@ -82,6 +82,7 @@ from . import cancel_fee as cancelling
 from . import operator_rates as op_rates
 from . import operators
 from . import payments
+from .state import hold_lock
 from . import availability as avail
 from . import review, sim
 from . import intake_schema as schema
@@ -215,8 +216,9 @@ def show(mail, message_id, work_dir=None, out=print):
         body = (m.get("body") if is_target else m.get("uniqueBody") or m.get("body")) or {}
         out("")
         out(body.get("content", "").strip())
-        if m.get("hasAttachments"):
-            _show_attachments(mail, m["id"], work_dir, out)
+        # Not gated on hasAttachments: Graph leaves inline images out of it, and a UNC pasted into the
+        # body is an inline image (UMA AVD-4246445, 05/11: slip never read, payment not recorded).
+        _show_attachments(mail, m["id"], work_dir, out)
 
 
 def _show_attachments(mail, message_id, work_dir, out):
@@ -1813,9 +1815,16 @@ def parser():
     return p
 
 
+# These only read, and some take half a minute: they don't wait for the state lock or hold it up.
+READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "quote", "availability", "payments-due",
+             "confirmations-due")
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
+        if args.cmd not in READ_ONLY:
+            hold_lock(config.state_path())
         st = config.state()
         c = args.cmd
         if c == "inbox-new":

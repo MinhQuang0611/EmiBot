@@ -28,6 +28,8 @@ Skills: `inbox-triage.md`, `booking-intake.md`, `department-forwards.md`, `inqui
 ### Job 1 — the commands, in order
 Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Use only these commands to reach the mailbox and the sheet; never write your own Python for it. Write your own files (row JSON, draft text) under `emi-work/out/`.
 
+**One command at a time (04/11):** never two `tools.emi` calls in parallel. A command that writes the state waits its turn on the lock; before the lock, a Telegram Deny saved over a draft made a moment earlier, and two drafts took #415.
+
 **One command per shell call (dev, 30/10).** `show`, `sheet-find`, `sheet-check`, `sheet-append`, `sheet-update`, `draft-*`, `done`: each in a shell call of its own, never several joined by newlines, `;` or `&&`, never a loop over ids. Every `tools.emi` command prints `END <command> rc=<n>` as its last line. No `END` line = the output was cut off (the shell call came back before the command finished): run that command again on its own and read the whole output. A cut-off output is not a failed run. (30/10 21:23–22:15: ten `show`s in one call came back half after 30 s and three runs stopped with 29 mails unread.)
 
 1. `py -m tools.precheck inbox --agent` → prints `quiet` or `work`, exit 0 either way (audit 30/10: exit 1 made every quiet run show as "Bash failed" and hid the real failures). `quiet`: answer exactly `NO_REPLY` (the scheduler then posts nothing) and stop. Exit 2: report the error line and stop.
