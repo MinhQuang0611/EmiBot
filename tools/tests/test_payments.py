@@ -187,6 +187,76 @@ class ConfirmationsDueTest(unittest.TestCase):
             self.assertEqual(self.run_it([row(5, **kw)], FakeMail(code="other")), [], kw)
 
 
+class ChangeConfirmationTest(unittest.TestCase):
+    """Dev 05/11, Amara #30124: a change gets no note of its own; the reply is the new confirmation once it is built."""
+    BUILT = dict(action="CHANGE", received_at="05/11/2026 09:28", ez_status="done", what_changed="+1 STD",
+                 ez_processed_at="2026-11-05T19:31:53+07:00")
+
+    def rows(self, **kw):
+        return [row(5, room_code="SUP-TWN", rooms="7", total_vnd="26600000"),
+                row(9, room_code="SUP-TWN", rooms="7", total_vnd="26600000", **{**self.BUILT, **kw}),
+                row(10, room_code="STD", rooms="1", total_vnd="3400000", **{**self.BUILT, **kw})]
+
+    def run_it(self, rows, mail, st=None):
+        return payments.needs_confirmation(rows, emi.booking_state, emi._parts, mail,
+                                           st or State(os.devnull + "-none"), MAILBOX, date(2026, 11, 5))
+
+    def test_built_change_is_due_on_its_own_rows(self):
+        items = self.run_it(self.rows(), FakeMail(sent_at="2026-11-02T03:00:00Z"))
+        self.assertEqual((items[0]["row"], items[0]["rows"], items[0]["total"]), (9, [9, 10], 30000000))
+        self.assertIn("CONFIRM CHANGE |", payments.render_confirmations(items))
+        self.assertIn("what changed: +1 STD", payments.render_confirmations(items))
+
+    def test_a_payment_is_not_a_change(self):
+        rows = [row(5), row(9, **{**self.BUILT, "what_changed": "Payment 1 received"})]
+        self.assertEqual(self.run_it(rows, FakeMail()), [])
+
+    def test_waits_for_the_build(self):
+        for status in ("", "needs_review", "out_of_scope"):
+            self.assertEqual(self.run_it(self.rows(ez_status=status), FakeMail(code="other")), [], status)
+
+    def test_the_pdf_link_alone_is_not_the_signal(self):
+        # the build tool remakes the PDF under the same Drive link, and every CHANGE row has it from the start
+        self.assertEqual(self.run_it(self.rows(ez_status=""), FakeMail(code="other")), [])
+
+    def test_changes_built_before_the_start_date_stay_by_hand(self):
+        rows = self.rows(ez_processed_at="2026-11-04T10:00:00+07:00")
+        self.assertEqual(self.run_it(rows, FakeMail(code="other")), [])
+
+    def test_a_pdf_sent_to_the_agency_after_the_build_closes_it(self):
+        self.assertEqual(self.run_it(self.rows(), FakeMail(sent_at="2026-11-05T13:00:00Z")), [])
+
+    def test_a_mail_without_a_file_or_only_to_accounting_does_not(self):
+        self.assertEqual(len(self.run_it(self.rows(), FakeMail(sent_at="2026-11-05T13:00:00Z", attach=False))), 1)
+        mail = FakeMail(sent_at="2026-11-05T13:00:00Z")
+        mail.get_message_bodies = lambda _: {"toRecipients": [{"emailAddress": {"address": "accountant@palmahotel.vn"}}]}
+        self.assertEqual(len(self.run_it(self.rows(), mail)), 1)
+
+    def test_already_drafted_on_the_change_row(self):
+        st = State(os.devnull + "-none")
+        st.record_draft("d1", "31-130127", 9, "confirmation")
+        self.assertEqual(self.run_it(self.rows(), FakeMail(code="other"), st), [])
+
+    def test_a_first_confirmation_draft_does_not_cover_the_change(self):
+        st = State(os.devnull + "-none")
+        st.record_draft("d1", "31-130127", 5, "confirmation")
+        self.assertEqual(len(self.run_it(self.rows(), FakeMail(code="other"), st)), 1)
+
+    def test_cancelled_after_the_change(self):
+        rows = self.rows() + [row(11, action="CANCEL", received_at="05/11/2026 20:00")]
+        self.assertEqual(self.run_it(rows, FakeMail(code="other")), [])
+
+    def test_held_until_the_pdf_is_remade_under_the_same_link(self):
+        st = State(os.devnull + "-none")
+        rows = self.rows()
+        args = SimpleNamespace(ref="31-130127", row=9, reason=["PDF", "13", "rooms"], clear=False)
+        with mock.patch.object(emi, "_row", return_value=rows[1]):
+            emi.run_confirmation_hold(SimpleNamespace(), st, args, out=lambda *_: None)
+        self.assertEqual(self.run_it(rows, FakeMail(code="other"), st), [])
+        again = self.rows(ez_processed_at="2026-11-05T22:00:00+07:00")
+        self.assertEqual(len(self.run_it(again, FakeMail(code="other"), st)), 1)
+
+
 class ConfirmationInThePdfTest(unittest.TestCase):
     """Anex 112970549: a person's reply of 12:59 had the group code only in the PDF, so the booking kept coming up."""
 

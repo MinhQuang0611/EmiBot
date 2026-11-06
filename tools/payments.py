@@ -22,6 +22,7 @@ REMIND_AT_HOURS = 40  # the deposit reminder goes 8 hours before the deadline
 BALANCE_DAYS = 7      # balance due this many days before check-in; reminder the day before, from 09:00
 FIRST_RUN_HOUR, LAST_RUN_HOUR = 7, 21  # the hourly check's window, Vietnam time
 CONFIRM_FROM = date(2026, 10, 30)      # Emi's first day on the live sheet: older bookings were confirmed by hand
+CHANGE_FROM = date(2026, 11, 5)        # changes built before this were confirmed by hand (dev, 05/11, Amara #30124)
 SEARCH_TOP = 25
 
 
@@ -194,10 +195,66 @@ def _flag_paid(st, mail, item, which, out):
     out["paid_unsent"].append(dict(item, which=which, review=st.review_by_draft(entry["draft_id"])))
 
 
+def _rooms(batch):
+    """What a confirmation states: dates, room types and the total. A payment or a name changes none of these."""
+    rooms = sorted((r.get("room_code") or "", r.get("rooms") or "") for r in batch if (r.get("rooms") or "") != "0")
+    return batch[0].get("arrival"), batch[0].get("departure"), rooms, total_of(batch)
+
+
+def last_change(hits):
+    """The rows of the last email that changed the booking's dates, rooms or total; None if nothing did. Each email
+    writes the whole booking, so comparing one email's rows with the one before shows what really changed."""
+    batches = []
+    for r in hits:
+        key = (r.get("action"), r.get("received_at"))
+        if batches and batches[-1][0] == key:
+            batches[-1][1].append(r)
+        else:
+            batches.append((key, [r]))
+    found = None
+    for (_, before), (key, batch) in zip(batches, batches[1:]):
+        if key[0] == "CHANGE" and _rooms(batch) != _rooms(before):
+            found = batch
+    return found
+
+
+def confirmed_since(mail, code, mailbox, since):
+    """A mail from sales@ to the agency with an attachment since the change was built: Emi's draft sent, or a person's.
+    Slips forwarded to accounting carry the code and a file too, so only mail to outside counts."""
+    for m in mail.search(code, top=SEARCH_TOP):
+        when = m.get("sentDateTime") or m.get("receivedDateTime") or ""
+        if _addr(m) != mailbox.lower() or not m.get("hasAttachments") or _when(when) < since:
+            continue
+        if any(not is_internal(a) for a in _list(mail.get_message_bodies(m["id"]).get("toRecipients"))):
+            return True
+    return False
+
+
+def built_at(batch):
+    """When the build tool finished these rows (the sheet's time is Vietnam time). None until every row is done with
+    its PDF. The PDF keeps its Drive link when it is remade, so ez_processed_at is the signal, not the link."""
+    if any(r.get("ez_status") != "done" or not (r.get("pdf_link") or "").strip() for r in batch):
+        return None
+    try:
+        return datetime.fromisoformat(max(r.get("ez_processed_at") or "" for r in batch)[:19]).replace(tzinfo=VN)
+    except ValueError:
+        return None
+
+
+def _held(st, ref, row):
+    """Job 2 stopped on this PDF (a mismatch, an invoice awaited) and told Karen: not every hour. A remade PDF has the
+    same link and a new ez_processed_at."""
+    hold = st.data["confirmation_holds"].get(ref)
+    processed = row.get("ez_processed_at", "")
+    return bool(hold) and hold.get("pdf_link") == row.get("pdf_link") and hold.get("processed", processed) == processed
+
+
 def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
-    """Bookings built since Emi went live that sales@ never confirmed. One line per booking, on its NEW row. An OTA
-    confirms to the guest itself; a change's confirmation is still read from the row by hand."""
-    done = {ref for ref, _ in st.confirmation_drafted()}
+    """Bookings built since Emi went live that sales@ hasn't confirmed: a NEW never confirmed, one line on its NEW row,
+    or a change of dates, rooms or total built and not yet confirmed, one line on the change's first row (dev, 05/11:
+    the reply to a change is the new confirmation with the PDF). An OTA confirms to the guest itself."""
+    drafted = st.confirmation_drafted()
+    done = {ref for ref, _ in drafted}
     out = []
     for state in operators.bookings(rows, state_of):
         head = state[0]
@@ -206,20 +263,31 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
         arrival = operators._date(head.get("arrival"))
         if not (channel in ("TA", "Direct") or channel.startswith("Tour operator")) or operators.cancelled(state):
             continue
-        if not arrival or arrival < today or not total_of(state) or ref in done:
+        if not arrival or arrival < today or not total_of(state):
             continue
         mine = parts_of(ref)
         hits = [r for r in rows if mine & parts_of(r.get("booking_ref"))]
+        code = _group(hits)
+        changed = last_change(hits)
+        if changed and code:
+            since = built_at(changed)
+            first = changed[0]
+            if (since and since.date() >= CHANGE_FROM and not _held(st, ref, first)
+                    and not any(row == r["_row"] for _, row in drafted for r in changed)
+                    and not confirmed_since(mail, code, mailbox, since)):
+                out.append({"ref": ref, "row": first["_row"], "company": head.get("company", ""), "group": code,
+                            "arrival": arrival, "subject": first.get("source_email", ""), "channel": channel,
+                            "rows": [r["_row"] for r in changed], "total": total_of(changed),
+                            "change": first.get("what_changed", "")})
+            continue  # changed since the NEW: its first confirmation is not what is owed
+        if ref in done:
+            continue
         new = next((r for r in hits if r.get("action") == "NEW" and (r.get("pdf_link") or "").strip()), None)
         if new is None:
             continue
         received = operators._date((new.get("received_at") or "").split(" ")[0])
-        code = _group(hits)
-        if not code or not received or received < CONFIRM_FROM:
+        if not code or not received or received < CONFIRM_FROM or _held(st, ref, new):
             continue
-        hold = st.data["confirmation_holds"].get(ref)
-        if hold and hold.get("pdf_link") == new.get("pdf_link"):
-            continue  # job 2 stopped on this PDF (a mismatch, an invoice awaited) and told Karen: not every hour
         if find_confirmation(mail, code, mailbox, mine) is None:
             out.append({"ref": ref, "row": new["_row"], "company": head.get("company", ""), "group": code,
                         "arrival": arrival, "subject": new.get("source_email", ""), "channel": channel,
@@ -273,9 +341,11 @@ def render(result, now):
 
 
 def render_confirmations(items):
-    out = [f"CONFIRMATIONS DUE: {len(items)} booking(s) built and never confirmed from sales@"]
+    out = [f"CONFIRMATIONS DUE: {len(items)} booking(s) built and not confirmed from sales@"]
     for i in items:
-        out.append(f"CONFIRM | {i['channel']} | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']} | "
+        change = i.get("change")
+        out.append(f"{'CONFIRM' if change is None else 'CONFIRM CHANGE'} | {i['channel']} | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']} | "
                    f"arrival {i['arrival']:%d/%m/%Y} | booking rows {', '.join(map(str, i['rows']))}, total "
-                   f"{money(i['total'])}: the PDF covers all of them | original email: {i['subject']}")
+                   f"{money(i['total'])}: the PDF covers all of them | original email: {i['subject']}"
+                   + (f" | what changed: {change}" if change else ""))
     return "\n".join(out)

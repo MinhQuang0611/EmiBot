@@ -6,6 +6,8 @@ Forwards go to accounting (payment slips, invoices, refunds), the company's VAT 
 
 **Once per email** (Tracy's audit, 29/10): before a forward, `mail-find` the subject or ref to see whether it is already in Sent Items; `draft-forward` and `forward-slip` refuse a second forward of the same email to the same address (unless the first draft was denied). Never Karen's name in the note.
 
+**A draft is not a forward (dev, 2026-11-05, Absolute Asia 28192).** `internal_notes`, `notes` and the report say "forward drafted #n" until the mail is in Sent Items; "forwarded" only for a `forward-slip` that printed sent. A draft that goes `gone` may have been deleted, so before anything says it went, `mail-find` the ref and look for the `FW:`.
+
 **The note on top, in Karen's style (dev, 2026-10-22):** Vietnamese, labels and bullets, nothing else. The colleague reading it should know in five seconds which booking, when, and what to do, without opening the email below. Accounting gets the block in `email-templates.md` 4c (mã đoàn on the first line, then total, 50%, the amount on the slip and whether it is short, reference numbers, invoice details — as HAYA's own forward for An0109 on 15/10/2026, subject "Fw: … – UNC cọc #[mã đoàn]"). No reasons, no "Dear team", no sign-off paragraph.
 - **Never forward an email back to the colleague who forwarded it to us** (sender `haya@haya-hotels.com` → nothing back to haya@). They have it; the reply to the guest or agency cc's them (`email-templates.md`, "Who the reply goes to"). `draft-forward` refuses it.
 

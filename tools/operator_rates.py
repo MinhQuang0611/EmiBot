@@ -131,9 +131,13 @@ def _offers(data, spo, ahead, gaps):
         raise RateError(f"{data['operator']} is priced with exactly the offer the voucher's SPO code applies: pass "
                         f"--spo <code[,code]> as printed on the voucher, or --spo none")
     eb_pct, free, extra = None, False, []
-    for token in [t.strip().upper() for t in spo if t.strip()]:
+    # An Odeon voucher prints its offers inside the SPOCode line, a night count per offer set (dev, 2026-11-05):
+    # "10 * (Contract Revise Rates(C[D45REB10%]) (C[S10P09]) ) + 3 * (Contract Revise Rates(C[S10P09]) )".
+    tokens = [c for t in spo for c in (re.findall(r"C\[([^\]]+)\]", t) or [t])]
+    for token in dict.fromkeys(t.strip().upper() for t in tokens if t.strip()):
         if token == "NONE":
             continue
+        token = re.sub(r"^D\d+REB", "EB", token)  # D45REB10% = early booking, 45+ days, 10%
         m = re.fullmatch(r"([A-Z]+)(\d+)?%?", token.replace(" ", ""))
         word, num = (m.group(1), m.group(2)) if m else (token, None)
         if word in conf.get("eb_tokens", ()):

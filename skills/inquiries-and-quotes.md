@@ -191,7 +191,7 @@ Payment terms to state: 50% deposit within 48 hours of receiving the confirmatio
 When those details arrive, the email becomes a NEW booking → `booking-intake.md`.
 
 ## Money asks
-Discount, upgrade, waived fee, free extra: acknowledge, give the real reason it isn't offered on this rate, offer what is available at its price. Never yes, never "let me see what I can do." If it's something Karen might grant, it goes to her as a request.
+A paid sea-view upgrade on a booking: `email-templates.md` 5b. Discount, free upgrade, waived fee, free extra: acknowledge, give the real reason it isn't offered on this rate, offer what is available at its price. Never yes, never "let me see what I can do." If it's something Karen might grant, it goes to her as a request.
 
 ## Replies
 - Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.

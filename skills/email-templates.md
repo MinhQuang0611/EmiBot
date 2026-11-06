@@ -448,6 +448,23 @@ Lines by point (keep only what applies):
 
 Vietnamese guest: same lines in Vietnamese, `Kính gửi anh/chị [Tên],` / `Cảm ơn anh/chị đã thông tin cho khách sạn.` / `Khách sạn ghi nhận yêu cầu [ ], tùy tình trạng phòng khi nhận phòng.` / `Hân hạnh được đón tiếp anh/chị tại HAYA Hotel Phu Quoc.`
 
+### 5b. Sea-view upgrade (`--kind request`, dev 05/11, Celia Li)
+Before writing: `py -m tools.emi upgrade --arrival D --departure D --booked <code> --adults <n> [--rooms <n>] --channel <TA|OTA|Direct>`. It looks at the two sea-view types on the Future Availability sheet (DLX-SV, SUITE-SV), free every night of the stay, and gives the surcharge: the rate-table difference from the booked type, on the sender's table; an OTA has none, so the TA card. Tour operators: `ask-karen`. It prints `NOT VERIFIED` or `NOT CHECKED` → a `[CHECK BEFORE SENDING]` line and `ask-karen`, nothing called free.
+
+Free (one option per line; only what it marks `AVAILABLE`), English:
+```
+Thank you for your message.
+
+[Deluxe Double Seaview] is available from [DD/MM/YYYY] to [DD/MM/YYYY]. The upgrade surcharge is VND [x] per night × [n] nights = VND [total], payable at the hotel.
+
+Please let us know if you would like us to go ahead.
+```
+Vietnamese: `Hạng phòng [ ] còn trống từ [DD/MM/YYYY] đến [DD/MM/YYYY]. Phụ thu nâng hạng: [x] VND/đêm × [n] đêm = [tổng] VND, thanh toán tại khách sạn.` / `Anh/chị vui lòng phản hồi nếu muốn khách sạn thực hiện.` An agency's booking: the surcharge goes on the booking, not "at the hotel".
+
+Not free (`NO SEA VIEW FREE`), English: `Thank you for your message.` / `Our sea-view rooms are fully booked from [DD/MM/YYYY] to [DD/MM/YYYY], so we are unable to arrange an upgrade for your stay.` No charge quoted, no "subject to availability at check-in".
+
+When they say yes: a CHANGE row with the new room type and the surcharge; the reply is the change confirmation once it is built (`confirmation-replies.md`). An OTA booking keeps its OTA rate on the row, the difference in `Surcharge amount`. A request for it free → Karen (AGENTS rule 8).
+
 ## 6. Tour operators: confirmation, decline (on request)
 Sources: Odeon 4609701 (22/10), Pegas 11091234 / 11095509 (23/10), Selfie 14559551 (23/10).
 

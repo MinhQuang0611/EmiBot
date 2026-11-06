@@ -75,6 +75,30 @@ class ForwardOnceTest(Base):
         self.assertIn("never forward twice", str(e.exception))
         self.fwd("booking@palmahotel.vn")  # another address is a different forward
 
+    def gone(self, sent):
+        self.fwd("ctyphuongnguyenpq.kt@gmail.com")
+        self.st.data["reviews"]["1"]["status"] = "gone"
+        self.mail.get_message_text = lambda _id: {"subject": "RE: Booking AAT", "receivedDateTime": "2026-11-05T09:13:00Z"}
+        self.mail.list_sent_since = sent
+
+    def test_gone_forward_not_in_sent_items_may_be_redone(self):
+        # Absolute Asia 05/11: #525 left Drafts without being sent, and a new forward was refused
+        self.gone(lambda _since: [])
+        self.fwd("ctyphuongnguyenpq.kt@gmail.com")
+
+    def test_gone_forward_found_in_sent_items_is_not_repeated(self):
+        self.gone(lambda _since: [{"subject": "FW: RE: Booking AAT", "toRecipients": [
+            {"emailAddress": {"address": "ctyphuongnguyenpq.kt@gmail.com"}}]}])
+        with self.assertRaises(emi.Refused):
+            self.fwd("ctyphuongnguyenpq.kt@gmail.com")
+
+    def test_gone_forward_with_sent_items_unreadable_is_not_repeated(self):
+        def broken(_since):
+            raise OSError("down")
+        self.gone(broken)
+        with self.assertRaises(emi.Refused):
+            self.fwd("ctyphuongnguyenpq.kt@gmail.com")
+
     def test_denied_forward_may_be_redone(self):
         self.fwd()
         self.st.data["reviews"]["1"]["status"] = "denied"

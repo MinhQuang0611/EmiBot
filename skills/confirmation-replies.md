@@ -33,7 +33,9 @@ Reply on the original thread, in the sender's language. Include:
 - **One confirmation per booking**, not one per room row: a booking of several room types has one PDF and one email. `draft-confirmation` refuses a second one while the first is still in Drafts; a new PDF after a change → `--replaces <n>`.
 
 ## Change
-Same thread. State what changed (old → new), the new total, and attach the new PDF. Say plainly that it replaces the earlier confirmation.
+**No draft before the build (dev, 05/11, Amara #30124):** a change of dates, rooms or room type gets its row in job 1 and nothing to the agency. No "we have noted", no asking them to confirm the room list. `confirmations-due` lists it as `CONFIRM CHANGE` once the build tool has finished its rows (`ez_status` done): the PDF is remade under the same Drive link and every CHANGE row carries that link from the start, so the link says nothing here; `ez_processed_at` does. From 05/11 on; older changes were confirmed by hand.
+
+Same thread. State what changed (old → new), the new total, and attach the new PDF. Say plainly that it replaces the earlier confirmation. A `CONFIRM CHANGE` line whose change touches no date, room or total → `confirmation-hold`, nothing to send.
 
 **Deposit check (Karen, 2026-10-08):** look up Payment 1 on the intake row. If no deposit has been received, the email reminds them to pay the deposit to the hotel's bank account within 48 hours of receiving this email, with the exact deadline in Vietnam time. If the deposit is in, no reminder — state what's been received and the balance. If I can't tell, I flag it to Karen and don't draft either version.
 

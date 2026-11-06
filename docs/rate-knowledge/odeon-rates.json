@@ -74,7 +74,7 @@
     "_note": "Odeon (dev, 2026-10-29): price with exactly the offer the voucher's SPO code applies. SCO / SSO 5% only when the voucher shows that code.",
     "required": true,
     "eb_tokens": ["EB", "EBR"],
-    "free_tokens": ["FS001", "FS"],
+    "free_tokens": ["FS001", "FS", "S10P09"],
     "codes": {
       "SCO": {"pct": 5, "on": ["room", "child"], "note": "SCO 5% is taken off room and child surcharge after the other offers; the contract file doesn't print SCO — Karen to confirm what it applies to"},
       "SSO": {"pct": 5, "on": ["room", "child"], "note": "SSO 5% is taken off room and child surcharge after the other offers; the contract file doesn't print SSO — Karen to confirm what it applies to"}

@@ -101,7 +101,7 @@ Nguồn: bảng giá TA (`ta.md`, cột "Giường"). Dùng khi khách hỏi lo�
 Tên hạng phòng trên OTA/SynXis khác tên trên bảng TA (ví dụ "Standard Garden View (1 Queen Bed)", "Suite Sea View (1 King Bed)"): dùng đúng tên trên voucher khi viết thư, cỡ giường theo bảng trên chỉ khi chắc chắn là cùng hạng phòng.
 
 ## Yêu cầu xếp phòng (cùng tầng, phòng thông nhau, loại giường, tầng cao…)
-Không có quy định trong file nào. Cách trả lời: **"đã ghi nhận, tùy tình trạng phòng"** — không hứa. Yêu cầu ghi vào `special_requests` và notes mục 5 của dòng booking; lễ tân đọc trong EZFOLIO, không forward (dev, 30/10). Không phải là yêu cầu miễn phí/nâng hạng; nếu khách xin nâng hạng phòng → Karen (AGENTS.md luật 8).
+Không có quy định trong file nào. Cách trả lời: **"đã ghi nhận, tùy tình trạng phòng"** — không hứa. Yêu cầu ghi vào `special_requests` và notes mục 5 của dòng booking; lễ tân đọc trong EZFOLIO, không forward (dev, 30/10). Khách xin nâng hạng hướng biển: `upgrade`, trả lời còn/hết phòng và phụ thu (`email-templates.md` 5b, dev 05/11); xin miễn phí → Karen (AGENTS.md luật 8).
 
 ## Chưa biết — hỏi Karen
 Emi không có thông tin này. Khách hỏi tới thì **không soạn thư**: hỏi Karen bằng `ask-karen`, soạn sau khi Karen trả lời (`karen-answer`), và ghi câu hỏi vào báo cáo scan (dev, 2026-10-22). Không để ô `[…: khách sạn xác nhận]` trong thư — lệnh draft sẽ từ chối. Không bao giờ viết câu kiểu "thông tin này không có trong hồ sơ của chúng tôi".

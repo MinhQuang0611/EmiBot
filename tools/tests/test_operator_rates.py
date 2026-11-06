@@ -48,6 +48,24 @@ class OdeonTest(unittest.TestCase):
         q = odeon(date(2026, 11, 20), date(2026, 11, 30), "STD", 2, spo=["EB", "FS001"])
         self.assertEqual(q["net"]["room"], round(1900000 * 0.85) * 9)
 
+    def test_voucher_spo_line_as_printed(self):
+        # Odeon 4799222 and OV613LLPX_11_1 (05/11): the codes sit inside the SPOCode line; S10P09 = FS001, D..REB..% = EB
+        q = odeon(date(2026, 12, 10), date(2026, 12, 20), "DLX-SV", 2, booked=date(2026, 11, 4),
+                  spo=["10 * (Contract Revise Rates(C[D30REB5%]) (C[S10P09]) )"])
+        self.assertEqual(q["total"], 18810000)
+        q = odeon(date(2026, 12, 25), date(2027, 1, 7), "TPL", 3, booked=date(2026, 11, 3),
+                  spo=["10 * (Contract Revise Rates(C[D45REB10%]) (C[S10P09]) ) + 3 * (Contract Revise Rates(C[S10P09]) )"])
+        self.assertEqual(q["total"], 31815000)  # no early booking on the 3 C nights, as the voucher's "+ 3 *" says
+
+    def test_voucher_tier_differs_from_contract_tier_is_a_gap(self):
+        q = odeon(date(2026, 12, 10), date(2026, 12, 20), "DLX-SV", 2, booked=date(2026, 11, 4),
+                  spo=["D45REB10%"])
+        self.assertTrue(any("Karen to check" in g for g in q["gaps"]))
+
+    def test_unknown_code_in_the_line_still_stops(self):
+        with self.assertRaises(o.RateError):
+            odeon(date(2026, 12, 10), date(2026, 12, 20), "DLX-SV", 2, spo=["10 * (Contract Revise Rates(C[X99]) )"])
+
     def test_sco_only_when_given_and_flagged(self):
         q = odeon(date(2026, 11, 20), date(2026, 11, 23), "STD", 2, spo=["SCO"])
         self.assertEqual(q["net"]["room"], round(1900000 * 0.95) * 3)

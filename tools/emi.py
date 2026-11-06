@@ -35,6 +35,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi to-info <operator>                # tour operator: the steps and what differs for this one
     python -m tools.emi to-price --operator X --arrival D --departure D --room CODE --adults N [--children "7;1"]
                                  [--rooms N] [--meal BB|HB|FB] --booked D [--spo "EB,FS001"]  # contract price
+    python -m tools.emi upgrade --arrival D --departure D --booked STD --adults 2 --channel OTA  # sea view: free? surcharge
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
     python -m tools.emi payments-due       # job 3: TA deposits and balances, reminders to draft now
@@ -985,6 +986,8 @@ def check_forward(mail, st, args, to, text, out=print):
         # Slips and Palma mail are forwarded once (Tracy audit 29/10); a denied draft may be redone
         if (r.get("how") == "forward" and r.get("source") == args.message_id and r.get("status") != "denied"
                 and lower & {a.lower() for a in r.get("to") or []}):
+            if r.get("status") == "gone" and deleted_not_sent(mail, args.message_id, lower):
+                continue  # gone = sent or deleted: #525 of 05/11 was deleted, and this blocked doing it again
             raise Refused(f"this email already has a forward to {', '.join(sorted(lower & {a.lower() for a in r['to']}))}"
                           f" (draft #{n}, {r.get('status')}): never forward twice")
 
@@ -1015,15 +1018,23 @@ def send_slips():
     return os.environ.get("EMI_SEND_SLIPS", "") == "1"
 
 
-def in_sent_items(mail, message_id):
-    """A forward of this email to accounting already in Sent Items, by subject, since the email arrived: a person's
-    own forward, or a run that stopped after sending. A second slip with the same subject can match too, which is
-    why this holds the forward as a draft instead of refusing it."""
+def deleted_not_sent(mail, message_id, to):
+    """A forward that left Drafts and isn't in Sent Items. Sent Items unreadable = not known, so False."""
+    try:
+        return not in_sent_items(mail, message_id, to)
+    except (OSError, httpjson.HttpError):
+        return False
+
+
+def in_sent_items(mail, message_id, addresses=(ACCOUNTING,)):
+    """A forward of this email to these addresses already in Sent Items, by subject, since the email arrived: a
+    person's own forward, or a run that stopped after sending. A second slip with the same subject can match too,
+    which is why this holds the forward as a draft instead of refusing it."""
     src = mail.get_message_text(message_id)
     subject = clean_subject(src.get("subject", "")).lower()
     for m in mail.list_sent_since(src.get("receivedDateTime", "")):
         to = {x["emailAddress"]["address"].lower() for x in m.get("toRecipients") or []}
-        if ACCOUNTING in to and subject in clean_subject(m.get("subject", "")).lower():
+        if to & set(addresses) and subject in clean_subject(m.get("subject", "")).lower():
             return True
     return False
 
@@ -1267,6 +1278,75 @@ def run_quote(args, out=print, availability=None):
             out(f"OPTION {label}: " + (state if not problems else "NOT AVAILABLE — " + "; ".join(problems)))
     q["availability"] = result
     return q
+
+
+SEA_VIEW = ("DLX-SV", "SUITE-SV")  # the two types the Future Availability sheet names SEAVIEW (dev, 05/11)
+
+
+def run_upgrade(args, data, out=print):
+    """A guest asks for a sea-view room (dev, 05/11): is either sea-view type free every night, and what does it cost
+    over the booked type. The difference comes from one table: the sender's, and the TA card for an OTA, which has none
+    (dev 04/11). data None = the sheet can't be read."""
+    if args.channel == "Tour operator":
+        raise Refused("a tour operator's upgrade is priced by its contract, not here: ask-karen")
+    table = "TA" if args.channel == "OTA" else args.channel
+    rates = quoting.load_channel(table)
+    try:
+        kids = [int(x) for x in re.split(r"[;,\s]+", (args.children or "").strip()) if x]
+        arrival, departure = quoting.parse_date(args.arrival), quoting.parse_date(args.departure)
+    except (ValueError, quoting.QuoteError) as e:
+        raise Refused(str(e)) from None
+
+    def priced(code):
+        return quoting.quote(arrival, departure, args.adults, kids, alloc={code: args.rooms},
+                             indian=args.indian and args.channel == "TA", data=rates)
+
+    try:
+        booked = priced(args.booked)
+    except quoting.QuoteError as e:
+        raise Refused(f"{args.booked}: {e}") from None
+    result, age = None, None
+    if data is not None:
+        try:
+            result, age = avail.check(data, arrival, departure, _today_vn()), _stale(data)
+        except avail.AvailabilityError as e:
+            out(f"GAP: {e}")
+    n = len(booked["nights"])
+    out(f"UPGRADE from {args.booked}, {args.rooms} room(s), {n} night(s), {args.arrival}–{args.departure}, prices from "
+        f"{rates.get('label', table)}" + (" (the OTA has no table: TA card)" if args.channel == "OTA" else ""))
+    for gap in booked["gaps"]:
+        if not gap.startswith("availability"):
+            out(f"GAP: {gap}")
+    free = 0
+    for code in SEA_VIEW:
+        name = next(r["name_en"] for r in rates["rooms"] if r["code"] == code)
+        if code == args.booked:
+            continue
+        try:
+            extra = priced(code)["options"][0][1]["total"] - booked["options"][0][1]["total"]
+        except quoting.QuoteError as e:
+            out(f"OPTION {code} {name}: DOES NOT FIT — {e}")
+            continue
+        if extra <= 0:
+            out(f"OPTION {code} {name}: NOT A PAID UPGRADE (no dearer than {args.booked}): ask-karen")
+            continue
+        problems = avail.fits(result, {code: args.rooms}) if result else []
+        if problems:
+            out(f"OPTION {code} {name}: NOT AVAILABLE — " + "; ".join(problems))
+            continue
+        per_night = extra / (n * args.rooms)
+        sums = (f"{quoting.money(per_night)} VND × {n} night(s) × {args.rooms} room(s) = {quoting.money(extra)} VND"
+                if per_night == int(per_night) else f"{quoting.money(extra)} VND over {n} night(s)")
+        verified = result is not None and not age
+        free += verified
+        out(f"OPTION {code} {name}: {'AVAILABLE' if verified else 'NOT VERIFIED'} | surcharge {sums}")
+    if data is None:
+        out("AVAILABILITY NOT CHECKED: Future Availability sheet not readable. A CHECK line on the draft and ask-karen; "
+            "nothing said to be free")
+    elif age:
+        out(f"AVAILABILITY STALE: sheet {age}. " + STALE_NEXT.format(age=age))
+    elif result is not None and not free:
+        out("NO SEA VIEW FREE: say so in the reply, no charge quoted (email-templates.md 5b)")
 
 
 def run_pickup(sheet, args, out=print, live=None):
@@ -1594,8 +1674,9 @@ def run_confirmation_hold(sheet, st, args, out=print):
         return
     if not args.reason:
         raise Refused("say why: confirmation-hold <ref> <row> <reason>")
-    st.data["confirmation_holds"][args.ref] = {"pdf_link": _row(sheet, args.row).get("pdf_link", ""),
-                                               "reason": " ".join(args.reason)}
+    row = _row(sheet, args.row)
+    st.data["confirmation_holds"][args.ref] = {"pdf_link": row.get("pdf_link", ""), "reason": " ".join(args.reason),
+                                               "processed": row.get("ez_processed_at", "")}
     out(f"{args.ref}: held, off confirmations-due until a new PDF lands or --clear")
 
 
@@ -1820,14 +1901,23 @@ def parser():
     s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
     s.add_argument("--departure", required=True, help="DD/MM/YYYY")
     s.add_argument("--alloc", help="check this allocation fits, e.g. 'STD:3,TPL:1'")
-    s = sub.add_parser("stop-sales", help="daily stop-sell PDF; a draft to the partners only when it changed")
-    s.add_argument("--preview", action="store_true", help="make the PDF only: no draft, nothing remembered")
     s = sub.add_parser("pickup", help="airport pick-up: free (whole booking above USD 250) or paid")
     s.add_argument("booking_ref")
     s.add_argument("--ota-rooms", type=int, help="rooms the OTA's own message or voucher says the booking has")
     g = s.add_mutually_exclusive_group()
     g.add_argument("--paid-vnd", type=int, help="what the guest paid, VND, from the booking email or voucher")
     g.add_argument("--paid-usd", type=float, help="what the guest paid in USD, as the guest or the voucher states it")
+    s = sub.add_parser("upgrade", help="sea-view upgrade: free rooms on the availability sheet and the surcharge")
+    s.add_argument("--arrival", required=True, help="DD/MM/YYYY")
+    s.add_argument("--departure", required=True, help="DD/MM/YYYY")
+    s.add_argument("--booked", required=True, help="the booked room code, e.g. STD")
+    s.add_argument("--adults", type=int, required=True)
+    s.add_argument("--rooms", type=int, default=1)
+    s.add_argument("--children", help="ages separated by ';'")
+    s.add_argument("--indian", action="store_true", help="Indian guests on the TA table: +20%% on room rate")
+    s.add_argument("--channel", default="TA", choices=["TA", "Tour operator", "OTA", "Direct"])
+    s = sub.add_parser("stop-sales", help="daily stop-sell PDF; a draft to the partners only when it changed")
+    s.add_argument("--preview", action="store_true", help="make the PDF only: no draft, nothing remembered")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -1985,6 +2075,8 @@ def main(argv=None):
                 print(AVAILABILITY_GAP_NEXT)
                 return 0
             run_availability(args, data)
+        elif c == "upgrade":
+            run_upgrade(args, load_availability())
         elif c == "stop-sales":
             tg = None if args.preview else config.telegram()
             data = load_availability()

@@ -58,6 +58,61 @@ class CheckTest(unittest.TestCase):
         self.assertIn("03/01/2027", str(e.exception))
 
 
+class UpgradeTest(unittest.TestCase):
+    """Dev 05/11, Celia Li: a sea-view upgrade is checked on the sheet and priced from the rate table."""
+    def setUp(self):
+        for name, value in (("_today_vn", date(2026, 12, 29)), ("_stale", None)):
+            patcher = mock.patch.object(emi, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_it(self, data_=None, **kw):
+        base = dict(arrival="30/12/2026", departure="01/01/2027", booked="STD", adults=2, rooms=1, children="",
+                    indian=False, channel="TA")
+        lines = []
+        emi.run_upgrade(SimpleNamespace(**{**base, **kw}), data() if data_ is None else data_, out=lines.append)
+        return "\n".join(lines)
+
+    def rates(self, channel="TA"):
+        from tools import quote as quoting
+        rooms = {r["code"]: r["rates"] for r in quoting.load_channel(channel)["rooms"]}
+        return rooms
+
+    def test_free_type_shows_the_difference_a_full_type_none(self):
+        text = self.run_it()
+        self.assertIn("OPTION DLX-SV", text)
+        self.assertRegex(text, r"DLX-SV [^\n]*AVAILABLE \| surcharge [\d.,]+ VND × 2 night\(s\) × 1 room\(s\) = ")
+        self.assertRegex(text, r"SUITE-SV [^\n]*NOT AVAILABLE — SUITE-SV: not on the availability sheet")
+
+    def test_more_rooms_than_are_free(self):
+        self.assertIn("6 asked, only 4 free", self.run_it(rooms=6, adults=12))
+
+    def test_nothing_free_says_so(self):
+        full = avail.parse(TITLE, ROWS[:2] + [["DLX-SV - DELUXE SEAVIEW", "20", "0", "0", "0", "0"]] + ROWS[3:])
+        self.assertIn("NO SEA VIEW FREE", self.run_it(full))
+
+    def test_ota_uses_the_ta_card(self):
+        self.assertEqual(self.run_it(channel="OTA").split("\n")[1:], self.run_it().split("\n")[1:])
+        self.assertIn("the OTA has no table", self.run_it(channel="OTA"))
+
+    def test_direct_uses_its_own_table(self):
+        self.assertIn("direct-guest", self.run_it(channel="Direct"))
+
+    def test_stale_sheet_is_not_a_promise(self):
+        with mock.patch.object(emi, "_stale", return_value="3 days old"):
+            text = self.run_it()
+        self.assertIn("NOT VERIFIED", text)
+        self.assertIn("AVAILABILITY STALE", text)
+        self.assertNotIn("NO SEA VIEW FREE", text)
+
+    def test_tour_operator_goes_to_karen(self):
+        with self.assertRaises(emi.Refused):
+            self.run_it(channel="Tour operator")
+
+    def test_booked_sea_view_is_not_offered_again(self):
+        self.assertNotIn("OPTION DLX-SV", self.run_it(booked="DLX-SV"))
+
+
 class QuoteWithAvailabilityTest(unittest.TestCase):
     def setUp(self):
         # the day before the stay: no stop-sale unless a test says otherwise
