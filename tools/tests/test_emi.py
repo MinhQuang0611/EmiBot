@@ -570,7 +570,9 @@ class DraftCommandsTest(unittest.TestCase):
         emi.draft_reply(mail, st, args, out=lambda *_: None)
         patch = [c for c in http.calls if c[0] == "PATCH" and "body" in (c[2] or {})][0][2]["body"]["content"]
         self.assertTrue(patch.startswith('<html><body dir="ltr"><div'))
-        self.assertIn("<p>Dear Ms. Hương,</p>\n<p>Can you please confirm &lt;the dates&gt;?</p>", patch)
+        from tools.graph_mail import FONT
+        p = f'<p style="margin:0 0 12pt 0;{FONT}">'
+        self.assertIn(f"{p}Dear Ms. Hương,</p>\n{p}Can you please confirm &lt;the dates&gt;?</p>", patch)
         self.assertTrue(patch.endswith("<p>quoted</p></body></html>"))
         self.assertIn("d1", st.data["drafts"])
         self.assertFalse(any(c[1].endswith(("/send", "/reply")) for c in http.calls))

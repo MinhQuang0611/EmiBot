@@ -209,9 +209,72 @@ BULLET = re.compile(r"^\s*(?:[•*\-–])\s+")
 LABEL = re.compile(r"^([^\s:*•\-–][^:]{0,34}?):(\s|$)")
 
 
+# The dev, 06/11 (Absolute Asia AAT261113.502 slip thank-you): one font in every draft, and no wall of text.
+# The font sat only on our outer <div>, so the quoted thread's own stylesheet ("p {font-family: Times New Roman}")
+# won and each draft showed whatever font its thread used. Every tag now carries the font inline.
+FONT = "font-family:Calibri,Arial,Helvetica,sans-serif;font-size:11pt;color:#000000"
+GREETING = re.compile(r"^\s*(Kính gửi|Kính chào|Chào|Dear|Hi|Hello|Уважаем\w*|Здравствуйте|Добрый день|안녕하세요)\b",
+                      re.I)
+SIGNOFF = re.compile(r"^\s*(Trân trọng|Thân ái|Best regards|Kind regards|Warm regards|Regards|Best wishes|Best|"
+                     r"Sincerely|Yours sincerely|Thanks (?:and|&) (?:best )?regards|С уважением|"
+                     r"С наилучшими пожеланиями|감사합니다)\b[^\n]{0,15}$", re.I)
+_STRUCT_LABEL = re.compile(r"^[^:]{1,40}:(\s|$)")
+
+
+def _line_kind(line):
+    """'list' lines (a bullet, 'Label: value', a short fragment) stay together under each other; a sentence
+    ('prose') is a paragraph of its own."""
+    s = line.strip()
+    if s.upper().startswith("[CHECK BEFORE SENDING"):
+        return "prose"
+    if BULLET.match(line) or _STRUCT_LABEL.match(s):
+        return "list"
+    if len(s) < 45 and not s.endswith((".", "!", "?")):
+        return "list"
+    return "prose"
+
+
+def paragraphs(text):
+    """The text cut into paragraphs the way a reader needs them, whatever line breaks the writer used: the
+    greeting, each sentence-line and the sign-off with its signature each a paragraph; 'Label: value' lines,
+    bullets and short fragments kept together as one block. A blank line always starts a new paragraph."""
+    out = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        lines = [l for l in block.split("\n") if l.strip()]
+        group = []
+        for i, line in enumerate(lines):
+            if SIGNOFF.match(line):
+                if group:
+                    out.append(group)
+                out.append(lines[i:])
+                group = []
+                break
+            if GREETING.match(line) and len(line.strip()) < 80 or _line_kind(line) == "prose":
+                if group:
+                    out.append(group)
+                out.append([line])
+                group = []
+                continue
+            group.append(line)
+        if group:
+            out.append(group)
+    return "\n\n".join("\n".join(g) for g in out)
+
+
+def email_html(text):
+    """text_to_html with the font and the paragraph spacing written on every tag, so the thread's own styles
+    can't change them."""
+    h = text_to_html(text)
+    h = h.replace("<p>", f'<p style="margin:0 0 12pt 0;{FONT}">')
+    h = h.replace("<ul>", '<ul style="margin:0 0 12pt 0;padding-left:24pt">')
+    h = h.replace("<li>", f'<li style="margin:0;{FONT}">')
+    return f'<div style="{FONT}">{h}</div>'
+
+
 def text_to_html(text):
-    """Plain text to the HTML HAYA's own sent confirmations use: a blank line starts a paragraph,
-    a single line break stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
+    """Plain text to the HTML HAYA's own sent confirmations use: paragraphs as `paragraphs` cuts them,
+    a line break inside one stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
+    text = paragraphs(text)
     def inline(s, labels=True):
         if s.strip().upper().startswith("[CHECK BEFORE SENDING"):
             # Tracy audit 29/10: bold red, no highlight; the person sending deletes it
@@ -406,8 +469,7 @@ class GraphMail:
         """Put the text above the quoted thread of a fresh reply/forward draft, formatted by text_to_html."""
         draft = self._call("GET", f"/messages/{draft_id}?$select=body")
         original = draft.get("body", {}).get("content", "")
-        ours = ('<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'
-                + text_to_html(text) + "</div><br>\n")
+        ours = email_html(text) + "<br>\n"
         m = re.search(r"<body[^>]*>", original, re.I)
         content = original[:m.end()] + ours + original[m.end():] if m else ours + original
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
@@ -435,8 +497,7 @@ class GraphMail:
 
     def create_new_draft(self, to, subject, body_text, cc=(), bcc=()):
         """A new email (not a reply): Odeon's confirmation and decline go out this way (tour-operators.md)."""
-        html_body = ('<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'
-                     + text_to_html(body_text) + "</div>")
+        html_body = email_html(body_text)
         draft = self._call("POST", "/messages", body={
             "subject": subject,
             "body": {"contentType": "HTML", "content": html_body},

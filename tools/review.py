@@ -19,7 +19,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from .graph_mail import clean_subject, reply_subject
+from .graph_mail import clean_subject, paragraphs, reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -70,8 +70,8 @@ def _buttons(n):
 
 def as_email(text):
     """The draft as the reader will see it in Outlook: **Label:** in bold (graph_mail.text_to_html does the
-    same), '•' lists and blank lines kept. Telegram HTML."""
-    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc(text))
+    same), '•' lists kept, paragraphs cut as Outlook gets them (graph_mail.paragraphs). Telegram HTML."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc(paragraphs(text)))
 
 
 def notify(tg, n, r, note="", in_place=False, held=""):

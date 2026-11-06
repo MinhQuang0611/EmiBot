@@ -5,6 +5,7 @@
 ## Rules that apply to every email
 
 **Layout**
+- **Easy to read, one font (dev, 06/11, Absolute Asia AAT261113.502 slip thank-you, which came out as one block of text in a serif font).** Greeting, then one short paragraph per point, then the sign-off with the signature under it, **a blank line between each**. Never two sentences-lines one under the other with no blank line; never one long paragraph holding the thanks, the payment and the invoice details together: split it. Details go as `Label: value` lines, not inside a sentence. The font is set by the command on every line (Calibri 11pt, black): never type a font, size or colour. The commands also cut a text written on single line breaks into paragraphs and show the result on Telegram, but write it right.
 - Plain lines `Label: value`, one per line, **no blank line between the lines of one block**; one blank line between blocks. Don't type `**` — `draft-reply` / `draft-confirmation` make the label before the colon bold in Outlook, as HAYA's own mail shows it.
 - A rate per room type is its own line with the sum written out: `– Standard Double: 2.040.000 VND/phòng/đêm × 02 phòng × 3 đêm = 12.240.000 VND` / `29/10 – 31/10/2026: VND 1,050,000 per room per night × 3 nights = VND 3,150,000`. Lines starting with `–`, `-`, `•` or `*` become a bulleted list.
 - Vietnamese counts take a leading zero: `02 phòng`, `03 trẻ em (07, 05, 05 tuổi)`, `trước 07 ngày`.
