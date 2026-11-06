@@ -25,6 +25,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
     python -m tools.emi stop-sales [--preview]            # daily stop-sell PDF; a draft to the partners only when it changed
+    python -m tools.emi pickup <booking_ref> [--ota-rooms N] [--paid-vnd X | --paid-usd X]  # airport pick-up: free or paid
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]] [--subject S] [--attach F]
@@ -82,6 +83,7 @@ from . import cancel_fee as cancelling
 from . import operator_rates as op_rates
 from . import operators
 from . import payments
+from . import pickup as pickups
 from .state import hold_lock
 from . import availability as avail
 from . import review, sim
@@ -1267,6 +1269,17 @@ def run_quote(args, out=print, availability=None):
     return q
 
 
+def run_pickup(sheet, args, out=print, live=None):
+    """Free or paid airport pick-up for one booking: every room of it, every SynXis number (dev 06/11)."""
+    rows = sheet.rows() + live_rows(live, out)
+    res = pickups.check(rows, args.booking_ref, _parts, ota_rooms=args.ota_rooms, paid_vnd=args.paid_vnd,
+                        paid_usd=args.paid_usd)
+    if res is None:
+        raise Refused(f"no rows for booking_ref {args.booking_ref!r} on the sheet: write the booking first")
+    out(pickups.render(res, _where))
+    return res
+
+
 def run_cancel_fee(sheet, args, out=print, live=None):
     rows = [r for r in sheet.rows() if _parts(r.get("booking_ref")) & _parts(args.booking_ref)]
     if not rows:
@@ -1809,6 +1822,12 @@ def parser():
     s.add_argument("--alloc", help="check this allocation fits, e.g. 'STD:3,TPL:1'")
     s = sub.add_parser("stop-sales", help="daily stop-sell PDF; a draft to the partners only when it changed")
     s.add_argument("--preview", action="store_true", help="make the PDF only: no draft, nothing remembered")
+    s = sub.add_parser("pickup", help="airport pick-up: free (whole booking above USD 250) or paid")
+    s.add_argument("booking_ref")
+    s.add_argument("--ota-rooms", type=int, help="rooms the OTA's own message or voucher says the booking has")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--paid-vnd", type=int, help="what the guest paid, VND, from the booking email or voucher")
+    g.add_argument("--paid-usd", type=float, help="what the guest paid in USD, as the guest or the voucher states it")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -1884,7 +1903,7 @@ def parser():
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
 READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "quote", "availability", "payments-due",
-             "confirmations-due")
+             "confirmations-due", "pickup")
 
 
 def main(argv=None):
@@ -1975,6 +1994,8 @@ def main(argv=None):
             run_stop_sales(None if args.preview else config.mail(), st, tg, data, preview=args.preview)
             if not args.preview:
                 st.save()
+        elif c == "pickup":
+            run_pickup(config.sheet(), args, live=config.live_sheet())
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args, live=config.live_sheet())
         elif c == "pdf-fetch":
