@@ -33,6 +33,7 @@ the same thing (`accept 12`, `deny 12 sai giá`, `rewrite 12 ngắn gọn hơn`,
 | `xem <n>` (typed, no button) | `review-info <n>` | Its output, nothing added |
 | `còn gì` / `list` | `review-list` | Its output |
 | `E-003 <answer>` (Karen answers a question) | `karen-answer E-003 "<answer>"`, then the waiting email: `show <id>`, write the draft, `draft-reply` / `draft-forward` | The new draft's number, or which question the email still waits on |
+| The answer came another way (dev, 2026-11-07): Karen decided on a draft's card, the dev fixed the command that refused (Odeon SPO codes, 05/11, E-273/E-274), the booking is now on the sheet | `karen-answer E-… "<what settled it>"`, then the waiting email the same way: its row, its draft. On 06/11 58 questions were open, E-240 to E-297, and the emails behind them (two Odeon vouchers with no row at all) waited for an answer that had already come | The rows and draft made, and the question closed |
 | `câu hỏi` / `questions` | `questions` | Its output |
 
 Only Accept and Deny take the buttons off a notice. Rewrite and `xem` leave them on.

@@ -1,7 +1,7 @@
 """Cheap check before a cron job wakes the agent (openclaw-setup-brief.md step 6).
 
     python -m tools.precheck inbox          # job 1
-    python -m tools.precheck confirmations  # job 2
+    python -m tools.precheck confirmations  # job 2; also sends Karen the bookings the build tool stopped on
     python -m tools.precheck payments       # job 3: a reminder is due
     python -m tools.precheck inbox --agent  # the agent's own first step in job 1 (schedule.md)
 
@@ -12,8 +12,9 @@ Cron line:  python -m tools.precheck inbox && <start Emi with job 1>
 that exits 1 as a failed run (audit 30/10: every quiet safety-net run showed as "Bash failed").
 """
 import sys
+from datetime import datetime
 
-from . import config, payments
+from . import build_watch, config, payments
 
 
 def inbox_has_work(mail, state):
@@ -26,6 +27,24 @@ def confirmations_have_work(mail, sheet, state):
     from .emi import _parts, booking_state, _today_vn
     return bool(payments.needs_confirmation(sheet.rows(), booking_state, _parts, mail, state, config.MAILBOX,
                                             _today_vn()))
+
+
+def alert_build_stuck(mail, sheet):
+    """Dev 07/11: rows the build tool stopped on (needs_review / error) or never picked up go to Karen on Telegram,
+    once each (tools/build_watch.py). A side job of the hourly confirmation check, so it needs no model. Its own
+    failure never changes the check's answer: the line goes to stderr."""
+    from .emi import booking_state, VN
+    from .state import hold_lock
+    try:
+        hold_lock(config.state_path())
+        st = config.state()  # read after the lock: a command may have saved it meanwhile
+        items = build_watch.stuck(sheet.rows(), booking_state, datetime.now(VN))
+        sent = build_watch.alert(st, config.telegram(), mail, items, config.MAILBOX,
+                                 out=lambda s: print(s, file=sys.stderr))
+        if sent:
+            st.save()
+    except Exception as e:
+        print(f"build-stuck alert failed: {e}", file=sys.stderr)
 
 
 def payments_have_work(mail, sheet, state):
@@ -46,7 +65,9 @@ def main(argv):
         if argv[0] == "inbox":
             work = inbox_has_work(config.mail(), st)
         elif argv[0] == "confirmations":
-            work = confirmations_have_work(config.mail(), config.sheet(), st)
+            mail, sheet = config.mail(), config.sheet()
+            work = confirmations_have_work(mail, sheet, st)
+            alert_build_stuck(mail, sheet)
         else:
             work = payments_have_work(config.mail(), config.sheet(), st)
     except Exception as e:

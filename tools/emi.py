@@ -16,7 +16,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-rows <first> [<last>]       # rows as they are on the sheet, filled cells only
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
-    python -m tools.emi sheet-update <row> <fields.json>  # change named cells on one row
+    python -m tools.emi sheet-update <row> <fields.json> --ref <booking_ref>  # change named cells on one row
     python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N] [--replaces N]
                                                           # reply all by default, To and Cc kept
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
@@ -39,7 +39,10 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
     python -m tools.emi payments-due       # job 3: TA deposits and balances, reminders to draft now
+    python -m tools.emi deposit-extension --asked "DD/MM/YYYY HH:MM" [--wanted "DD/MM/YYYY[ HH:MM]"] [--current "…"] [--balance-by DD/MM/YYYY]
+                                                          # agency asks to move the deposit: the new deadline + COD
     python -m tools.emi confirmations-due  # job 2: built since 30/10, no confirmation from sales@
+    python -m tools.emi build-stuck        # bookings the build tool stopped on or hasn't picked up (read-only)
     python -m tools.emi invoice-data <booking_ref>        # proforma figures: number, due date, lines
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
@@ -84,6 +87,7 @@ from . import cancel_fee as cancelling
 from . import operator_rates as op_rates
 from . import operators
 from . import payments
+from . import build_watch
 from . import pickup as pickups
 from .state import hold_lock
 from . import availability as avail
@@ -507,6 +511,113 @@ def fill_group_code(records, rows, group_cols, out=print):
     return records
 
 
+def _group_codes(r, group_cols):
+    return {str(r.get(c) or "").strip() for c in group_cols} - {""}
+
+
+def own_ref(rec, rows, group_cols, out=print):
+    """A CHANGE / CANCEL row carries the booking's own ref, never its EZFOLIO group code (dev 07/11). The build tool
+    matches a row to its group by booking_ref: Amara rows 1614/1615 written as '30124' stopped because group 30124
+    belongs to 'AMARA 14-16/12 (no agency code)'; Ohmyhotel CANCEL 1595 '28286' (booking V26090710084H01) waited on
+    approval; the name change of S26082711291H01, once as '27984' (1594) and once under its number (1634), was
+    written twice. A ref that is a group code on rows holding another ref becomes that ref."""
+    ref = str(rec.get("booking_ref") or "").strip()
+    if rec.get("action") not in ("CHANGE", "CANCEL") or not ref:
+        return ref
+    mine = _group_codes(rec, group_cols)
+    if mine and ref not in mine:
+        return ref
+    owners = [r for r in rows if ref in _group_codes(r, group_cols)
+              and str(r.get("booking_ref") or "").strip() not in ("", ref)]
+    if not owners:
+        return ref
+    src = next((r for r in owners if r.get("action") != "EXISTING BOOKING"), owners[0])
+    real = src["booking_ref"].strip()
+    out(f"{rec['action']} {rec.get('room_code') or ''}: booking_ref {ref} is the EZFOLIO group code; the booking is "
+        f"{real} ({_where(src)}), written as that")
+    for c in group_cols:
+        if _blank(rec.get(c)):
+            rec[c] = ref
+    rec["booking_ref"] = real
+    return real
+
+
+NEWS = ("guest_names", "arrival", "departure", "room_code", "rooms", "adults", "children", "child_ages", "meal_plan",
+        "nationality", "arrival_time", "special_requests", "rate_per_night_vnd", "total_vnd", "surcharge",
+        "Surcharge amount")
+
+
+REQUESTS = ("arrival_time", "special_requests")
+ARROW = re.compile(r"([^;→]+?)\s*→\s*([^;]+)")
+
+
+def _arrows(text):
+    return {(" ".join(a.split()).casefold(), " ".join(b.split()).casefold())
+            for a, b in ARROW.findall(str(text or ""))}
+
+
+PAID = re.compile(r"payment|paid|deposit|balance|slip|UNC|remittance|thanh toán|chuyển khoản|cọc", re.I)
+
+
+def _same(a, b):
+    return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
+
+
+def check_not_a_repeat(records, state):
+    """A CHANGE that says nothing the booking's current rows don't already say is a chase or a second email about
+    the same change, not a change (Ohmyhotel S26082711291H01, 06/11: the name change on row 1594 at 06:29 and again
+    on row 1634 at 16:42). A payment always passes."""
+    changes = [r for r in records if r.get("action") == "CHANGE"]
+    if not changes or not state or len(changes) != len(records) or any(
+            r.get(p) for r in changes for p in schema.PAYMENT) or any(
+            PAID.search(str(r.get("what_changed") or "")) for r in changes):
+        return
+    for rec in changes:
+        old = [s for s in state if s.get("room_code") == rec.get("room_code") and s.get("action") != "CANCEL"]
+        if not old or any(not _same(rec.get(k), old[0].get(k)) for k in NEWS if k not in REQUESTS):
+            return
+        # the second Ohmyhotel row put the change itself in special_requests: the same "old → new" in what_changed
+        # is the same change whatever the request cells say
+        same_change = _arrows(rec.get("what_changed")) and _arrows(rec.get("what_changed")) == _arrows(
+            old[0].get("what_changed"))
+        if not same_change and any(not _same(rec.get(k), old[0].get(k)) for k in REQUESTS):
+            return
+    src = state[0]
+    raise Refused(f"{changes[0].get('booking_ref')}: this CHANGE repeats {_where(src)} ({src.get('received_at', '')}) "
+                  f"cell for cell: a chase or a second email about the same change, not a new one. No row: mark the "
+                  f"email done (built → the confirmation comes from job 2; stuck → build-stuck). If the email does "
+                  f"change something, put it in its column")
+
+
+PROVISIONAL = re.compile(r"provisional|tạm tính|giá tạm", re.I)
+
+
+def keep_known_rate(records, rows, group_cols):
+    """A provisional TA-card figure is for a booking with no price at all (dev 04/11), never for one that has one.
+    Ohmyhotel #27984, 06/11: a name change carried 'TA card rate, provisional' 1,900,000 on CHANGE row 1594, and the
+    build tool wrote it into EZFOLIO over the booking's 1,487,500 (row 1436). The booking is found by its numbers or
+    its group code (that row had the group code as its ref)."""
+    def codes(r):
+        return {str(r.get(c) or "").strip() for c in group_cols} - {""}
+    for rec in records:
+        if rec.get("action") != "CHANGE":
+            continue
+        if not PROVISIONAL.search(" ".join(str(rec.get(k) or "") for k in ("notes", "missing_info", "rate_source"))):
+            continue
+        mine, code = _parts(rec.get("booking_ref")), codes(rec)
+        known = [r for r in rows
+                 if (mine & _parts(r.get("booking_ref")) or code & codes(r) or mine & codes(r))
+                 and r.get("room_code") == rec.get("room_code") and operators._amount(r.get("rate_per_night_vnd"))
+                 and r.get("action") != "CANCEL"
+                 and not PROVISIONAL.search(" ".join(str(r.get(k) or "") for k in ("notes", "missing_info", "rate_source")))]
+        if known and operators._amount(known[-1].get("rate_per_night_vnd")) != operators._amount(rec.get("rate_per_night_vnd")):
+            src = known[-1]
+            raise Refused(f"CHANGE {rec.get('room_code') or ''}: the booking already has its price, "
+                          f"{operators._amount(src.get('rate_per_night_vnd')):,} per night on {_where(src)}; a "
+                          f"provisional TA-card figure never replaces it (the build tool would write it into EZFOLIO). "
+                          f"Copy that rate, its total and rate_source, unless this email gives a new price")
+
+
 def verify_appended(sheet, records):
     """Read the sheet back after a write: every row written must be there with its key cells (Tracy audit 29/10:
     re-read, write, verify)."""
@@ -609,6 +720,7 @@ def sheet_append(sheet, data, out=print, live=None):
         if rows is None:
             rows = sheet.rows()
             elsewhere = live_rows(live, out)
+        ref = own_ref(rec, rows + elsewhere, sheet.group_code_columns(), out=out)
         state = booking_state(rows, ref) or booking_state(elsewhere, ref)
         if rec.get("action") == "NEW" and state:
             # Rules tab: a CHANGE or CANCEL is a new row with the same booking_ref; only NEW must be unique.
@@ -621,7 +733,7 @@ def sheet_append(sheet, data, out=print, live=None):
                               f"is already on the {'live ' if hit.get('_sheet') == 'live' else ''}sheet "
                               f"({_where(hit)}): this is not a NEW booking. Use action CHANGE (new rows, what_changed "
                               f"filled)" + ("" if hit.get("_sheet") == "live" else f", or sheet-update row "
-                              f"{hit['_row']} to add the other number") + ". A cancel-and-rebuild: the CANCEL rows "
+                              f"{hit['_row']} --ref {hit['booking_ref']} to add the other number") + ". A cancel-and-rebuild: the CANCEL rows "
                               "and the NEW rows in one file")
         if rec.get("action") == "CHANGE" and not any(rec.get(p) for p in schema.PAYMENT) and state and all(
                 r.get("action") == "NEW" and r.get("_sheet") != "live" for r in state):
@@ -630,7 +742,7 @@ def sheet_append(sheet, data, out=print, live=None):
             mine = [r for r in rows + elsewhere if _parts(r.get("booking_ref")) & _parts(ref)]
             if not any(schema.is_built(r) for r in mine):
                 raise Refused(f"{ref} isn't built yet (no pdf_link on either sheet): news before the build goes into "
-                              f"the NEW row — sheet-update {' and '.join(str(r['_row']) for r in state)} with the "
+                              f"the NEW row — sheet-update {' and '.join(str(r['_row']) for r in state)} --ref {ref} with the "
                               f"cells this email changes, as the live sheet does. A CHANGE row once it's built; a "
                               f"payment is always a CHANGE row")
         if rec.get("action") == "CHANGE":
@@ -660,20 +772,37 @@ def sheet_append(sheet, data, out=print, live=None):
                           f"(shared out by total_vnd)")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
         ref0 = records[0].get("booking_ref")
-        records = carry_over(records, booking_state(rows, ref0) or booking_state(elsewhere, ref0), out=out)
+        current = booking_state(rows, ref0) or booking_state(elsewhere, ref0)
+        records = carry_over(records, current, out=out)
+        check_not_a_repeat(records, current)
         records = fill_group_code(records, rows + elsewhere, sheet.group_code_columns(), out=out)
+        keep_known_rate(records, rows + elsewhere, sheet.group_code_columns())
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     verify_appended(sheet, records)
     out(f"appended {len(records)} row(s), read back from the sheet. Check them below; fix a wrong cell with "
-        f"sheet-update <row> by column name.")
+        f"sheet-update <row> <fields.json> --ref <booking_ref> by column name.")
     for ref in dict.fromkeys(rec["booking_ref"] for rec in records if rec.get("booking_ref")):
         for r in sheet.find_by_ref(ref):
             out(f"row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != "_row"},
                                                   ensure_ascii=False))
 
 
-def sheet_update(sheet, row, fields, work_dir=None, out=print):
+def check_row_is(current, ref, group_cols):
+    """Row numbers move: the build tool inserts rows mid-sheet when it reconciles (07/11: Church Travels was row
+    1617 in Emi's report and 1623 on the sheet, 1617 had become Booking.com 29201). A row number is checked against
+    the booking it was taken for before anything is written to it."""
+    if ref is None:
+        return
+    want = _parts(ref) | ({str(ref).strip()} - {""})
+    have = _parts(current.get("booking_ref")) | _group_codes(current, group_cols)
+    if not want & have:
+        raise Refused(f"row {current['_row']} is now {current.get('booking_ref') or '(no ref)'} "
+                      f"({current.get('company') or '?'}), not {ref}: rows were inserted above since the number was "
+                      f"taken. sheet-find {ref} for its row now, then run this again")
+
+
+def sheet_update(sheet, row, fields, work_dir=None, out=print, ref=None):
     """Correct or update a NEW row not yet built: a wrong cell, or news from a later email (nationality, pax,
     names, a request) — the live sheet folds those into the NEW row until the build (dev 30/10). After the build,
     and for a payment at any time, a CHANGE row instead.
@@ -683,6 +812,7 @@ def sheet_update(sheet, row, fields, work_dir=None, out=print):
     current = next((r for r in sheet.rows() if r["_row"] == int(row)), None)
     if current is None:
         raise Refused(f"row {row} is empty or not a data row")
+    check_row_is(current, ref, sheet.group_code_columns())
     pay = sorted(set(fields) & {"Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time"})
     if pay:
         raise Refused(f"{pay}: a payment is a CHANGE row (sheet-template CHANGE, what_changed 'Payment 1 "
@@ -1644,6 +1774,11 @@ def run_on_request(args, data, out=print):
             f"draft (email-templates.md section 6): Odeon -> draft-new to "
             f"{','.join(operators.OPERATORS['Odeon']['confirm_to'])} --kind decline; others -> draft-reply "
             f"--kind decline on the operator's email.")
+    elif verdict == "ACCEPT":
+        out("Next: NEW rows, as for an allotment booking (tour-operators.md step 4): to-price, rate_source "
+            "\"<Operator> contract\", internal_notes \"On request, accepted by the on-request rule\". No draft now: "
+            "the reply is the confirmation once pdf_link is there (job 2). done <message_id> \"on request accepted, "
+            "confirmation once pdf_link is there\".")
     else:
         out("Next: no row yet. ask-karen <message_id> \"<booking, dates, rooms: can we accept it?>\" --ref <ref>, "
             "then done <message_id> \"waiting on Karen E-…\". Her yes -> NEW rows; her no -> the REJECT path.")
@@ -1659,6 +1794,61 @@ def run_payments_due(mail, sheet, st, out=print, now=None):
     result = payments.due(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, now)
     out(payments.render(result, now))
     return result
+
+
+def _vn_time(text, default_hour=17):
+    text = text.strip()
+    for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            when = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        if fmt == "%d/%m/%Y":
+            when = when.replace(hour=default_hour)
+        return when.replace(tzinfo=VN)
+    raise Refused(f"'{text}': write DD/MM/YYYY HH:MM, Vietnam time")
+
+
+WEEKDAYS_VI = ("thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy", "Chủ nhật")
+
+
+def run_deposit_extension(args, out=print):
+    """Agency asks to move its deposit deadline (dev, 2026-11-07): granted at once, no question to Karen."""
+    asked = _vn_time(args.asked)
+    wanted = _vn_time(args.wanted) if args.wanted else None
+    current = _vn_time(args.current) if args.current else None
+    deadline, why = payments.extension_deadline(asked, wanted, current)
+    out(f"NEW DEPOSIT DEADLINE: {deadline:%H:%M} on {deadline:%d/%m/%Y} ({deadline:%A}), Vietnam time (UTC+7)")
+    out(f"  why: {why}")
+    if current is not None and deadline == current:
+        out("Next: no change to the row; reply with their current deadline (email-templates.md 4e).")
+        return deadline
+    cod = f"Deposit extended to {deadline:%d/%m/%Y %H:%M} (asked {asked:%d/%m})"
+    if args.balance_by:
+        cod += f"; balance by {args.balance_by.strip()}"
+    out(f"  COD: {cod}")
+    out(f"  English: by {deadline:%H:%M} on {deadline:%d/%m/%Y}, Vietnam time (UTC+7)")
+    out(f"  Tiếng Việt: trước {deadline:%H:%M} {WEEKDAYS_VI[deadline.weekday()]} ngày {deadline:%d/%m/%Y} "
+        f"(giờ Việt Nam, UTC+7)")
+    out("Next: COD on the booking's row (sheet-update --ref on an unbuilt NEW row, else a CHANGE row), then the "
+        "reply (email-templates.md 4e). payments-due reads the new deadline from COD. Balance deadlines: still Karen.")
+    return deadline
+
+
+def run_build_stuck(sheet, st, out=print):
+    """The build tool's stops, with whether Karen has been asked (E-nnn) and answered."""
+    items = build_watch.stuck(sheet.rows(), booking_state, datetime.now(VN))
+    out(build_watch.render(items))
+    alerts = st.data.get("build_alerts", {})
+    for i in items:
+        qid = (alerts.get(i["key"]) or {}).get("question")
+        if qid:
+            q = st.data["questions"].get(qid, {})
+            out(f"  {i['ref']}: Karen asked {qid}, " + (f"answered: {q['answer']}" if q.get("answer") is not None
+                                                          else "no answer yet"))
+        elif i["key"] not in alerts:
+            out(f"  {i['ref']}: not sent to Karen yet (the hourly check sends it)")
+    return items
 
 
 def run_confirmations_due(mail, sheet, st, out=print):
@@ -1859,6 +2049,7 @@ def parser():
     s.add_argument("--row", default="")
     s.set_defaults(kind="forward")
     s = sub.add_parser("sheet-update"); s.add_argument("row", type=int); s.add_argument("file")
+    s.add_argument("--ref", required=True, help="the booking_ref of the row: refused if the row now holds another booking")
     for name in ("draft-reply", "draft-forward"):
         s = sub.add_parser(name)
         s.add_argument("message_id")
@@ -1881,7 +2072,14 @@ def parser():
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("draft-attach"); s.add_argument("draft_id"); s.add_argument("file")
     sub.add_parser("payments-due", help="TA deposits and balances: reminders to draft now, overdue, never confirmed")
+    s = sub.add_parser("deposit-extension", help="agency asks to move its deposit deadline: the new deadline and COD")
+    s.add_argument("--asked", required=True, help="when the request email came, DD/MM/YYYY HH:MM Vietnam time")
+    s.add_argument("--wanted", help="the time they asked for, if they named one (date only = 17:00)")
+    s.add_argument("--current", help="their current deposit deadline, DD/MM/YYYY HH:MM")
+    s.add_argument("--balance-by", help="the balance date already in COD, DD/MM/YYYY")
     sub.add_parser("confirmations-due", help="bookings built since 30/10 with no confirmation from sales@")
+    sub.add_parser("build-stuck", help="bookings the build tool stopped on (needs_review / error) or hasn't picked "
+                                       "up after 4 h, with its reason; Karen gets them from the hourly check")
     s = sub.add_parser("confirmation-hold", help="leave a booking out of confirmations-due: its PDF doesn't match, or "
                                                  "it waits on an invoice. A new PDF on the row brings it back")
     s.add_argument("ref"); s.add_argument("row", type=int); s.add_argument("reason", nargs="*")
@@ -1993,7 +2191,7 @@ def parser():
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
 READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "quote", "availability", "payments-due",
-             "confirmations-due", "pickup")
+             "confirmations-due", "pickup", "build-stuck", "deposit-extension")
 
 
 def main(argv=None):
@@ -2042,7 +2240,7 @@ def main(argv=None):
         elif c == "sheet-append":
             sheet_append(config.sheet(), read_json(args.file), live=config.live_sheet())
         elif c == "sheet-update":
-            sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR)
+            sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR, ref=args.ref)
         elif c == "draft-reply":
             draft_reply(config.mail(), st, args, tg=config.telegram())
             st.save()
@@ -2061,8 +2259,12 @@ def main(argv=None):
             print(f"forgot the confirmation draft for {args.ref} row {args.row}; delete the draft itself in Outlook")
         elif c == "payments-due":
             run_payments_due(config.mail(), config.sheet(), st)
+        elif c == "deposit-extension":
+            run_deposit_extension(args)
         elif c == "confirmations-due":
             run_confirmations_due(config.mail(), config.sheet(), st)
+        elif c == "build-stuck":
+            run_build_stuck(config.sheet(), st)
         elif c == "confirmation-hold":
             run_confirmation_hold(config.sheet(), st, args)
             st.save()

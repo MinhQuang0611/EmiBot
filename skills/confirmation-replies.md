@@ -13,6 +13,11 @@ A link is not proof the booking is right. I still open the PDF and check it agai
 
 If the sender chases before that, I never write "we'll check and get back to you". The scan report says the row is waiting on EZFOLIO and how long the sender has waited.
 
+**The build tool stopped (dev, 2026-11-07).** When the build tool can't build a row it writes `ez_status` `needs_review` or `error` and its reason in `ez_note` / `ez_error` (a room type full, a group it can't find, voucher fields blank). No PDF will come until a person acts, so the confirmation never comes on its own: on 06/11 Church Travels, Footprint 031P0127J, Amara #30124, Ohmyhotel and the Pegas and Odeon vouchers sat there while the agencies chased. The hourly confirmation check now sends each stop to Karen on Telegram once, as a question `E-nnn` on the booking's email, with the build tool's reason (`py -m tools.emi build-stuck` lists them, and whether Karen has answered). What to do there is Karen's or Long's call, never mine: overbook, another room type, decline, fix the group.
+- Her answer → `karen-answer`, then the draft that answer calls for (a decline, an offer of another room type), on the agency's thread.
+- Long fixes it and the build tool finishes → job 2's confirmation, as usual.
+- The agency chases a stuck booking → no second question while one is open for it: `done <id> "chased, waiting on Karen E-nnn"` and the chase goes at the top of the scan report with how long they have waited. No question open yet → `ask-karen` with the build tool's reason.
+
 ## Wording
 Use the templates in `email-templates.md`. They are built from confirmations already sent from this mailbox. This file says when to draft and what to check; that file says how the email reads.
 
@@ -36,6 +41,10 @@ Reply on the original thread, in the sender's language. Include:
 **No draft before the build (dev, 05/11, Amara #30124):** a change of dates, rooms or room type gets its row in job 1 and nothing to the agency. No "we have noted", no asking them to confirm the room list. `confirmations-due` lists it as `CONFIRM CHANGE` once the build tool has finished its rows (`ez_status` done): the PDF is remade under the same Drive link and every CHANGE row carries that link from the start, so the link says nothing here; `ez_processed_at` does. From 05/11 on; older changes were confirmed by hand.
 
 Same thread. State what changed (old → new), the new total, and attach the new PDF. Say plainly that it replaces the earlier confirmation. A `CONFIRM CHANGE` line whose change touches no date, room or total → `confirmation-hold`, nothing to send.
+
+**Name, pax and meal-plan changes too (dev, 2026-11-07).** A change of guest names, number of guests or meal plan, built in EZFOLIO, is owed its confirmation the same way: Ohmyhotel #27984, Ohmyhotel/ivedo #27981, Mekong MVN29835 and Travel Concierge 2801572 asked for a name change, it was built, and nobody answered, because `confirmations-due` only knew dates, rooms and totals. Not a change: names given for a "TBA" booking or added to a rooming list (job 1 answers those), the same name written another way, a payment. An OTA change is confirmed only when a person at the agency or bed bank asked for it (Ohmyhotel's operations desk); never a guest writing through Booking.com, Agoda or Expedia, never a robot. The line names the booking under its group code too, so a change written under the group code (`27984`) and the booking under its number (`S26082711291H01`) are one. **The new name must be on the PDF** before I confirm it: on 06/11 the build tool's note for both Ohmyhotel name changes said only "sửa Notice", not the guest name. Old name still on the PDF → `confirmation-hold` and `ask-karen`, no draft.
+
+**`RATE MOVED` under a `CONFIRM CHANGE` line:** the total changed while the dates and rooms stayed the same. A price the agency or Karen agreed (what_changed says so) → confirm as usual. Anything else → no draft: `confirmation-hold`, and `ask-karen`, because the price in EZFOLIO may be wrong (Ohmyhotel #27984: 7,437,500 → 9,500,000 from a provisional figure on a name change).
 
 **Deposit check (Karen, 2026-10-08):** look up Payment 1 on the intake row. If no deposit has been received, the email reminds them to pay the deposit to the hotel's bank account within 48 hours of receiving this email, with the exact deadline in Vietnam time. If the deposit is in, no reminder — state what's been received and the balance. If I can't tell, I flag it to Karen and don't draft either version.
 
@@ -72,7 +81,13 @@ I follow up on unpaid bookings myself, **TA bookings only**: `py -m tools.emi pa
 
 **Both reminders ask for the payment slip** so the hotel's accountant can check it.
 
-**Agency asks to move a deadline** (deposit or balance): I never decide it. It goes to Karen as a question, at the top of the scan report (by Telegram once that channel exists). The intake row keeps the current deadline and notes the requested one as awaiting Karen. No reply to the agency until she has decided — and no holding reply either.
+**Agency asks to move its deposit deadline (dev, 2026-11-07; replaces "Karen decides", 08/10):** granted at once, no question to Karen. The new deadline is **17:00 two days after the day the request came** (a request on Saturday 07/11 → Monday 09/11, 17:00), or the time they asked for when that is sooner. Never later than that, never earlier than the deadline they already have.
+```
+py -m tools.emi deposit-extension --asked "<request received, DD/MM/YYYY HH:MM>" [--wanted "<their time>"] \
+    [--current "<current deadline>"] [--balance-by <balance date from COD>]
+```
+It prints the deadline with the weekday and the `COD` text (`Deposit extended to 09/11/2026 17:00 (asked 07/11); balance by …`). Write that COD on the booking (`sheet-update --ref` on a NEW row not built yet, otherwise a CHANGE row), then the reply, `email-templates.md` 4e. `payments-due` reads the new deadline from COD, so the reminder follows it. Always an exact date and time, never "Monday" or "next week" alone (rule 6).
+**A balance deadline** (7 days before check-in) asked to move: still Karen's call, `ask-karen`, with a complete best-answer draft and a CHECK line.
 
 **Deadline passed and no reminder ever went** (`LATE` in `payments-due`, Karen 2026-11-04: bookings went unchased from 08/10 until this was built): the one reminder still goes, with the deadline as it stood.
 

@@ -41,13 +41,24 @@ class OnRequestTest(unittest.TestCase):
         self.assertEqual(v, "REJECT")
         self.assertIn("11/12 (61%)", why[0])
 
-    def test_over_60_but_close_asks_karen(self):
-        v, _ = operators.on_request(occupancy([70], start=date(2026, 11, 20)), [], date(2026, 11, 20), self.TODAY)
-        self.assertEqual(v, "ASK KAREN")
+    def test_over_60_but_close_accepts(self):
+        v, why = operators.on_request(occupancy([70], start=date(2026, 11, 20)), [], date(2026, 11, 20), self.TODAY)
+        self.assertEqual(v, "ACCEPT")
+        self.assertIn("within 30 days", why[1])
 
-    def test_free_and_quiet_asks_karen(self):
+    def test_free_and_quiet_accepts(self):
+        # dev 07/11, Anex 112976780 on 05/11: STD free, occupancy 24-44%, 36 days away -> accept, not ask Karen
         v, _ = operators.on_request(occupancy([60, 45]), [], date(2026, 12, 10), self.TODAY)
-        self.assertEqual(v, "ASK KAREN")  # exactly 60% is not over 60%
+        self.assertEqual(v, "ACCEPT")  # exactly 60% is not over 60%
+
+    def test_missing_occupancy_far_away_asks_karen(self):
+        v, why = operators.on_request(occupancy([40, None]), [], date(2026, 12, 10), self.TODAY)
+        self.assertEqual(v, "ASK KAREN")
+        self.assertIn("11/12", why[0])
+
+    def test_missing_occupancy_close_accepts(self):
+        v, _ = operators.on_request(occupancy([None], start=date(2026, 11, 20)), [], date(2026, 11, 20), self.TODAY)
+        self.assertEqual(v, "ACCEPT")  # within 30 days occupancy doesn't decide
 
 
 class AnexRobotTest(unittest.TestCase):

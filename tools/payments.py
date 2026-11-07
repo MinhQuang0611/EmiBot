@@ -11,6 +11,7 @@ Tour operators pay under their contract and OTAs are paid by the OTA: never chas
 check-in and have no reminder rule (docs/rate-knowledge/direct.md).
 """
 import re
+import unicodedata
 from datetime import date, datetime, time, timedelta, timezone
 
 from . import operators
@@ -57,9 +58,34 @@ BARE_DATE = re.compile(r"^(\d{2}/\d{2}/\d{4})(?: (\d{2}):(\d{2}))?$")
 BALANCE_DATE = re.compile(r"balance[^;]*?(\d{2}/\d{2}/\d{4})", re.I)
 
 
+EXTENDED = re.compile(r"^deposit extended to (\d{2}/\d{2}/\d{4}) (\d{2}):(\d{2})", re.I)
+EXTEND_DAYS, EXTEND_HOUR = 2, 17
+
+
+def extension_deadline(asked_at, wanted=None, current=None):
+    """An agency asks to move its deposit deadline (dev, 2026-11-07): granted, no question to Karen. The new deadline
+    is 17:00 two days after the day the request came (Sat 07/11 -> Mon 09/11 17:00), or the agency's own time when
+    that is sooner. Never earlier than the deadline they already have. Returns (deadline, why)."""
+    standard = datetime.combine(asked_at.date() + timedelta(days=EXTEND_DAYS), time(EXTEND_HOUR), tzinfo=VN)
+    deadline, why = standard, f"17:00, {EXTEND_DAYS} days after the request ({asked_at:%d/%m})"
+    if wanted is not None and asked_at < wanted < standard:
+        deadline, why = wanted, "the time the agency asked for (sooner than the 2-day limit)"
+    elif wanted is not None and wanted >= standard:
+        why += f"; they asked for {wanted:%H:%M %d/%m/%Y}, later than the limit"
+    if current is not None and current >= deadline:
+        return current, f"their current deadline is already {current:%H:%M %d/%m/%Y}: nothing to move"
+    return deadline, why
+
+
 def fixed_deadline(cod):
-    """A COD that is only a date ('06/11/2026', '17/10/2026 14:00'): the agreed deadline, not the 48-hour clock."""
-    m = BARE_DATE.match((cod or "").strip())
+    """A COD that is only a date ('06/11/2026', '17/10/2026 14:00'): the agreed deadline, not the 48-hour clock.
+    Also an extension: 'Deposit extended to 09/11/2026 17:00 (asked 07/11); balance by 03/12/2026'."""
+    cod = (cod or "").strip()
+    m = EXTENDED.match(cod)
+    if m:
+        day = operators._date(m.group(1))
+        return datetime.combine(day, time(int(m.group(2)), int(m.group(3))), tzinfo=VN) if day else None
+    m = BARE_DATE.match(cod)
     if not m:
         return None
     day = operators._date(m.group(1))
@@ -201,9 +227,59 @@ def _rooms(batch):
     return batch[0].get("arrival"), batch[0].get("departure"), rooms, total_of(batch)
 
 
-def last_change(hits):
-    """The rows of the last email that changed the booking's dates, rooms or total; None if nothing did. Each email
-    writes the whole booking, so comparing one email's rows with the one before shows what really changed."""
+# Words in guest_names that aren't a name: titles, placeholders.
+NOT_A_NAME = {"mr", "mrs", "ms", "miss", "mstr", "master", "dr", "chd", "child", "inf", "infant", "tba", "tbc", "tbu",
+              "and", "va", "other", "others", "guest", "guests", "pax"}
+PAYMENT_COLUMNS = ("Payment 1", "Payment 1 date + time", "Payment 2", "Payment 2 date + time")
+
+
+def _plain(text):
+    t = unicodedata.normalize("NFKD", (text or "").lower().replace("đ", "d"))
+    return "".join(c for c in t if not unicodedata.combining(c))
+
+
+def _names(batch):
+    """The guests' names as a set of words: 'MR.PERIC/DRAGAN' = 'Dragan Peric', 'Lê' = 'Le'."""
+    return {w for r in batch for w in re.findall(r"[a-z]+", _plain(r.get("guest_names")))
+            if len(w) > 1 and w not in NOT_A_NAME}
+
+
+def _pax(batch):
+    if any(not (r.get("adults") or "").strip() for r in batch):
+        return None  # a backfilled row without pax: unknown, not a change
+    return sorted((r.get("room_code") or "", operators._amount(r.get("adults")), operators._amount(r.get("children")))
+                  for r in batch)
+
+
+def _meals(batch):
+    meals = {(r.get("meal_plan") or "").strip().upper() for r in batch}
+    return None if "" in meals else meals
+
+
+def _paid(batch):
+    return sorted(tuple((r.get(c) or "").strip() for c in PAYMENT_COLUMNS) for r in batch)
+
+
+def _rooms_only(batch):
+    return _rooms(batch)[:3]  # dates and rooms, without the total
+
+
+def booking_changed(before, batch):
+    """Did this email change what the agency booked: dates, rooms or total; or, with a payment left alone, the guests'
+    names (dev 07/11: Ohmyhotel #27984, Mekong MVN29835, a name change built and never answered), pax or meal plan.
+    Names given for a 'TBA' booking or added to a rooming list are not a change: the reply to those is job 1's."""
+    if _rooms(batch) != _rooms(before):
+        return True
+    if _paid(batch) != _paid(before):
+        return False  # a payment email; it was answered with the slip thank-you in job 1
+    old, new = _names(before), _names(batch)
+    if old and new and not old <= new:
+        return True
+    return any(a is not None and b is not None and a != b
+               for a, b in ((f(before), f(batch)) for f in (_pax, _meals)))
+
+
+def _batches(hits):
     batches = []
     for r in hits:
         key = (r.get("action"), r.get("received_at"))
@@ -211,11 +287,38 @@ def last_change(hits):
             batches[-1][1].append(r)
         else:
             batches.append((key, [r]))
-    found = None
+    return batches
+
+
+def last_change_pair(hits):
+    """(rows before, rows of the last email that changed the booking), or (None, None). Each email writes the whole
+    booking, so comparing one email's rows with the one before shows what really changed."""
+    found = (None, None)
+    batches = _batches(hits)
     for (_, before), (key, batch) in zip(batches, batches[1:]):
-        if key[0] == "CHANGE" and _rooms(batch) != _rooms(before):
-            found = batch
+        if key[0] == "CHANGE" and booking_changed(before, batch):
+            found = (before, batch)
     return found
+
+
+def last_change(hits):
+    """The rows of the last email that changed the booking (booking_changed); None if nothing did."""
+    return last_change_pair(hits)[1]
+
+
+# An OTA confirms its own guests; a person at a B2B or bed bank (Ohmyhotel's operations desk, WebBeds) who asked for a
+# change waits for our answer. Guest relay addresses, robots and a guest's own mailbox are not that.
+NOT_AN_AGENCY = re.compile(r"no-?reply|do-?not-?reply|notification|robot|@guest\.booking\.com|messaging|"
+                           r"@(gmail|yahoo|hotmail|outlook|icloud|live|qq|163|mail|yandex)\.", re.I)
+
+
+def asked_by_agency(batch):
+    sender = (batch[0].get("company_email") or "").strip()
+    return "@" in sender and not NOT_AN_AGENCY.search(sender)
+
+
+def _codes(r):
+    return {(r.get(c) or "").strip() for c in ("ezfolio_group_code", "Group code")} - {""}
 
 
 def confirmed_since(mail, code, mailbox, since):
@@ -255,31 +358,50 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
     the reply to a change is the new confirmation with the PDF). An OTA confirms to the guest itself."""
     drafted = st.confirmation_drafted()
     done = {ref for ref, _ in drafted}
-    out = []
+    out, groups_seen = [], set()
     for state in operators.bookings(rows, state_of):
         head = state[0]
         ref = (head.get("booking_ref") or "").strip()
         channel = head.get("channel_type") or ""
         arrival = operators._date(head.get("arrival"))
-        if not (channel in ("TA", "Direct") or channel.startswith("Tour operator")) or operators.cancelled(state):
+        ota = channel == "OTA"
+        if not (ota or channel in ("TA", "Direct") or channel.startswith("Tour operator")) or operators.cancelled(state):
             continue
-        if not arrival or arrival < today or not total_of(state):
+        if not arrival or arrival < today:
             continue
         mine = parts_of(ref)
         hits = [r for r in rows if mine & parts_of(r.get("booking_ref"))]
         code = _group(hits)
-        changed = last_change(hits)
+        if code:
+            # Ohmyhotel #27984 (06/11): the name change went on the sheet under the group code as its ref, the
+            # booking under the OTA number; both are one booking.
+            mine_rows = {r["_row"] for r in hits}
+            hits = [r for r in rows if r["_row"] in mine_rows or code in _codes(r)]
+            if code in groups_seen:
+                continue
+            groups_seen.add(code)
+        before, changed = last_change_pair(hits)
         if changed and code:
             since = built_at(changed)
             first = changed[0]
+            if ota and not asked_by_agency(changed):
+                continue
             if (since and since.date() >= CHANGE_FROM and not _held(st, ref, first)
                     and not any(row == r["_row"] for _, row in drafted for r in changed)
                     and not confirmed_since(mail, code, mailbox, since)):
-                out.append({"ref": ref, "row": first["_row"], "company": head.get("company", ""), "group": code,
-                            "arrival": arrival, "subject": first.get("source_email", ""), "channel": channel,
-                            "rows": [r["_row"] for r in changed], "total": total_of(changed),
-                            "change": first.get("what_changed", "")})
+                item = {"ref": ref, "row": first["_row"], "company": head.get("company", ""), "group": code,
+                        "arrival": arrival, "subject": first.get("source_email", ""), "channel": channel,
+                        "rows": [r["_row"] for r in changed], "total": total_of(changed),
+                        "change": first.get("what_changed", "")}
+                if _rooms_only(changed) == _rooms_only(before) and total_of(before) and total_of(changed) and \
+                        total_of(changed) != total_of(before):
+                    # Ohmyhotel #27984: a name change carried a provisional TA-card rate and the build tool put it
+                    # into EZFOLIO, 1,487,500 -> 1,900,000. The PDF then matches the wrong row.
+                    item["rate_moved"] = (total_of(before), total_of(changed))
+                out.append(item)
             continue  # changed since the NEW: its first confirmation is not what is owed
+        if ota or not total_of(state):
+            continue
         if ref in done:
             continue
         new = next((r for r in hits if r.get("action") == "NEW" and (r.get("pdf_link") or "").strip()), None)
@@ -348,4 +470,10 @@ def render_confirmations(items):
                    f"arrival {i['arrival']:%d/%m/%Y} | booking rows {', '.join(map(str, i['rows']))}, total "
                    f"{money(i['total'])}: the PDF covers all of them | original email: {i['subject']}"
                    + (f" | what changed: {change}" if change else ""))
+        if i.get("rate_moved"):
+            was, now = i["rate_moved"]
+            out.append(f"  RATE MOVED {money(was)} → {money(now)} with the same dates and rooms. A price the agency or "
+                       f"Karen agreed (what_changed says so) → confirm as usual. Anything else (a name or pax change "
+                       f"that brought a provisional rate) → no draft: confirmation-hold {i['ref']} {i['row']} \"rate "
+                       f"moved\" and ask-karen, the price in EZFOLIO may be wrong")
     return "\n".join(out)

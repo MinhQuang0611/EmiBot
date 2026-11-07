@@ -114,7 +114,8 @@ COMMON_STEPS = [
     "Allotment: NEW row, one row per room type.",
     "On request (release passed or allotment used up): on-request. No availability, or occupancy over 60% with "
     "check-in more than 30 days away -> reject: CANCEL row 'On request booking cannot be accommodated' + decline "
-    "draft. Anything else -> ask Karen before logging it.",
+    "draft. Anything else -> accepted: NEW rows like an allotment booking, reply = the confirmation once pdf_link "
+    "is there (dev 07/11). Ask Karen only when the availability sheet is stale or unreadable.",
     "The build tool builds it and puts the PDF link in pdf_link (column AQ). Held -> Long approves it. Check the "
     "PDF against the booking.",
     "Confirmation: a reply draft on the original thread with the group code and the EZFOLIO PDF.",
@@ -153,7 +154,9 @@ def info(operator):
 # --- on request ---
 
 def on_request(result, problems, arrival, today):
-    """('REJECT' | 'ASK KAREN', reasons). result = availability.check(), problems = availability.fits()."""
+    """('REJECT' | 'ACCEPT' | 'ASK KAREN', reasons). result = availability.check(), problems = availability.fits().
+    Not rejected = accepted (dev, 2026-11-07, Anex 112976780: 'nếu không thì accept'); ASK KAREN only when the
+    rule can't be checked: check-in more than 30 days away and a night's occupancy missing from the sheet."""
     if problems:
         return "REJECT", [f"no availability: {'; '.join(problems)}"]
     away = (arrival - today).days
@@ -164,13 +167,16 @@ def on_request(result, problems, arrival, today):
         return "REJECT", [f"occupancy over {ON_REQUEST_OCCUPANCY:.0f}% on "
                           f"{', '.join(f'{n:%d/%m} ({v:.0f}%)' for n, v in high)} and check-in {away} days away "
                           f"(more than {ON_REQUEST_DAYS})"]
+    if unknown and away > ON_REQUEST_DAYS:
+        return "ASK KAREN", [f"occupancy not on the sheet for {', '.join(f'{n:%d/%m}' for n in unknown)} and "
+                             f"check-in {away} days away: the 60% rule can't be checked"]
     why = [f"rooms free every night; check-in {away} days away"]
     if high:
         why.append(f"occupancy over {ON_REQUEST_OCCUPANCY:.0f}% on {', '.join(f'{n:%d/%m}' for n, _ in high)} "
                    f"but check-in is within {ON_REQUEST_DAYS} days")
-    if unknown:
-        why.append(f"occupancy not on the sheet for {', '.join(f'{n:%d/%m}' for n in unknown)}")
-    return "ASK KAREN", why
+    else:
+        why.append(f"occupancy at most {ON_REQUEST_OCCUPANCY:.0f}% every night")
+    return "ACCEPT", why
 
 
 # --- check-outs and invoices, from the intake sheet ---

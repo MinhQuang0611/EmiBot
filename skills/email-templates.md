@@ -397,6 +397,39 @@ sales@haya-hotels.com
 English: `Thank you for sending the payment slip. The attached slip is a transfer to [beneficiary] ([reference], VND [amount]), not for booking [ref] at HAYA Hotel Phu Quoc.` / `Could you please check and send us the correct slip for booking [ref] (group code #[code])?` / the bank details / `Best regards,` …
 - Say what the slip shows, nothing about how it happened. Don't guess that the money reached HAYA.
 
+### 4e. Deposit deadline moved (`--kind reply`, dev 2026-11-07)
+After `deposit-extension` and the COD on the row. Same greeting and sign-off as 4a; the deadline exactly as the command prints it.
+
+Vietnamese:
+```
+Kính gửi chị [Tên],
+
+Khách sạn đã nhận được đề nghị gia hạn tiền cọc của chị.
+
+Khách sạn đồng ý gia hạn tiền cọc cho đặt phòng [ref] (mã đoàn #[code]) đến trước [HH:MM] [thứ] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7).
+
+Số tiền cọc: [số tiền] VND.
+
+Chị vui lòng gửi lại UNC sau khi chuyển khoản để bộ phận kế toán kiểm tra.
+
+Trân trọng,
+```
+English:
+```
+Dear Ms. [Name],
+
+Thank you for your email.
+
+We have extended the deposit deadline for booking [ref] (Group code: #[code]) to [HH:MM] on [DD/MM/YYYY], Vietnam time (UTC+7).
+
+Deposit due: VND [amount].
+
+Please send us the payment slip once the transfer is made so that our accounting team can check it.
+
+Best regards,
+```
+They asked for less time than 2 days → "đến trước [their time]" as they asked. Their current deadline is already later (`nothing to move`) → the same text with that deadline, no "gia hạn": `Hạn đặt cọc của đặt phòng [ref] là trước …`.
+
 ## 5. Request or update on an existing booking (`--kind request`)
 Sources: Booking.com Loo / Voong / Bettiol, Expedia Ho, Agoda 2056156621, Ohmyhotel 28374, RezLive REZ6AD9A3A2, Jain meal 211Q1126Y (13–25/10).
 
