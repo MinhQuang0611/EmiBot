@@ -70,7 +70,7 @@ I save the reply as a draft on the original thread in sales@haya-hotels.com and 
 No reply. The OTA confirms to the guest itself.
 
 ## Payment reminders (Karen, 2026-10-08)
-I follow up on unpaid bookings myself, **TA bookings only**: `py -m tools.emi payments-due` (job 3, `schedule.md`) works out who is due and prints the draft command. Tour operators pay under their contract, OTAs are paid by the OTA, and direct guests pay 100% before check-in with no reminder rule (open with Karen). Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
+I follow up on unpaid bookings myself, **travel companies (TA) only** (Karen via the dev, 07/11: online sites — OTAs and B2B like Ohmyhotel, MG, WebBeds, Hotelbeds, Tiket — pay by VCC and are never chased, even on a row written "TA"): `py -m tools.emi payments-due` (job 3, `schedule.md`) works out who is due and prints the draft command. Tour operators pay under their contract, OTAs are paid by the OTA, and direct guests pay 100% before check-in with no reminder rule (open with Karen). Reminders are drafted from `email-templates.md` (section 4) and left in Drafts like everything else.
 
 **"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the booking's latest row (a payment arrives as a CHANGE row). I check both before every reminder.
 

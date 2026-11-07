@@ -160,11 +160,16 @@ BACKFILL = "EXISTING BOOKING"
 # backfill wrote Ohmyhotel, MG, Mytour and Dida as "TA", and a CHANGE copies channel_type from the booking's rows.
 OTA_COMPANIES = ("SynXis", "Agoda", "Expedia", "Trip.com", "Oh My Hotel", "MG", "MakeMyTrip", "Traveloka",
                  "Dida Travel", "Mytour", "VNTrip", "Booking.com")
-_OTA_KEYS = tuple(k for k, canon in schema._COMPANY_KEYS.items() if canon in OTA_COMPANIES)
+# Karen via the dev, 2026-11-07, on draft #613 (Ohmyhotel V26062610072H01): "chase payment thì chỉ chase với công ty
+# du lịch thôi. Các trang online không cần phải chase do có payment VCC rồi". The B2B sites of the stop-sell list
+# (tools/stop_sales.py) and RezLive, which relays Ohmyhotel, pay by VCC too, even when a row calls them "TA".
+B2B_KEYS = ("webbeds", "dotw", "hotelbeds", "hbx", "bedsonline", "tiket", "tiketcom", "rezlive")
+_OTA_KEYS = tuple(k for k, canon in schema._COMPANY_KEYS.items() if canon in OTA_COMPANIES) + B2B_KEYS
 
 
 def ota_company(name):
-    """'MG', 'MY TOUR', 'CÔNG TY TNHH OHMYHOTEL&CO VN' (the name inside a legal name) -> True."""
+    """An online site, never chased: 'MG', 'MY TOUR', 'CÔNG TY TNHH OHMYHOTEL&CO VN' (the name inside a legal name),
+    'WebBeds FZ LLC' -> True. Only a travel company (TA) gets a payment reminder."""
     if schema.canonical_company(name or "") in OTA_COMPANIES:
         return True
     words = f" {schema._norm(name or '')} "
