@@ -58,7 +58,7 @@ class BackfillTest(unittest.TestCase):
 
     def test_ota_company_names(self):
         for name in ("MG", "MY TOUR", "DIDA TOUR", "CÔNG TY TNHH OHMYHOTEL&CO VN", "Agoda Company Pte Ltd",
-                     "WebBeds FZ LLC", "HotelBeds", "Tiket.com", "RezLive"):  # B2B sites pay by VCC (07/11)
+                     "WebBeds FZ LLC", "HotelBeds", "Tiket.com", "RezLive", "TravClan"):  # B2B sites pay by VCC (07/11)
             self.assertTrue(payments.ota_company(name), name)
         for name in ("Worldwide Gateway DMC", "Threeland Travel", "CTY VICTORIA", "Asian Classic Travels", ""):
             self.assertFalse(payments.ota_company(name), name)

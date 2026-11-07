@@ -163,7 +163,7 @@ OTA_COMPANIES = ("SynXis", "Agoda", "Expedia", "Trip.com", "Oh My Hotel", "MG", 
 # Karen via the dev, 2026-11-07, on draft #613 (Ohmyhotel V26062610072H01): "chase payment thì chỉ chase với công ty
 # du lịch thôi. Các trang online không cần phải chase do có payment VCC rồi". The B2B sites of the stop-sell list
 # (tools/stop_sales.py) and RezLive, which relays Ohmyhotel, pay by VCC too, even when a row calls them "TA".
-B2B_KEYS = ("webbeds", "dotw", "hotelbeds", "hbx", "bedsonline", "tiket", "tiketcom", "rezlive")
+B2B_KEYS = ("webbeds", "dotw", "hotelbeds", "hbx", "bedsonline", "tiket", "tiketcom", "rezlive", "travclan")
 _OTA_KEYS = tuple(k for k, canon in schema._COMPANY_KEYS.items() if canon in OTA_COMPANIES) + B2B_KEYS
 
 
