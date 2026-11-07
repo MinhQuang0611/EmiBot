@@ -7,7 +7,7 @@ Runs every day including weekends — agencies email on Saturdays and Sundays.
 | # | Job | Cron (Vietnam time) | Runs |
 |---|---|---|---|
 | 1 | Inbox scan | watcher + every 3 h | On new mail, within a minute or two |
-| 2 | Confirmation drafts | `30 7-21 * * *` command check, starts the job when there is work; the job itself also at 22:00 | Hourly, no model when quiet |
+| 2 | Confirmation drafts | `*/15 7-21 * * *` command check (dev, 2026-11-07; was hourly at :30), starts the job when there is work; the job itself also at 22:00 | Every 15 min, no model when quiet |
 | 3 | Payments | `0 8,15 * * *`, plus `35 7-21 * * *` command check for a reminder due | 08:00 and 15:00, and hourly when a reminder falls due |
 | 4 | Daily report to Karen | `30 21 * * *` | 21:30 |
 | 5 | Stop-sell list | `0 8,9 * * *` command job, no model | 08:00; 09:00 only makes it if 08:00 failed |
@@ -58,7 +58,7 @@ Run everything from `/data/emi` with `.venv/bin/python` (written `py` below). Us
 7. `py -m tools.emi mark-scanned <scan_started>`.
 8. Answer with the scan report in the exact shape of `skills/inbox-triage.md` §4: plain lines for Telegram, **no table**. Name every draft by its number (`#12`), as printed by the `draft-*` command for that email, never another email's. Each one already has its Telegram notice, so I don't send another.
 
-## 2. Confirmation drafts — `30 6-22 * * *`
+## 2. Confirmation drafts — `*/15 7-21 * * *`
 Skills: `confirmation-replies.md`, `email-templates.md`.
 1. Read the intake sheet for rows where the build tool has pasted a `pdf_link` and no confirmation has been drafted yet. (Cancellations are answered in job 1.)
 2. Open the PDF and check it against the row. Mismatch → flag to Karen, no draft.
@@ -66,10 +66,10 @@ Skills: `confirmation-replies.md`, `email-templates.md`.
 4. Draft the reply on the agency's thread in their language, PDF attached, deadline as exact time and date in Vietnam time. Leave it in Drafts.
 5. Rows the build tool stopped on (`needs_review` / `error`) or hasn't picked up after 4 hours → Karen on Telegram, once each, as a question `E-nnn` with the build tool's reason (dev, 2026-11-07). The hourly command check does it by itself (`tools.precheck confirmations`, `tools/build_watch.py`); `py -m tools.emi build-stuck` lists them and what Karen answered.
 
-Hourly because this is the step the agency is waiting on. It does nothing on a run where no row has changed.
+Every 15 minutes (dev, 2026-11-07; hourly until then) because this is the step the agency is waiting on. It does nothing on a run where no row has changed.
 
 ### Job 2 — the commands (confirmation for one row)
-**Automations:** "Emi job 2 - confirmations" `571e5a23-…` (isolated agent run, 22:00, report to Telegram) and "Emi confirmation check" (command job, `30 7-21 * * *` Asia/Ho_Chi_Minh, no model when quiet): `tools.precheck confirmations`, and on work `openclaw automations run <job 2 id>`.
+**Automations:** "Emi job 2 - confirmations" `571e5a23-…` (isolated agent run, 22:00, report to Telegram) and "Emi confirmation check" (command job, `*/15 7-21 * * *` Asia/Ho_Chi_Minh since 07/11 17:30, was `30 7-21`, no model when quiet): `tools.precheck confirmations`, and on work `openclaw automations run <job 2 id>`.
 
 0. `py -m tools.emi confirmations-due` → every TA, direct and tour operator booking built since 30/10 with no mail from sales@ carrying its group code, and (`CONFIRM CHANGE`) every change of dates, rooms, total, guest names, pax or meal plan built since 05/11 with no mail and PDF to the agency since; an OTA's only when a person at the agency asked (dev, 07/11). A `RATE MOVED` line under it → no draft, `confirmation-hold` + `ask-karen` unless the price was agreed. `py -m tools.emi build-stuck` → the bookings the build tool stopped on: in the report, with their `E-nnn`. For a change use `email-templates.md` 2 on its first row; an older note of mine still open on that booking → `review-deny`. The first **5**; the rest wait for the next run. `py -m tools.emi mail-find <ref>` gives the original email's id (a booking sent in by front office: the reply still goes to the operator or agency).
 1. `py -m tools.emi pdf-fetch <row>` → the PDF behind `pdf_link`, saved, its text printed next to the row. Compare every date, room, rate and total, **against all the booking's rows together** (`confirmations-due` lists them with their total): one PDF covers every room type, so a single row's total never matches it (Threeland, 04/11, a false alarm). A real mismatch → report to Karen, stop for this booking, and `py -m tools.emi confirmation-hold <ref> <row> "<what differs>"`, so the hourly check doesn't bring it back: a new PDF on the row does (a new `ez_processed_at` too: a remade PDF keeps its link). An Odeon or Crystal Bay booking waiting on its invoice: the same; `confirmation-hold <ref> 0 --clear` when the invoice is ready.
