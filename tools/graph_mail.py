@@ -20,6 +20,10 @@ EMI_CATEGORY = "Emi"
 APPROVED_CATEGORY = "Emi approved"  # a person pressed Accept on Telegram; still a draft until someone sends it
 # A draft whose first line asks the sender to check something (AGENTS.md rule 9) is never sent by Emi.
 CHECK_LINE = "[CHECK BEFORE SENDING"
+# A confirmation drafted before the build tool's PDF exists (dev, 2026-11-07): this first line, bold red, until
+# confirmation-attach puts the PDF on and takes the line off. Never sent with it.
+DO_NOT_SEND = "[DO NOT SEND UNTIL PDF IS ATTACHED]"
+RED_LINES = (CHECK_LINE, DO_NOT_SEND[:-1])
 # The only address Emi may send to, and only a payment slip (send_slip_forward).
 ACCOUNTING = "accountant@palmahotel.vn"
 
@@ -225,7 +229,7 @@ def _line_kind(line):
     """'list' lines (a bullet, 'Label: value', a short fragment) stay together under each other; a sentence
     ('prose') is a paragraph of its own."""
     s = line.strip()
-    if s.upper().startswith("[CHECK BEFORE SENDING"):
+    if s.upper().startswith(RED_LINES):
         return "prose"
     if BULLET.match(line) or _STRUCT_LABEL.match(s):
         return "list"
@@ -276,8 +280,8 @@ def text_to_html(text):
     a line break inside one stays a <br>, **label** is bold, lines starting with •, -, * or – are a list."""
     text = paragraphs(text)
     def inline(s, labels=True):
-        if s.strip().upper().startswith("[CHECK BEFORE SENDING"):
-            # Tracy audit 29/10: bold red, no highlight; the person sending deletes it
+        if s.strip().upper().startswith(RED_LINES):
+            # Tracy audit 29/10: bold red, no highlight; the person sending deletes it (DO NOT SEND: Emi does)
             return f'<b><span style="color:#FF0000">{html.escape(s.strip())}</span></b>'
         if labels and "**" not in s:
             # Text written without markup still gets HAYA's bold labels.
@@ -514,6 +518,24 @@ class GraphMail:
         if not draft.get("isDraft") or EMI_CATEGORY not in draft.get("categories", []):
             raise PermissionError(f"{draft_id} is not an unsent Emi draft; leaving it alone")
         return self._call("PATCH", f"/messages/{draft_id}", body=fields)
+
+    def fill_draft(self, draft_id, replacements, drop=DO_NOT_SEND):
+        """An Emi draft written before its PDF (confirmation-attach): each placeholder replaced in the body as it
+        is in Outlook now, so a person's own edits stay, and the red `drop` line taken out. Returns the new HTML."""
+        draft = self.get_draft(draft_id)
+        if draft is None:
+            raise PermissionError(f"{draft_id} is no longer in Drafts: a person sent or deleted it")
+        if EMI_CATEGORY not in draft.get("categories", []):
+            raise PermissionError(f"{draft_id} is not an Emi draft; leaving it alone")
+        content = self._call("GET", f"/messages/{draft_id}?$select=body").get("body", {}).get("content", "")
+        for old, new in replacements.items():
+            content = content.replace(html.escape(old), html.escape(new)).replace(old, html.escape(new))
+        if drop:
+            content = re.sub(r"<p[^>]*>\s*<b><span[^>]*>\s*" + re.escape(html.escape(drop)) +
+                             r"\s*</span></b>\s*</p>\s*", "", content, flags=re.I)
+            content = content.replace(html.escape(drop), "")  # Outlook rewrote the markup around it
+        self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
+        return content
 
     def get_draft(self, draft_id):
         """The draft, or None when it is gone from Drafts (a person sent or deleted it in Outlook)."""

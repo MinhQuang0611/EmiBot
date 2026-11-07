@@ -14,6 +14,7 @@ import re
 import unicodedata
 from datetime import date, datetime, time, timedelta, timezone
 
+from . import intake_schema as schema
 from . import operators
 from .graph_mail import is_internal
 
@@ -41,12 +42,20 @@ def total_of(state):
 
 def paid_of(hits, state):
     """What has been paid. The columns don't always say it on the latest rows (a CHANGE row with Payment 1 blank but
-    Remaining halved, live row 1103), so: the most any one email's rows show as paid, or total − Remaining."""
-    by_email = {}
+    Remaining halved, live row 1103), so: the most any one email's rows show as paid, or total − Remaining. Each
+    email's own total − Remaining counts too: RHK BG15963 (07/11) paid 19,400,000 by 28/10 (rows 688–689, 40,200,000
+    with 20,800,000 left), and the 04/11 change wrote Remaining on one room row only, so the latest rows alone said 0."""
+    by_email, batches = {}, {}
     for r in hits:
         key = (r.get("action"), r.get("received_at"))
         by_email[key] = by_email.get(key, 0) + (operators._amount(r.get("Payment 1"))
                                                 + operators._amount(r.get("Payment 2")))
+        batches.setdefault(key, []).append(r)
+    for (action, _), batch in batches.items():
+        if action == "CANCEL" or not all(str(r.get("Remaining amount") or "").strip() for r in batch):
+            continue  # a CANCEL row's Remaining is 0 with nothing paid
+        by_email[(action, _)] = max(by_email[(action, _)], total_of(batch) - sum(
+            operators._amount(r.get("Remaining amount")) for r in batch))
     paid = max(by_email.values(), default=0)
     left = [r.get("Remaining amount") for r in state]
     if left and all(str(x or "").strip() for x in left):
@@ -58,7 +67,9 @@ BARE_DATE = re.compile(r"^(\d{2}/\d{2}/\d{4})(?: (\d{2}):(\d{2}))?$")
 BALANCE_DATE = re.compile(r"balance[^;]*?(\d{2}/\d{2}/\d{4})", re.I)
 
 
-EXTENDED = re.compile(r"^deposit extended to (\d{2}/\d{2}/\d{4}) (\d{2}):(\d{2})", re.I)
+# 'Deposit extended to 09/11/2026 17:00 (asked 07/11)', and the form written before deposit-extension existed:
+# 'Deposit deadline extended to 12/11/2026 (agency request)' (Threeland 31-130127, 05/11), a date alone = 23:59.
+EXTENDED = re.compile(r"^deposit (?:deadline )?extended to (\d{2}/\d{2}/\d{4})(?: (\d{2}):(\d{2}))?", re.I)
 EXTEND_DAYS, EXTEND_HOUR = 2, 17
 
 
@@ -84,7 +95,8 @@ def fixed_deadline(cod):
     m = EXTENDED.match(cod)
     if m:
         day = operators._date(m.group(1))
-        return datetime.combine(day, time(int(m.group(2)), int(m.group(3))), tzinfo=VN) if day else None
+        clock = time(int(m.group(2)), int(m.group(3))) if m.group(2) else time(23, 59)
+        return datetime.combine(day, clock, tzinfo=VN) if day else None
     m = BARE_DATE.match(cod)
     if not m:
         return None
@@ -143,17 +155,66 @@ def find_confirmation(mail, code, mailbox, parts=()):
     return None
 
 
+BACKFILL = "EXISTING BOOKING"
+# The OTAs and B2B sites of the channel rule (MEMORY, 2026-10-09): paid by their own terms, never chased. The 05/11
+# backfill wrote Ohmyhotel, MG, Mytour and Dida as "TA", and a CHANGE copies channel_type from the booking's rows.
+OTA_COMPANIES = ("SynXis", "Agoda", "Expedia", "Trip.com", "Oh My Hotel", "MG", "MakeMyTrip", "Traveloka",
+                 "Dida Travel", "Mytour", "VNTrip", "Booking.com")
+_OTA_KEYS = tuple(k for k, canon in schema._COMPANY_KEYS.items() if canon in OTA_COMPANIES)
+
+
+def ota_company(name):
+    """'MG', 'MY TOUR', 'CÔNG TY TNHH OHMYHOTEL&CO VN' (the name inside a legal name) -> True."""
+    if schema.canonical_company(name or "") in OTA_COMPANIES:
+        return True
+    words = f" {schema._norm(name or '')} "
+    return any(f" {k} " in words for k in _OTA_KEYS)
+
+
+def own_state(rows, ref, parts_of):
+    """The booking as Emi's own rows leave it, without the EZFOLIO backfill. The backfill of 05/11 19:46 (RER004,
+    256 rows, action EXISTING BOOKING) has no COD and no payment columns: written after a booking's own rows it
+    hid them (Mytour H6844730: NEW 'N/A (OTA prepaid)', then a backfill row 'TA'). [] when the backfill is all
+    there is: a booking confirmed by hand months ago, whose payments the sheet never recorded (Ohmyhotel
+    V26062610072H01, 07/11: a deposit reminder for a deadline of 29/06)."""
+    mine = parts_of(ref)
+    own = [r for r in rows if r.get("action") != BACKFILL and mine & parts_of(r.get("booking_ref"))]
+    if not own:
+        return []
+    key = (own[-1].get("action"), own[-1].get("received_at"))
+    state = []
+    for r in reversed(own):
+        if (r.get("action"), r.get("received_at")) != key:
+            break
+        state.insert(0, r)
+    return state
+
+
 def due(rows, state_of, parts_of, mail, st, mailbox, now):
     """Sorted by arrival. remind: reminders to draft now. slip: looks paid, read it first. no_confirmation: built, but
     no mail with the group code. overdue: deadline passed and its one reminder already went. short_notice: booked
-    inside the 7 days, Karen sets the date. paid_unsent: a reminder in Drafts for a booking paid since."""
-    out = {"remind": [], "slip": [], "no_confirmation": [], "overdue": [], "short_notice": [], "paid_unsent": []}
+    inside the 7 days, Karen sets the date. paid_unsent: a reminder in Drafts for a booking paid since. backfill: a
+    TA booking known only from the EZFOLIO backfill, not chased (no payment record on the sheet)."""
+    out = {"remind": [], "slip": [], "no_confirmation": [], "overdue": [], "short_notice": [], "paid_unsent": [],
+           "backfill": []}
     soon = now + lookahead(now)
     for state in operators.bookings(rows, state_of):
+        if any(r.get("action") == BACKFILL for r in state):
+            backfill = state
+            state = own_state(rows, (state[0].get("booking_ref") or "").strip(), parts_of)
+            if not state:
+                head = backfill[0]
+                arrival = operators._date(head.get("arrival"))
+                if (head.get("channel_type") == "TA" and not ota_company(head.get("company"))
+                        and not operators.cancelled(backfill) and arrival and arrival > now.date()):
+                    out["backfill"].append({"ref": (head.get("booking_ref") or "").strip(), "row": head["_row"],
+                                            "company": head.get("company", ""), "arrival": arrival})
+                continue
         head = state[0]
         ref = (head.get("booking_ref") or "").strip()
         arrival = operators._date(head.get("arrival"))
-        if head.get("channel_type") != "TA" or operators.cancelled(state) or not arrival or arrival <= now.date():
+        if head.get("channel_type") != "TA" or ota_company(head.get("company")) or operators.cancelled(state) \
+                or not arrival or arrival <= now.date():
             continue
         if (head.get("status") or "").strip() == "Tentative":
             continue
@@ -414,6 +475,12 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
             out.append({"ref": ref, "row": new["_row"], "company": head.get("company", ""), "group": code,
                         "arrival": arrival, "subject": new.get("source_email", ""), "channel": channel,
                         "rows": [r["_row"] for r in state], "total": total_of(state)})
+    waiting = st.awaiting_pdf()
+    for i in out:
+        # a confirmation drafted before the PDF (dev, 07/11): job 2 puts the PDF on it, no second draft
+        draft = next((d for (ref, row), d in waiting.items() if ref == i["ref"] and row in i["rows"]), None)
+        if draft:
+            i["attach"] = st.review_by_draft(draft)
     return sorted(out, key=lambda i: i["arrival"])
 
 
@@ -459,6 +526,11 @@ def render(result, now):
     for i in r["paid_unsent"]:
         out.append(f"PAID, REMINDER STILL IN DRAFTS | ref {i['ref']} | {i['which']} | draft #{i['review']}: report "
                    f"line 'deny #{i['review']}', so it isn't sent by mistake")
+    if r.get("backfill"):
+        refs = ", ".join(f"{i['ref']} ({i['company']}, {i['arrival']:%d/%m})" for i in r["backfill"])
+        out.append(f"NOT CHASED, BACKFILL ONLY: {len(r['backfill'])} TA booking(s) known only from the EZFOLIO "
+                   f"backfill (EXISTING BOOKING rows: confirmed by hand before, no payment record on the sheet): {refs}. "
+                   f"One report line, no reminder")
     return "\n".join(out)
 
 
@@ -470,6 +542,9 @@ def render_confirmations(items):
                    f"arrival {i['arrival']:%d/%m/%Y} | booking rows {', '.join(map(str, i['rows']))}, total "
                    f"{money(i['total'])}: the PDF covers all of them | original email: {i['subject']}"
                    + (f" | what changed: {change}" if change else ""))
+        if i.get("attach"):
+            out.append(f"  ATTACH: draft #{i['attach']} was written before the PDF. confirmation-attach {i['attach']}"
+                       f" (the PDF, group code, confirmation no. and deposit deadline go on it; no new draft)")
         if i.get("rate_moved"):
             was, now = i["rate_moved"]
             out.append(f"  RATE MOVED {money(was)} → {money(now)} with the same dates and rooms. A price the agency or "

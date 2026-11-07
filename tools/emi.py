@@ -30,6 +30,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
     python -m tools.emi draft-confirmation <message_id> <row> <body.txt> [--all | --to A [--cc C]] [--subject S] [--attach F]
                                                           # reply + EZFOLIO PDF; --subject: a new email (Odeon)
+                                                          # --before-pdf: no PDF yet, first line DO NOT SEND UNTIL PDF IS ATTACHED
+    python -m tools.emi confirmation-attach <n> [--attach F]  # the PDF has landed: onto draft #n, placeholders filled
     python -m tools.emi draft-new <message_id> <to> <subject> <body.txt> [--cc C] [--kind K --ref R --row N] [--attach F]
                                                           # a new email, not a reply (Odeon decline)
     python -m tools.emi to-info <operator>                # tour operator: the steps and what differs for this one
@@ -80,7 +82,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive, stop_sales, telegram
-from .graph_mail import ACCOUNTING, CHECK_LINE as CHECK_MARK, SendBlocked, clean_subject, is_internal
+from .graph_mail import ACCOUNTING, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, SendBlocked, clean_subject, is_internal
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -969,6 +971,13 @@ def check_no_gaps(text, message_id="<message_id>"):
     Karen answers). A gap inside the text is refused; what is uncertain goes in one first line
     '[CHECK BEFORE SENDING: …]' and to Karen with ask-karen. Karen's name is never in a draft."""
     lines = text.strip().splitlines()
+    if lines and lines[0].strip() == DO_NOT_SEND:  # a confirmation drafted before its PDF (draft-confirmation)
+        lines = lines[1:]
+        while lines and not lines[0].strip():
+            lines.pop(0)
+    if any(x.strip().upper().startswith(DO_NOT_SEND[:-1]) for x in lines):
+        raise Refused(f"'{DO_NOT_SEND}' is only ever the first line, and draft-confirmation --before-pdf writes it")
+    text = "\n".join(lines)
     first = lines[0].strip() if lines else ""
     body = "\n".join(lines[1:]) if CHECK_LINE.match(first) else text
     misplaced = [x.strip() for x in body.splitlines() if x.strip().upper().startswith("[CHECK BEFORE SENDING")]
@@ -1639,33 +1648,79 @@ def new_recipients(args):
     return to, cc
 
 
+# A confirmation drafted before the build tool's PDF (dev, 2026-11-07, Pegas 11124455: "cứ cho Emi build draft, khi
+# nào tool xuất PDF thì attach sau"). What only the build gives is written as one of these placeholders and filled by
+# confirmation-attach from the built row; the deposit deadline counts its 48 hours from then.
+GROUP_TOKEN, CONF_TOKEN, DEADLINE_TOKEN = "#[GROUP CODE]", "[CONF NO]", "[DEPOSIT DEADLINE]"
+TOKENS = (GROUP_TOKEN, CONF_TOKEN, DEADLINE_TOKEN)
+BRACKETS = re.compile(r"#?\[[^\]\n]{1,60}\]")
+
+
+def _built(row):
+    return payments.built_at([row]) is not None
+
+
+def check_before_pdf(row, body):
+    """--before-pdf: the build-only facts as placeholders, nothing else left in [brackets]."""
+    stray = [b for b in dict.fromkeys(BRACKETS.findall(body)) if b not in TOKENS and b != DO_NOT_SEND
+             and not b.startswith("[CHECK BEFORE SENDING")]
+    if stray:
+        raise Refused(f"template blanks left in the text: {' | '.join(stray)}. Before the PDF only these stand in for "
+                      f"what the build gives: {GROUP_TOKEN} (group code), {CONF_TOKEN} (confirmation number), "
+                      f"{DEADLINE_TOKEN} (the deposit time and date: 48 hours from when the PDF is attached). "
+                      f"Everything else comes from the row. No draft made.")
+    if not (row.get("ezfolio_group_code") or "").strip() and GROUP_TOKEN not in body:
+        raise Refused(f"the group code isn't known before the build: write it as {GROUP_TOKEN}. No draft made.")
+
+
 def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     """Reply on the sender's thread with the build tool's own PDF attached. Never a PDF Emi made.
-    --subject: a new email instead of a reply (Odeon, tour-operators.md); --attach: our proforma invoice too."""
+    --subject: a new email instead of a reply (Odeon, tour-operators.md); --attach: our proforma invoice too.
+    --before-pdf (dev, 2026-11-07): the row isn't built yet, so no PDF: the draft opens with the red line
+    DO NOT SEND UNTIL PDF IS ATTACHED, can't be Accepted, and confirmation-attach puts the PDF on it later."""
     r = _row(sheet, args.row)
     ref = r.get("booking_ref", "")
+    before = getattr(args, "before_pdf", False)
     if (ref, int(args.row)) in st.confirmation_drafted():
         raise Refused(f"{ref} row {args.row} already has a confirmation draft")
+    waiting = st.awaiting_pdf().get((ref, int(args.row)))
+    if waiting:
+        raise Refused(f"{ref} row {args.row} already has its confirmation drafted before the PDF "
+                      f"(#{st.review_by_draft(waiting)}): confirmation-attach {st.review_by_draft(waiting)} puts the "
+                      f"PDF on it. No second draft.")
+    if before and _built(r):
+        raise Refused(f"row {args.row} is built and has its PDF: draft-confirmation without --before-pdf")
     body = read_text(args.body)
+    if before:
+        lines = body.strip().splitlines()
+        if lines and lines[0].strip() == DO_NOT_SEND:
+            body = "\n".join(lines[1:]).strip()
+        body = f"{DO_NOT_SEND}\n\n{body.strip()}"
     check_no_gaps(body, args.message_id)
+    if before:
+        check_before_pdf(r, body)
     confirmation_check(r)(body)
     company = r.get("company", "")
     subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
     if company == "Odeon":
         odeon = operators.OPERATORS["Odeon"]
         missing = [a for a in odeon["confirm_to"] if a not in _addresses(args.to) + _addresses(args.cc)]
-        if not subject or missing or not attach:
+        if not subject or missing or not (attach or before):
             raise Refused(f"Odeon's confirmation is a new email to {' and '.join(odeon['confirm_to'])} with both "
                           f"PDFs: --to {','.join(odeon['confirm_to'])} --subject "
                           f"\"{odeon['confirm_subject'].format(ref=ref.split('/')[0].strip())}\" "
-                          f"--attach Invoice_<ref>.pdf (invoice-data {ref})")
+                          f"--attach Invoice_<ref>.pdf (invoice-data {ref})"
+                          + (" — with --before-pdf the invoice goes on with confirmation-attach" if before else ""))
     extra = read_pdfs(attach)
-    path, name, mime, data = pdf_fetch(sheet, args.row, out=out)
-    if mime != "application/pdf":
-        raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
-                      f"exported from EZFOLIO. No draft made.")
-    check_cancellation_days(body, attachments.extract_text(path, data))
-    files = [(name, data, "application/pdf")] + extra
+    if before:
+        files = extra
+    else:
+        path, name, mime, data = pdf_fetch(sheet, args.row, out=out)
+        if mime != "application/pdf":
+            raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
+                          f"exported from EZFOLIO. No draft made.")
+        check_cancellation_days(body, attachments.extract_text(path, data))
+        files = [(name, data, "application/pdf")] + extra
     if subject:
         to, cc = new_recipients(args)
         how = "new"
@@ -1677,14 +1732,18 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     # kept on the review so a Rewrite is checked the same way
     meta = {"operator": company if r.get("channel_type") == "Tour operator" else "",
             "group": r.get("ezfolio_group_code", "")}
+    if before:
+        meta.update(awaiting_pdf=True, action=r.get("action", ""))
+    later = (f"; WITHOUT the EZFOLIO PDF, first line {DO_NOT_SEND}. Once the row is built: confirmation-attach "
+             if before else "")
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how=how, source=args.message_id, kind="confirmation",
                            ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
                            to=to, cc=cc, files=files, new_subject=subject or "")
         st.data["reviews"][n].update(meta)
-        st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation")
+        st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation", awaiting_pdf=before)
         out(f"confirmation draft #{n} sent to Telegram for review with {len(files)} PDF(s), not in Outlook until "
-            f"Accept: {review.PENDING}{n}")
+            f"Accept: {review.PENDING}{n}" + (later + n if before else ""))
         close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
     if how == "new":
@@ -1693,14 +1752,105 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all, to=to, cc=cc)
     for fname, fdata, ctype in files:
         mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
-    st.record_draft(d["id"], ref, int(args.row), "confirmation")
+    st.record_draft(d["id"], ref, int(args.row), "confirmation", awaiting_pdf=before)
     n = review.opened(mail, st, tg, d["id"], how=how, source=args.message_id, kind="confirmation", ref=ref,
                       row=int(args.row), text=body, reply_all=args.all, to=to, cc=cc, override=bool(to),
-                      attachments=[f[0] for f in files])
+                      attachments=[f[0] for f in files], notice=False)
     st.data["reviews"][n].update(meta)
-    out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc))
+    review.notify(tg, n, st.data["reviews"][n])
+    out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc)
+        + (later + n if before else ""))
     close_replaced(mail, st, tg, older, n, out=out)
     return d
+
+
+def _booking_row(sheet, r):
+    """The row draft #n was written on. The build tool inserts rows mid-sheet, so the number may have moved: the
+    same booking_ref and action is the same row."""
+    rows = [x for x in sheet.rows() if (x.get("booking_ref") or "").strip() == (r.get("ref") or "").strip()]
+    same = next((x for x in rows if x["_row"] == int(r.get("row") or 0)), None)
+    if same:
+        return same
+    moved = [x for x in rows if not r.get("action") or x.get("action") == r.get("action")]
+    if not moved:
+        raise Refused(f"{r.get('ref')}: no row on the sheet any more (was row {r.get('row')})")
+    return moved[-1]
+
+
+def _fills(row, text, now):
+    """The placeholders of a before-PDF draft, from the built row."""
+    fills = {}
+    if GROUP_TOKEN in text:
+        code = (row.get("ezfolio_group_code") or "").strip().lstrip("#")
+        if not code:
+            raise Refused(f"row {row['_row']} is built but has no group code (ezfolio_group_code): {GROUP_TOKEN} "
+                          f"can't be filled. Nothing changed.")
+        fills[GROUP_TOKEN] = f"#{code}"
+    if CONF_TOKEN in text:
+        conf = (row.get("confirmation_no") or "").strip()
+        if not conf:
+            raise Refused(f"row {row['_row']} has no confirmation_no: {CONF_TOKEN} can't be filled. Read it from the "
+                          f"PDF (pdf-fetch {row['_row']}) and rewrite the draft with it. Nothing changed.")
+        fills[CONF_TOKEN] = conf
+    if DEADLINE_TOKEN in text:
+        due = (now + timedelta(hours=48)).replace(second=0, microsecond=0)
+        vi = "giờ Việt Nam" in text
+        fills[DEADLINE_TOKEN] = f"{due:%H:%M} ngày {due:%d/%m/%Y}" if vi else f"{due:%H:%M} on {due:%d/%m/%Y}"
+    return fills
+
+
+def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
+    """Draft #n was written before its PDF (draft-confirmation --before-pdf). The row is built now: the build tool's
+    own PDF goes on the same draft, the placeholders take the built row's group code, confirmation number and a
+    deposit deadline 48 hours from now, and the red DO NOT SEND line comes off. A person's own edits in Outlook stay."""
+    now = now or datetime.now(VN)
+    n, r = st.review(_review_n(args.n))
+    if r.get("kind") != "confirmation" or not r.get("awaiting_pdf"):
+        raise Refused(f"#{n} is not a confirmation waiting for its PDF")
+    if r["status"] != REVIEW_OPEN:
+        raise Refused(f"#{n} is {r['status']}: nothing to attach to")
+    if review.in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
+        st.close_review(n, "gone", "left Drafts before its PDF was attached")
+        st.drop_awaiting(r.get("ref", ""), int(r.get("row") or 0))
+        raise Refused(f"#{n} left Drafts before its PDF was attached: a person sent or deleted it. If it went out, the "
+                      f"agency has it without the PDF. {r.get('ref')} is back on confirmations-due for a confirmation "
+                      f"with the PDF the usual way; say so in the report")
+    row = _booking_row(sheet, r)
+    if not _built(row):
+        raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
+                      f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
+                      f"#{n} keeps its DO NOT SEND line")
+    attach = getattr(args, "attach", None) or []
+    if row.get("company") == "Odeon" and not attach:
+        raise Refused(f"Odeon's confirmation carries our proforma invoice too: --attach Invoice_<ref>.pdf "
+                      f"(invoice-data {r.get('ref')})")
+    extra = read_pdfs(attach)
+    path, name, mime, data = pdf_fetch(sheet, row["_row"], out=out)
+    if mime != "application/pdf":
+        raise Refused(f"pdf_link on row {row['_row']} is {mime}, not a PDF. Nothing changed.")
+    fills = _fills(row, r["text"], now)
+    text = r["text"]
+    for old, new in fills.items():
+        text = text.replace(old, new)
+    lines = text.strip().splitlines()
+    if lines and lines[0].strip() == DO_NOT_SEND:
+        text = "\n".join(lines[1:]).strip()
+    confirmation_check(row)(text)
+    check_cancellation_days(text, attachments.extract_text(path, data))
+    files = [(name, data, "application/pdf")] + extra
+    if review.in_outlook(r):
+        mail.fill_draft(r["draft_id"], fills)
+        for fname, fdata, ctype in files:
+            mail.add_attachment(r["draft_id"], fname, fdata, content_type=ctype)
+    for fname, fdata, ctype in files:
+        review.attached(st, r["draft_id"], fname, fdata, ctype, store=pending_store())
+    r["history"].append({"at": now_iso(), "status": "pdf attached", "note": name, "old_text": r["text"]})
+    r.update(text=text, awaiting_pdf=False, group=(row.get("ezfolio_group_code") or "").strip(),
+             version=r["version"] + 1)
+    st.pdf_attached(r.get("ref", ""), int(r.get("row") or 0))
+    review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
+    filled = ", ".join(f"{k} → {v}" for k, v in fills.items()) or "no placeholders"
+    out(f"#{n}: {len(files)} PDF(s) attached ({name}), {filled}, DO NOT SEND line removed. Ready for review.")
 
 
 def draft_new(mail, st, args, tg=None, out=print):
@@ -1851,7 +2001,32 @@ def run_build_stuck(sheet, st, out=print):
     return items
 
 
+def tidy_awaiting(mail, sheet, st, out=print):
+    """Confirmations drafted before the PDF: one denied, replaced or gone from Drafts is dropped (job 2 then drafts the
+    confirmation the usual way, and a gone one is reported: it may have gone out without the PDF); one whose booking
+    was cancelled meanwhile is named for a Deny."""
+    rows = None
+    for (ref, row), draft_id in st.awaiting_pdf().items():
+        n = st.review_by_draft(draft_id)
+        r = st.data["reviews"].get(n) if n else None
+        gone = r is not None and (r["status"] == "gone" or (r["status"] == REVIEW_OPEN and review.in_outlook(r)
+                                                             and mail.get_draft(draft_id) is None))
+        if r is None or r["status"] != REVIEW_OPEN or gone:
+            if gone and r["status"] == REVIEW_OPEN:
+                st.close_review(n, "gone", "left Drafts before its PDF was attached")
+            st.drop_awaiting(ref, row)
+            if gone:
+                out(f"WARNING #{n} {ref}: left Drafts before its PDF was attached (sent or deleted by a person). "
+                    f"Back on confirmations-due for a confirmation with the PDF")
+            continue
+        rows = sheet.rows() if rows is None else rows
+        if operators.cancelled(booking_state(rows, ref) or []):
+            out(f"DENY #{n} {ref}: confirmation drafted before the PDF, and the booking is cancelled now: "
+                f"review-deny {n} \"booking cancelled\"")
+
+
 def run_confirmations_due(mail, sheet, st, out=print):
+    tidy_awaiting(mail, sheet, st, out=out)
     items = payments.needs_confirmation(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, _today_vn())
     out(payments.render_confirmations(items))
     return items
@@ -2122,12 +2297,16 @@ def parser():
     s.add_argument("--no-show", action="store_true")
     s = sub.add_parser("pdf-fetch"); s.add_argument("row", type=int)
     s = sub.add_parser("forget-confirmation"); s.add_argument("ref"); s.add_argument("row", type=int)
+    s = sub.add_parser("confirmation-attach", help="the PDF has landed: onto confirmation draft #n written before it")
+    s.add_argument("n"); s.add_argument("--attach", action="append", default=[], help="another PDF, e.g. our invoice")
     s = sub.add_parser("draft-confirmation")
     s.add_argument("message_id"); s.add_argument("row", type=int); s.add_argument("body")
     s.add_argument("--all", action="store_true", help="reply all (the default now; kept for old calls)")
     s.add_argument("--sender-only", action="store_true", help="reply to the sender alone, not reply all")
     _recipient_args(s)
     s.add_argument("--subject", default="", help="a new email with this subject instead of a reply (Odeon)")
+    s.add_argument("--before-pdf", action="store_true", help="the row isn't built yet: draft now without the PDF, "
+                   "first line DO NOT SEND UNTIL PDF IS ATTACHED; confirmation-attach adds it")
     s.add_argument("--attach", action="append", default=[], help="another PDF to attach, e.g. our proforma invoice")
     s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
     s = sub.add_parser("draft-new", help="a new email, not a reply (Odeon decline)")
@@ -2263,6 +2442,7 @@ def main(argv=None):
             run_deposit_extension(args)
         elif c == "confirmations-due":
             run_confirmations_due(config.mail(), config.sheet(), st)
+            st.save()
         elif c == "build-stuck":
             run_build_stuck(config.sheet(), st)
         elif c == "confirmation-hold":
@@ -2297,6 +2477,11 @@ def main(argv=None):
         elif c == "draft-confirmation":
             draft_confirmation(config.mail(), config.sheet(), st, args, tg=config.telegram())
             st.save()
+        elif c == "confirmation-attach":
+            try:
+                confirmation_attach(config.mail(), config.sheet(), st, args, tg=config.telegram())
+            finally:
+                st.save()
         elif c == "draft-new":
             draft_new(config.mail(), st, args, tg=config.telegram())
             st.save()

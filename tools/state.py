@@ -114,11 +114,13 @@ class State:
         return qid
 
     # --- drafts, confirmations, reminders ---
-    def record_draft(self, draft_id, booking_ref, row, kind):
+    def record_draft(self, draft_id, booking_ref, row, kind, awaiting_pdf=False):
         self.data["drafts"][draft_id] = {"booking_ref": booking_ref, "row": row, "kind": kind,
                                          "drafted_at": now_iso()}
         if kind == "confirmation":
             self.data["confirmations"][f"{booking_ref}|{row}"] = {"draft_id": draft_id, "sent_at": None}
+            if awaiting_pdf:  # drafted before the build tool's PDF (dev, 2026-11-07): confirmation-attach finishes it
+                self.data["confirmations"][f"{booking_ref}|{row}"]["awaiting_pdf"] = True
         elif kind in ("deposit_reminder", "balance_reminder"):
             self.data["reminders"][f"{booking_ref}|{kind.split('_')[0]}"] = {"draft_id": draft_id,
                                                                             "drafted_at": now_iso()}
@@ -157,12 +159,34 @@ class State:
         return entry is not None
 
     def confirmation_drafted(self):
-        """(booking_ref, row) pairs that already have a confirmation draft."""
+        """(booking_ref, row) pairs that already have a confirmation draft with its PDF. One still waiting for the PDF
+        is not counted: job 2 still owes it the PDF (awaiting_pdf)."""
         out = set()
-        for key in self.data["confirmations"]:
+        for key, v in self.data["confirmations"].items():
+            if v.get("awaiting_pdf"):
+                continue
             ref, _, row = key.rpartition("|")
             out.add((ref, int(row)))
         return out
+
+    def awaiting_pdf(self):
+        """{(booking_ref, row): draft_id} for confirmations drafted before the PDF and not yet given it."""
+        out = {}
+        for key, v in self.data["confirmations"].items():
+            if v.get("awaiting_pdf"):
+                ref, _, row = key.rpartition("|")
+                out[(ref, int(row))] = v.get("draft_id")
+        return out
+
+    def pdf_attached(self, booking_ref, row):
+        self.data["confirmations"][f"{booking_ref}|{row}"].pop("awaiting_pdf", None)
+
+    def drop_awaiting(self, booking_ref, row):
+        """The early draft was denied, or left Drafts without its PDF: job 2 drafts the confirmation the usual way."""
+        entry = self.data["confirmations"].get(f"{booking_ref}|{row}")
+        if entry and entry.get("awaiting_pdf"):
+            self.data["confirmations"].pop(f"{booking_ref}|{row}")
+            self.data["drafts"].pop(entry.get("draft_id"), None)
 
     def reminder_drafted(self, booking_ref, which):
         return f"{booking_ref}|{which}" in self.data["reminders"]

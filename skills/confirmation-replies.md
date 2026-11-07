@@ -5,13 +5,19 @@ The reply that tells an agency or guest their booking is confirmed, changed, or 
 ## The gate
 The booking is built in EZFOLIO by a separate tool Karen is building, which reads the intake form and pastes the link to the PDF confirmation into the row once it's complete (Karen, 2026-10-08). Until that tool is live, Tracy does the same job.
 
-I draft a confirmation only when:
+A confirmation is ready to send (its PDF on it) only when — drafting it earlier with the DO NOT SEND line is below, "Drafted before the PDF":
 - for NEW and CHANGE: the row has a `pdf_link`. The link appearing is the signal that the PMS is updated (`tracy_status` was deleted from the live sheet on 12/10).
 - for CANCEL: as soon as the CANCEL row is written, when the cancellation clearly matches one booking (Karen, 29/10, via Tracy's audit). Something unclear (a possible fee, which booking) → Karen first, then the reply.
 
 A link is not proof the booking is right. I still open the PDF and check it against the row before drafting.
 
 If the sender chases before that, I never write "we'll check and get back to you". The scan report says the row is waiting on EZFOLIO and how long the sender has waited.
+
+**Drafted before the PDF (dev, 2026-11-07, Pegas 11124455: booked 12:06, built 15:33, confirmed only after; "cứ cho Emi build draft, khi nào tool xuất PDF thì attach sau"; Karen to be told).** The confirmation is written in job 1, the moment the row is on the sheet, and finished in job 2:
+- `draft-confirmation <id> <row> <body> --before-pdf`: the full confirmation from `email-templates.md`, with only what the build gives as a placeholder: `#[GROUP CODE]` for the group code (every place it appears, transfer reference too), `[CONF NO]` for the confirmation number, `[DEPOSIT DEADLINE]` for the deposit's time and date (`trước [DEPOSIT DEADLINE] (giờ Việt Nam, UTC+7)` / `by [DEPOSIT DEADLINE], Vietnam time (UTC+7)`). Any other `[…]` is refused. The command writes `[DO NOT SEND UNTIL PDF IS ATTACHED]` as the first line, bold red; I never write it myself or remove it.
+- The draft can't be Accepted while it waits (the reviewer gets "chưa có PDF"). A Rewrite keeps the line.
+- Job 2: `confirmations-due` lists the booking with `ATTACH: draft #n` once it is built. I check the PDF as always (`pdf-fetch`), then `confirmation-attach <n>`: the PDF goes on the same draft, the placeholders take the row's group code and confirmation number and a deposit deadline 48 hours from that moment, the red line comes off, and the Telegram notice is updated. Edits a person made in Outlook stay. A mismatch → `confirmation-hold` and Karen, as for any confirmation; the draft keeps its line.
+- The early draft gone from Drafts before its PDF (`WARNING #n`): a person sent or deleted it. The booking comes back as a normal `CONFIRM`; the report says it may have gone out without the PDF. Booking cancelled meanwhile (`DENY #n`): `review-deny`.
 
 **The build tool stopped (dev, 2026-11-07).** When the build tool can't build a row it writes `ez_status` `needs_review` or `error` and its reason in `ez_note` / `ez_error` (a room type full, a group it can't find, voucher fields blank). No PDF will come until a person acts, so the confirmation never comes on its own: on 06/11 Church Travels, Footprint 031P0127J, Amara #30124, Ohmyhotel and the Pegas and Odeon vouchers sat there while the agencies chased. The hourly confirmation check now sends each stop to Karen on Telegram once, as a question `E-nnn` on the booking's email, with the build tool's reason (`py -m tools.emi build-stuck` lists them, and whether Karen has answered). What to do there is Karen's or Long's call, never mine: overbook, another room type, decline, fix the group.
 - Her answer → `karen-answer`, then the draft that answer calls for (a decline, an offer of another room type), on the agency's thread.
@@ -38,7 +44,7 @@ Reply on the original thread, in the sender's language. Include:
 - **One confirmation per booking**, not one per room row: a booking of several room types has one PDF and one email. `draft-confirmation` refuses a second one while the first is still in Drafts; a new PDF after a change → `--replaces <n>`.
 
 ## Change
-**No draft before the build (dev, 05/11, Amara #30124):** a change of dates, rooms or room type gets its row in job 1 and nothing to the agency. No "we have noted", no asking them to confirm the room list. `confirmations-due` lists it as `CONFIRM CHANGE` once the build tool has finished its rows (`ez_status` done): the PDF is remade under the same Drive link and every CHANGE row carries that link from the start, so the link says nothing here; `ez_processed_at` does. From 05/11 on; older changes were confirmed by hand.
+**No note before the build (dev, 05/11, Amara #30124):** a change of dates, rooms or room type gets its row in job 1 and nothing to the agency but its change confirmation, drafted then with `--before-pdf` (dev, 07/11, above). No "we have noted", no asking them to confirm the room list. `confirmations-due` lists it as `CONFIRM CHANGE` once the build tool has finished its rows (`ez_status` done): the PDF is remade under the same Drive link and every CHANGE row carries that link from the start, so the link says nothing here; `ez_processed_at` does. From 05/11 on; older changes were confirmed by hand.
 
 Same thread. State what changed (old → new), the new total, and attach the new PDF. Say plainly that it replaces the earlier confirmation. A `CONFIRM CHANGE` line whose change touches no date, room or total → `confirmation-hold`, nothing to send.
 
@@ -69,7 +75,7 @@ I follow up on unpaid bookings myself, **TA bookings only**: `py -m tools.emi pa
 **"Received" means:** a payment slip in the inbox for that booking, or the payment columns filled on the booking's latest row (a payment arrives as a CHANGE row). I check both before every reminder.
 
 **Deposit — 50%, due 48 hours after the client received the confirmation.**
-- The clock starts at the real sent time of the confirmation: the first mail from sales@ carrying the booking's group code, whoever sent it. None found → `NO CONFIRMATION FOUND`, the clock hasn't started, nothing is chased: report line. A COD that is only a date is the agreed deadline instead of the 48 hours.
+- The clock starts at the real sent time of the confirmation: the first mail from sales@ carrying the booking's group code, whoever sent it. None found → `NO CONFIRMATION FOUND`, the clock hasn't started, nothing is chased: report line. A COD that is only a date is the agreed deadline instead of the 48 hours. A booking known only from the EZFOLIO backfill (`EXISTING BOOKING` rows of 05/11, no COD, no payment record) is never chased: `NOT CHASED, BACKFILL ONLY`, one report line; an OTA or B2B written as "TA" there (Ohmyhotel, MG, Mytour, Dida) isn't even listed (dev, 07/11: Ohmyhotel V26062610072H01 got a reminder for a deadline of 29/06).
 - At **40 hours** with no deposit seen → draft the deposit reminder, stating the exact deadline (time, date, Vietnam time).
 - If the 40-hour mark falls overnight, between my last run of the day and my first run the next morning, I draft the reminder at the last run before it. Waiting for morning could put it past the deadline.
 - One reminder per deadline. No second chaser unless Karen asks.

@@ -15,7 +15,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from datetime import timezone
 
-from .graph_mail import ACCOUNTING, CHECK_LINE, SendBlocked, reply_subject, text_to_html
+from .graph_mail import ACCOUNTING, CHECK_LINE, DO_NOT_SEND, SendBlocked, reply_subject, text_to_html
 
 
 def _thread_key(subject):
@@ -154,6 +154,19 @@ class SimMail:
             f.write(data)
         meta["attachments"].append({"name": name, "contentType": content_type, "bytes": len(data)})
         self._save(meta)
+
+    def fill_draft(self, draft_id, replacements, drop=DO_NOT_SEND):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted") or meta.get("sent"):
+            raise PermissionError(f"{draft_id} is no longer in Drafts: a person sent or deleted it")
+        text = meta["text"]
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        if drop:
+            text = "\n".join(l for l in text.split("\n") if l.strip() != drop).lstrip("\n")
+        meta["text"] = text
+        self._save(meta)
+        return text
 
     # --- review (tools.emi review-*) ---
 

@@ -19,7 +19,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from .graph_mail import clean_subject, paragraphs, reply_subject
+from .graph_mail import DO_NOT_SEND, clean_subject, paragraphs, reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -297,6 +297,10 @@ def accept(mail, st, tg, n, by="", out=print):
         raise ReviewError(f"#{str(n).lstrip('#')}: only {', '.join(allowed)} can Accept"
                           + (f", not {by}" if by else " (no --by given)") + ". The draft stays pending.")
     n, r = _pending(mail, st, n)
+    if r.get("awaiting_pdf"):
+        # dev, 2026-11-07: a confirmation drafted before the PDF is approved once the PDF is on it, never before
+        raise ReviewError(f"#{n} chưa có PDF xác nhận (DO NOT SEND UNTIL PDF IS ATTACHED). Emi tự đính kèm PDF khi "
+                          f"build tool xuất file; Accept sau đó.")
     new = not in_outlook(r)
     if new:
         _to_outlook(mail, st, r)
@@ -340,6 +344,8 @@ def replaced(mail, st, tg, n, by_n, out=print):
 
 def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     n, r = _pending(mail, st, n)
+    if r.get("awaiting_pdf") and text.strip().splitlines()[0].strip() != DO_NOT_SEND:
+        text = f"{DO_NOT_SEND}\n\n{text.strip()}"  # the line stays until the PDF is on
     if check:
         check(text)
     r["history"].append({"at": now_iso(), "status": "rewritten", "note": feedback, "old_text": r["text"]})
