@@ -83,6 +83,7 @@ Changes and cancellations follow the same path, as CHANGE or CANCEL rows.
 - **Every Monday:** last week's check-outs invoiced (Monday to Sunday), with a signed and stamped debt reconciliation and the booking report (`checkouts --company "Crystal Bay" --last-week`).
 
 ## Pegas (W26/S27 contract)
+- **Robot mail gets its reply** (dev, 2026-11-07, Pegas 11124455 left unconfirmed by job 2 as "robot, no reply"): `pegasys-notifications@pegast.su` asks to confirm by answering the email. The confirmation goes as a reply, **to `reservation.vtm@pegast.com`**: `draft-confirmation` / `draft-reply` set it by themselves. Changing the status on the Pegas provider site is still a person's job: report line "Pegas <ref>: đổi trạng thái trên provider.pegasys".
 - **Proforma invoice:** sent at least 14 days before check-in (`invoice-data` prints the send-by date).
 - **Payment:** 100% by bank transfer at least 7 days before check-in, and they email the slip (a payment slip as usual: CHANGE row + accounting forward). If they pay late without telling us, the booking can be released — that is Karen's call; I report it, I don't release or warn.
 - **VAT invoice:** issued on the check-out date.

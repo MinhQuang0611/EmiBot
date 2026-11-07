@@ -86,6 +86,10 @@ class AnexRobotTest(unittest.TestCase):
     def test_robot_lookup(self):
         self.assertEqual(operators.robot_operator("VN.Robot@ms.anextour.com"), "Anex")
         self.assertIsNone(operators.robot_operator("reservation@anexvietnam.com"))
+        # dev 07/11, Pegas 11124455: the Pegas robot asks for a reply; it goes to the reservation desk
+        self.assertEqual(operators.robot_operator("pegasys-notifications@pegast.su"), "Pegas")
+        self.assertEqual(operators.OPERATORS["Pegas"]["reply_to"], ("reservation.vtm@pegast.com",))
+        self.assertIsNone(operators.robot_operator("reservation.vtm@pegast.com"))
 
 
 class OdeonConfirmationTest(unittest.TestCase):

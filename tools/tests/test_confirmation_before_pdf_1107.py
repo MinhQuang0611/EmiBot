@@ -193,6 +193,15 @@ class BeforePdfTest(unittest.TestCase):
         emi.tidy_awaiting(self.mail, FakeSheet(PEGAS, cancel), self.st, out=lines.append)
         self.assertTrue(any(line.startswith(f"DENY #{n}") for line in lines), lines)
 
+    def test_pegas_robot_confirmation_goes_to_the_reservation_desk(self):
+        self.mail, self.http = mail_with([
+            ("GET", "/messages/m1", {"from": {"emailAddress": {"address": "pegasys-notifications@pegast.su"}}}),
+            ("POST", "/createReply", {"id": "d1", "subject": "RE: Reminder: New booking #11124455"}),
+            ("GET", "/messages/d1?$select=body", {"body": {"content": "<html><body></body></html>"}})])
+        self.draft()
+        patch = next(b for m, u, b in self.http.calls if m == "PATCH" and b and "toRecipients" in b)
+        self.assertEqual(patch["toRecipients"], [{"emailAddress": {"address": "reservation.vtm@pegast.com"}}])
+
     def test_red_line_rendered_bold_red(self):
         self.assertIn('<span style="color:#FF0000">' + DO_NOT_SEND, email_html(DO_NOT_SEND + "\n\nDear X,"))
 

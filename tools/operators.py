@@ -81,7 +81,16 @@ OPERATORS = {
         "contract": "0002PQ011026 (W26/S27)",
         "invoice": {"number": "HAYA - {group}", "due_days_before": 7, "send_days_before": 14,
                     "file": "Invoice_{ref}.pdf"},
+        # dev, 2026-11-07, Pegas 11124455: job 2 left the confirmation undrafted, "email từ robot không nhận trả
+        # lời". The robot's own mail says 'confirm by answering this email … use Reply', cc's the reservation desk
+        # and signs with it; sales@ answered Pegas 11103722 there on 28/10.
+        "robots": ("@pegast.su",),
+        "reply_to": ("reservation.vtm@pegast.com",),
         "steps": [
+            "Emails come from the robot pegasys-notifications@pegast.su: every reply, the confirmation included, "
+            "goes to reservation.vtm@pegast.com (draft-reply / draft-confirmation do this by itself).",
+            "The robot also asks to change the booking's status on the Pegas provider site: someone still has to do "
+            "it, an email reply doesn't count. Say so in the scan report.",
             "Proforma invoice at least 14 days before check-in.",
             "Pegas pays 100% by bank transfer at least 7 days before check-in and emails the slip. Paid late "
             "without a word -> the booking can be released: that is Karen's call, never Emi's.",
