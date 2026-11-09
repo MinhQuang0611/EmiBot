@@ -35,24 +35,27 @@ class PartialCancelTest(unittest.TestCase):
         self.assertIsNone(appended(http))
 
 
-class SlipSharedOutTest(unittest.TestCase):
-    def test_one_slip_split_over_the_room_rows(self):
+class SlipOnTheFirstRowTest(unittest.TestCase):
+    """dev 09/11 (Quang Tool payment_split_across_rows, Footprint 111W1126P): one slip, once, at full amount, on the
+    first room row with the booking's Remaining amount; the other room rows blank. Replaces Tracy 31/10's shares."""
+
+    def test_one_slip_on_the_first_room_row(self):
         data = {"booking": {"Payment 1": "6300000", "Payment 1 date + time": "30/10/2026 16:36"},
                 "room_lines": [dict(DLX), dict(TPL)]}
         lines = []
-        got = emi.split_payments(data, out=lines.append)["room_lines"]
-        self.assertEqual([(r["Payment 1"], r["Payment 1 date + time"], r["Remaining amount"]) for r in got],
-                         [("4000000", "30/10/2026 16:36", "4000000"), ("2300000", "30/10/2026 16:36", "2300000")])
-        self.assertIn("shared out", lines[0])
+        got = emi.split_payments(data, out=lines.append)
+        total = int(DLX["total_vnd"]) + int(TPL["total_vnd"])
+        self.assertEqual([(r["Payment 1"], r["Payment 1 date + time"], r["Remaining amount"]) for r in got["room_lines"]],
+                         [("6300000", "30/10/2026 16:36", str(total - 6300000)), ("", "", "")])
+        self.assertNotIn("Payment 1", got["booking"])
 
-    def test_rounding_on_the_first_row_and_shares_given_per_line_kept(self):
-        got = emi.split_payments({"booking": {"Payment 1": "1000001"},
-                                  "room_lines": [dict(DLX), dict(TPL)]}, out=lambda *_: None)["room_lines"]
-        self.assertEqual(sum(int(r["Payment 1"]) for r in got), 1000001)
-        own = {"booking": {}, "room_lines": [dict(DLX, **{"Payment 1": "1"}), dict(TPL, **{"Payment 1": "2"})]}
-        self.assertIs(emi.split_payments(own), own)
+    def test_shares_given_per_line_are_added_up_on_the_first_row(self):
+        own = {"booking": {}, "room_lines": [dict(DLX, **{"Payment 1": "4600000"}),
+                                             dict(TPL, **{"Payment 1": "5400000"})]}
+        got = emi.split_payments(own, out=lambda *_: None)["room_lines"]
+        self.assertEqual([r["Payment 1"] for r in got], ["10000000", ""])
 
-    def test_change_rows_on_the_sheet_sum_to_the_slip(self):
+    def test_change_rows_carry_the_slip_on_the_first_row(self):
         sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**TPL_BUILT)])
         own = lambda line: {k: line[k] for k in ("room_code", "notes", "rate_source", "rate_per_night_vnd",
                                                   "Average rate per night after discount", "total_vnd", "meal_plan")}
@@ -60,7 +63,37 @@ class SlipSharedOutTest(unittest.TestCase):
                       booking_ref="TEST-1510", what_changed="Payment 1 received", property="HAYA", status="Definite",
                       priority="Normal", nights="2", **{"Payment 1": "6300000", "Payment 1 date + time": "x"})
         emi.sheet_append(sh, {"booking": change, "room_lines": [own(DLX), own(TPL)]}, out=lambda *_: None)
-        self.assertEqual([r["Payment 1"] for r in appended(http)], ["4000000", "2300000"])
+        self.assertEqual([r["Payment 1"] for r in appended(http)], ["6300000", ""])
+
+    def test_two_sets_of_the_same_rooms_in_one_email_counted_once(self):
+        # PMQ Loan1107TUS 09/11, rows 1718-1721: one email, DLX-SV + TPL-SV written twice
+        def r(code, p1, p2):
+            return {"action": "CHANGE", "received_at": "09/11/2026 10:03", "room_code": code,
+                    "total_vnd": "18000000" if code == "DLX-SV" else "6900000", "_row": "1",
+                    "Payment 1": p1, "Payment 2": p2}
+        current = [r("DLX-SV", "9000000", ""), r("TPL-SV", "3450000", "3450000"),
+                   r("DLX-SV", "9000000", "9000000"), r("TPL-SV", "3450000", "3450000")]
+        recs = [{"action": "CHANGE", "room_code": "DLX-SV"}, {"action": "CHANGE", "room_code": "TPL-SV"}]
+        got = emi.payments_of_booking(recs, current, out=lambda *_: None)
+        self.assertEqual([(x.get("Payment 1") or "", x.get("Payment 2") or "") for x in got],
+                         [("12450000", "12450000"), ("", "")])
+
+    def test_later_change_takes_the_old_shares_onto_the_first_row(self):
+        paid_dlx = dict(BUILT, action="CHANGE", received_at="25/10/2026 13:56",
+                        **{"Payment 1": "4000000", "Payment 1 date + time": "25/10/2026 13:50"})
+        paid_tpl = dict(TPL_BUILT, action="CHANGE", received_at="25/10/2026 13:56",
+                        **{"Payment 1": "2300000", "Payment 1 date + time": "25/10/2026 13:50"})
+        sh, http = real_sheet([sheet_row(**BUILT), sheet_row(**TPL_BUILT), sheet_row(**paid_dlx),
+                               sheet_row(**paid_tpl)])
+        own = lambda line: {k: line[k] for k in ("room_code", "notes", "rate_source", "rate_per_night_vnd",
+                                                  "Average rate per night after discount", "total_vnd", "meal_plan")}
+        change = dict(action="CHANGE", received_at="27/10/2026 09:00", source_email="Re: TEST-1510",
+                      booking_ref="TEST-1510", what_changed="Passports received", property="HAYA", status="Definite",
+                      priority="Normal", nights="2")
+        emi.sheet_append(sh, {"booking": change, "room_lines": [own(DLX), own(TPL)]}, out=lambda *_: None)
+        got = appended(http)
+        self.assertEqual([(r["Payment 1"], r["Payment 1 date + time"]) for r in got],
+                         [("6300000", "25/10/2026 13:50"), ("", "")])
 
 
 class RowChecksTest(unittest.TestCase):

@@ -301,14 +301,13 @@ class Audit0311RowTest(unittest.TestCase):
 
 
 class Audit0311PaymentRowsTest(unittest.TestCase):
-    def test_remaining_for_the_booking_shared_over_room_rows(self):
+    def test_remaining_for_the_booking_on_the_first_room_row(self):
+        # dev 09/11: what is left on the whole booking, once, on the first room row (was shared out by total)
         data = {"booking": {"Remaining amount": "12450000"},
                 "room_lines": [{"room_code": "DLX-SV", "total_vnd": "18000000"},
                                {"room_code": "TPL-SV", "total_vnd": "6900000"}]}
         out = emi.split_payments(data, out=lambda *_: None)
-        left = [int(x["Remaining amount"]) for x in out["room_lines"]]
-        self.assertEqual(sum(left), 12450000)
-        self.assertEqual(left, [9000000, 3450000])
+        self.assertEqual([x.get("Remaining amount") for x in out["room_lines"]], ["12450000", ""])
         self.assertNotIn("Remaining amount", out["booking"])
 
     def test_payment_change_repeats_every_room_type(self):

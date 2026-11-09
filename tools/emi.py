@@ -474,8 +474,9 @@ def booking_state(rows, ref):
 # email itself says (transfer, requests, status, notes).
 CARRY_BOOKING = ("channel_type", "company", "contact_person", "company_email", "ezfolio_group_code",
                  "confirmation_no", "guest_names", "nationality", "arrival", "departure", "nights", "prepaid",
-                 "invoice_details", "COD", "Payment 1", "Payment 1 date + time", "Payment 2",
-                 "Payment 2 date + time")
+                 "invoice_details", "COD")
+# Payment 1 / 2 and their dates are not carried room by room: payments_of_booking puts them on the first room row
+# (dev 09/11).
 CARRY_ROOM = ("room_code", "rooms", "meal_plan")
 # Copied as a block, only when its first column is blank: a change that sets a new rate (a surcharge waived)
 # must not get the old surcharge back.
@@ -669,61 +670,113 @@ def verify_appended(sheet, records):
                       f"before writing again, never append twice")
 
 
+PAY_COLUMNS = ("Payment 1", "Payment 2")
+LEFT = "Remaining amount"
+
+
+def _digits(v):
+    v = str(v or "").strip()
+    return int(v) if v.isdigit() else None
+
+
+def _on_first_row(lines, out=print, cols=PAY_COLUMNS + (LEFT,)):
+    """Payment 1, Payment 2 and Remaining amount once per booking, at full amount, on the first room row; the other
+    room rows leave them blank (dev 09/11, Quang Tool payment_split_across_rows: Footprint 111W1126P's 10,000,000
+    slip was 4,600,000 on the TPL row and 5,400,000 on the QPL row). Amounts found on several rows are added up."""
+    if len(lines) < 2:
+        return lines
+    lines = [dict(line) for line in lines]
+    moved = []
+    for col in cols:
+        have = [line for line in lines if not _blank(line.get(col))]
+        if not have or (len(have) == 1 and have[0] is lines[0]):
+            continue
+        amounts = [_digits(line.get(col)) for line in have]
+        if None in amounts:
+            raise Refused(f"{col}: VND digits only, not {[line.get(col) for line in have]!r}")
+        when = next((line.get(f"{col} date + time") for line in have if not _blank(line.get(f"{col} date + time"))),
+                    "") if col != LEFT else None
+        for line in lines[1:]:
+            line[col] = ""
+            if when is not None:
+                line[f"{col} date + time"] = ""
+        lines[0][col] = str(sum(amounts))
+        if when is not None:
+            lines[0][f"{col} date + time"] = lines[0].get(f"{col} date + time") or when
+        moved.append(f"{col} {sum(amounts):,}")
+    if moved:
+        out(f"{', '.join(moved)}: for the whole booking, on the first room row "
+            f"({lines[0].get('room_code') or '?'}); the other room rows left blank")
+    return lines
+
+
 def split_payments(data, out=print):
-    """A slip in `booking` is one payment for the whole booking: each room row gets its share by total_vnd (the
-    rounding on the first row) and its own Remaining amount. Tracy 31/10, Footprint 141C0127Y rows 845-847: the
-    15,825,000 slip was on all three rows, three times what was paid. A share given per room line stays."""
+    """A slip in `booking` is one payment for the whole booking: written once, at full amount, on the first room
+    row, with the booking's Remaining amount (total of the room rows − the payments); the other room rows leave
+    them blank (dev 09/11, replaces Tracy 31/10's share by total_vnd). Never the slip on every row: Footprint
+    141C0127Y rows 845-847 had 15,825,000 three times."""
     if not isinstance(data, dict) or len(data.get("room_lines") or []) < 2:
         return data
-    shared, lines = data.get("booking") or {}, data["room_lines"]
-    pays = [p for p in ("Payment 1", "Payment 2") if not _blank(shared.get(p))
-            and all(_blank(line.get(p)) for line in lines)]
-    if not pays:
-        return _split_remaining(data, out)
-    totals = [str(line.get("total_vnd") or "").strip() for line in lines]
-    if not all(t.isdigit() and int(t) > 0 for t in totals):
-        raise Refused(f"{pays[0]} {shared[pays[0]]} is one slip for {len(lines)} room rows: give every room line its "
-                      f"total_vnd so the slip can be shared out, or write each room line's share in {pays[0]}")
-    totals = [int(t) for t in totals]
-    lines = [dict(line) for line in lines]
+    shared, lines = dict(data.get("booking") or {}), [dict(line) for line in data["room_lines"]]
+    pays = [p for p in PAY_COLUMNS if not _blank(shared.get(p)) and all(_blank(line.get(p)) for line in lines)]
     for p in pays:
-        amount = str(shared[p]).strip()
-        if not amount.isdigit():
-            raise Refused(f"{p}: VND digits only, not {amount!r}")
-        shares = [int(amount) * t // sum(totals) for t in totals]
-        shares[0] += int(amount) - sum(shares)
-        for line, s in zip(lines, shares):
-            line[p] = str(s)
-            line[f"{p} date + time"] = line.get(f"{p} date + time") or shared.get(f"{p} date + time", "")
-    for line, t in zip(lines, totals):
-        line["Remaining amount"] = str(t - sum(int(line[p]) for p in ("Payment 1", "Payment 2")
-                                               if str(line.get(p) or "").isdigit()))
-    out(f"{' + '.join(pays)} shared out over the {len(lines)} room rows by total_vnd: "
-        + "; ".join(f"{line.get('room_code') or '?'} " + " / ".join(line[p] for p in pays)
-                    + f", remaining {line['Remaining amount']}" for line in lines))
-    drop = set(pays) | {f"{p} date + time" for p in pays} | {"Remaining amount"}
-    return {**data, "booking": {k: v for k, v in shared.items() if k not in drop}, "room_lines": lines}
+        if _digits(shared[p]) is None:
+            raise Refused(f"{p}: VND digits only, not {shared[p]!r}")
+        lines[0][p] = str(shared.pop(p)).strip()
+        lines[0][f"{p} date + time"] = (lines[0].get(f"{p} date + time")
+                                        or shared.pop(f"{p} date + time", ""))
+        shared.pop(f"{p} date + time", None)
+    if not _blank(shared.get(LEFT)) and all(_blank(line.get(LEFT)) for line in lines):
+        lines[0][LEFT] = str(shared.pop(LEFT)).strip()
+    elif pays and all(_blank(line.get(LEFT)) for line in lines):
+        totals = [_digits(line.get("total_vnd")) for line in lines]
+        if all(totals):
+            paid = sum(_digits(lines[0].get(p)) or 0 for p in PAY_COLUMNS)
+            lines[0][LEFT] = str(sum(totals) - paid)
+        shared.pop(LEFT, None)
+    lines = _on_first_row(lines, out)
+    if any(not _blank(lines[0].get(c)) for c in PAY_COLUMNS + (LEFT,)):
+        for line in lines[1:]:
+            for c in PAY_COLUMNS + tuple(f"{p} date + time" for p in PAY_COLUMNS) + (LEFT,):
+                line.setdefault(c, "")
+    return {**data, "booking": shared, "room_lines": lines}
 
 
-def _split_remaining(data, out=print):
-    """A `Remaining amount` in `booking` with no slip is what is left on the whole booking: each room row gets its
-    share by total_vnd. Audit 03/11, PMQ Loan1107TUS rows 1090-1091: 12,450,000 left on the booking, written on
-    both room rows."""
-    shared, lines = data["booking"] or {}, data["room_lines"]
-    left = str(shared.get("Remaining amount") or "").strip()
-    if not left or not all(_blank(line.get("Remaining amount")) for line in lines):
-        return data
-    totals = [str(line.get("total_vnd") or "").strip() for line in lines]
-    if not left.isdigit() or not all(t.isdigit() and int(t) > 0 for t in totals):
-        raise Refused(f"Remaining amount {left} is for the whole booking: give every room line its total_vnd so it "
-                      f"can be shared out, or write each room line's own Remaining amount")
-    totals = [int(t) for t in totals]
-    shares = [int(left) * t // sum(totals) for t in totals]
-    shares[0] += int(left) - sum(shares)
-    lines = [dict(line, **{"Remaining amount": str(s)}) for line, s in zip(lines, shares)]
-    out(f"Remaining amount {left} shared out over the {len(lines)} room rows by total_vnd: "
-        + "; ".join(f"{line.get('room_code') or '?'} {line['Remaining amount']}" for line in lines))
-    return {**data, "booking": {k: v for k, v in shared.items() if k != "Remaining amount"}, "room_lines": lines}
+def payments_of_booking(records, current, out=print):
+    """CHANGE / CANCEL rows: the payments already received ride on the first room row of every new email's rows
+    (the build tool reads the latest CHANGE row), the other room rows blank (dev 09/11). Not given in this email →
+    the booking's latest rows: added up when they were shared out by room (rows written before 09/11), one of them
+    when the same slip was on every row."""
+    mine = [rec for rec in records if rec.get("action") in ("CHANGE", "CANCEL")]
+    if not mine or not current:
+        return records
+    # one row per room type, the last: PMQ Loan1107TUS's 09/11 email wrote rows 1718-1721, two sets of the same
+    # two room types, and adding all four counted the slips twice
+    last = {}
+    for r in current:
+        last[r.get("room_code") or r.get("_row")] = r
+    current = list(last.values())
+    booking_total = sum(_digits(r.get("total_vnd")) or 0 for r in current)
+    for p in PAY_COLUMNS:
+        if any(not _blank(rec.get(p)) for rec in mine):
+            continue
+        have = [r for r in current if _digits(r.get(p))]
+        if not have:
+            continue
+        amounts = [_digits(r.get(p)) for r in have]
+        amount = sum(amounts)
+        if len(set(amounts)) == 1 and len(amounts) > 1 and booking_total and amount > booking_total:
+            amount = amounts[0]  # the whole slip on every room row (before 31/10)
+        mine[0][p] = str(amount)
+        mine[0][f"{p} date + time"] = (mine[0].get(f"{p} date + time")
+                                       or next((r.get(f"{p} date + time") for r in have
+                                                if not _blank(r.get(f"{p} date + time"))), ""))
+        out(f"{mine[0]['action']} {mine[0].get('room_code') or ''}: {p} {amount:,} already received, from "
+            f"{_where(have[0])}")
+    # a CANCEL row's Remaining amount is 0 on every row (dev 30/10)
+    first = _on_first_row(mine, out, cols=PAY_COLUMNS if mine[0].get("action") == "CANCEL" else PAY_COLUMNS + (LEFT,))
+    swap = {id(rec): new for rec, new in zip(mine, first)}
+    return [swap.get(id(rec), rec) for rec in records]
 
 
 def _rooms(rows):
@@ -772,7 +825,7 @@ def sheet_append(sheet, data, out=print, live=None):
                               f"filled)" + ("" if hit.get("_sheet") == "live" else f", or sheet-update row "
                               f"{hit['_row']} --ref {hit['booking_ref']} to add the other number") + ". A cancel-and-rebuild: the CANCEL rows "
                               "and the NEW rows in one file")
-        if rec.get("action") == "CHANGE" and not any(rec.get(p) for p in schema.PAYMENT) and state and all(
+        if rec.get("action") == "CHANGE" and not any(r.get(p) for r in records for p in schema.PAYMENT) and state and all(
                 r.get("action") == "NEW" and r.get("_sheet") != "live" for r in state):
             # dev 30/10: the live sheet folds news into the NEW row until the booking is built (Victoria
             # INBOM04540000001: nationality and adults went into NEW row 803, no CHANGE row)
@@ -806,11 +859,12 @@ def sheet_append(sheet, data, out=print, live=None):
         if left_out:
             raise Refused(f"{ref0}: a payment CHANGE repeats every room type of the booking; {', '.join(left_out)} "
                           f"missing ({_where(state[0])}). One room_lines entry per room type, the slip in `booking` "
-                          f"(shared out by total_vnd)")
+                          f"(written once, on the first room row)")
     if rows is not None and any(r.get("action") in ("CHANGE", "CANCEL") for r in records):
         ref0 = records[0].get("booking_ref")
         current = booking_state(rows, ref0) or booking_state(elsewhere, ref0)
         records = carry_over(records, current, out=out)
+        records = payments_of_booking(records, current, out=out)
         check_not_a_repeat(records, current)
         records = fill_group_code(records, rows + elsewhere, sheet.group_code_columns(), out=out)
         keep_known_rate(records, rows + elsewhere, sheet.group_code_columns())
