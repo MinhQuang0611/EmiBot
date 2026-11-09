@@ -38,6 +38,31 @@ SEND_ACTIONS = {"send", "sendmail", "reply", "replyall", "forward"}
 # Graph rejects inline attachments over 3 MB; larger ones need an upload session (not built).
 MAX_INLINE_ATTACHMENT = 3 * 1024 * 1024
 
+# Files opened from a OneDrive/SharePoint link in an email (fetch_shared).
+MAX_LINK_FILE = 25 * 1024 * 1024
+MAX_LINK_FILES = 5
+SHARE_HOSTS = ("sharepoint.com", "1drv.ms", "onedrive.live.com")
+_URL = re.compile(r"https?://[^\s<>\"'\]\)]+", re.I)
+
+
+def share_links(text):
+    """OneDrive / SharePoint links in an email body, each once, in order. Outlook's SafeLinks wrapper
+    (…safelinks.protection.outlook.com/?url=…) is taken off first."""
+    found = []
+    for raw in _URL.findall(text or ""):
+        url = raw.rstrip(".,;:!?")
+        parts = urllib.parse.urlsplit(url)
+        if parts.netloc.lower().endswith("safelinks.protection.outlook.com"):
+            inner = urllib.parse.parse_qs(parts.query).get("url")
+            if not inner:
+                continue
+            url = inner[0]
+            parts = urllib.parse.urlsplit(url)
+        host = parts.netloc.lower()
+        if any(host == h or host.endswith("." + h) for h in SHARE_HOSTS) and url not in found:
+            found.append(url)
+    return found
+
 
 
 def drop_line(content, line):
@@ -475,6 +500,31 @@ class GraphMail:
         return out
 
     list_draft_attachments = list_attachments
+
+    def fetch_shared(self, url):
+        """The file(s) behind a OneDrive/SharePoint sharing link, as [{name, data}] or [{name, error}]: front office
+        sends vouchers as links (Odeon 8649178, Pegas 11124455). A folder link gives its first files. Read-only;
+        needs the sign-in's Files.Read.All and a link sales@ may open. Raises httpjson.HttpError when it can't."""
+        sid = "u!" + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+        redeem = {"Prefer": "redeemSharingLinkIfNecessary"}
+        item = self._call("GET", f"{GRAPH}/shares/{sid}/driveItem", headers=redeem)
+        if "folder" in item:
+            items = [k for k in self._pages(f"{GRAPH}/shares/{sid}/driveItem/children") if "file" in k]
+            items = items[:MAX_LINK_FILES]
+        else:
+            items = [item]
+        out = []
+        for it in items:
+            name = it.get("name") or "linked-file"
+            dl = it.get("@microsoft.graph.downloadUrl")
+            if int(it.get("size") or 0) > MAX_LINK_FILE:
+                out.append({"name": name, "error": f"{it.get('size')} bytes, over {MAX_LINK_FILE // 2**20} MB"})
+            elif not dl:
+                out.append({"name": name, "error": "no download address (not a file)"})
+            else:
+                # pre-authenticated short-lived address: no Authorization header
+                out.append({"name": name, "data": self.http("GET", dl, raw=True)})
+        return out
 
     # --- drafting (never sending) ---
 

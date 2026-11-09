@@ -84,7 +84,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive, stop_sales, telegram
 from .graph_mail import (ACCOUNTING, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES, SendBlocked,
-                         clean_subject, is_internal)
+                         clean_subject, is_internal, share_links)
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -214,6 +214,7 @@ def show(mail, message_id, work_dir=None, out=print):
     if not any(m["id"] == message_id for m in thread):
         thread.append(target)
     out(f"thread: {len(thread)} message(s), oldest first. Target = the one marked >>>.")
+    opened = set()  # a link quoted again further down the thread is opened once
     for m in thread:
         is_target = m["id"] == message_id
         mark = ">>> " if is_target else ""
@@ -231,6 +232,37 @@ def show(mail, message_id, work_dir=None, out=print):
         # Not gated on hasAttachments: Graph leaves inline images out of it, and a UNC pasted into the
         # body is an inline image (UMA AVD-4246445, 05/11: slip never read, payment not recorded).
         _show_attachments(mail, m["id"], work_dir, out)
+        _show_links(mail, m["id"], body.get("content", ""), work_dir, out, opened)
+
+
+def _show_links(mail, message_id, text, work_dir, out, opened):
+    """A voucher sent as a OneDrive/SharePoint link (dev, 2026-11-09, Odeon 8649178 row 1609 left blank): the file
+    is opened with the sign-in's Files.Read.All and read like an attachment. Not opened → the line says so, and the
+    voucher is asked for as a PDF (tour-operators.md)."""
+    if not hasattr(mail, "fetch_shared"):
+        return
+    folder = attachments.message_dir(work_dir, message_id)
+    for url in share_links(text):
+        if url in opened:
+            continue
+        opened.add(url)
+        try:
+            files = mail.fetch_shared(url)
+        except httpjson.HttpError as e:
+            why = {401: "sign-in has no Files.Read.All yet", 403: "no access: link not shared with sales@, or the "
+                   "sign-in has no Files.Read.All yet", 404: "link not found or not shared with sales@"}.get(e.status,
+                                                                                                         "error")
+            detail = " ".join(e.body.split())[:160]
+            out(f"\n[link not opened: {url} — HTTP {e.status}, {why} ({detail}). "
+                "Ask for the file as a PDF attachment]")
+            continue
+        for f in files:
+            if "data" not in f:
+                out(f"\n[link file not saved: {f['name']!r} from {url} — {f['error']}]")
+                continue
+            path = attachments.save(folder, f)
+            out(f"\n[link file saved: {os.path.abspath(path)} ({len(f['data'])} bytes) from {url}]")
+            out(attachments.clip(attachments.extract_text(path, f["data"])))
 
 
 def _show_attachments(mail, message_id, work_dir, out):
