@@ -48,7 +48,9 @@ def mail_login_start(*flags):
 def mail_login_finish():
     if not config.mail().token.finish():
         sys.exit("NOT YET: sign-in not finished in the browser. Finish it, then run this again.")
-    print("PASS: signed in, refresh token saved; Mail.Send:", "yes" if config.mail().token.can_send() else "no")
+    tok = config.mail().token
+    print("PASS: signed in, refresh token saved; Mail.Send:", "yes" if tok.can_send() else "no",
+          "; Files.Read.All (OneDrive voucher links):", "yes" if tok.can_read_files() else "no")
     mail_read()
 
 

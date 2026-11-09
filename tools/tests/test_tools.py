@@ -270,6 +270,7 @@ class DeviceCodeTokenTest(unittest.TestCase):
             tok = DeviceCodeToken("cid", cache, http=http, out=lambda m: None)
             tok.start(send=True)
             self.assertIn("Mail.Send", asked[0])
+            self.assertIn("Files.Read.All", asked[0])
             self.assertTrue(tok.finish())
             tok._token = None
             tok()  # access token expired at once: refresh

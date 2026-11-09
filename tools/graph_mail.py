@@ -87,11 +87,14 @@ class DeviceCodeToken:
     EMI_AUTH=device: personal Outlook.com test mailbox (tenant "consumers").
     EMI_AUTH=delegated: the HAYA tenant, signed in as sales@ itself (same pattern as Sunny).
     First run prints a link and a code to sign in with; the refresh token is cached in
-    `cache_path` (mode 600) so later runs don't ask again. Scope is Mail.ReadWrite; start(send=True) adds
-    Mail.Send, and the scope signed in with is kept in the cache so a refresh asks for the same.
+    `cache_path` (mode 600) so later runs don't ask again. Scope is Mail.ReadWrite + Files.Read.All; start(send=True)
+    adds Mail.Send, and the scope signed in with is kept in the cache so a refresh asks for the same.
+    Files.Read.All (dev, 2026-11-09): front office sends Odeon/Pegas vouchers as OneDrive/SharePoint links (Odeon
+    8649178, row 1609 left blank); read-only, so Emi can open the file the link points to. A token signed in before
+    this keeps its old scope until the next sign-in.
     """
 
-    SCOPE = "offline_access https://graph.microsoft.com/Mail.ReadWrite"
+    SCOPE = "offline_access https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Files.Read.All"
     SEND_SCOPE = SCOPE + " https://graph.microsoft.com/Mail.Send"
 
     def __init__(self, client_id, cache_path, tenant="consumers", http=httpjson.request, out=print):
@@ -125,6 +128,9 @@ class DeviceCodeToken:
 
     def can_send(self):
         return "mail.send" in str(jwt_claims(self()).get("scp", "")).lower().split()
+
+    def can_read_files(self):
+        return "files.read.all" in str(jwt_claims(self()).get("scp", "")).lower().split()
 
     def _cached_access(self):
         c = self._read_cache()
