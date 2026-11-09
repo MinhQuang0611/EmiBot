@@ -88,6 +88,19 @@ def availability():
     return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_FOLDER_ID)
 
 
+# "HAYA Odeon Invoices 2026 - 2027" (1SLeLZnkl4IJX5AinK8V2a1k9yLjEoMrfkMpvBnTdULc): one tab per Odeon proforma.
+# Unset = Emi makes no invoice and the confirmation waits with DO NOT SEND UNTIL INVOICE IS ATTACHED (dev, 2026-11-09).
+ODEON_INVOICE_BOOK = os.environ.get("EMI_ODEON_INVOICE_BOOK", "")
+
+
+def invoice_book():
+    if not ODEON_INVOICE_BOOK or SIM_DIR:
+        return None
+    from .intake_sheet import google_service_account_transport
+    from .invoice import InvoiceBook
+    return InvoiceBook(ODEON_INVOICE_BOOK, google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")))
+
+
 def telegram():
     """Draft notices to the reviewer's Telegram chat; None when EMI_TELEGRAM_CHAT_ID isn't set.
     In a SIM run they go to <sim dir>/telegram/ (and to Telegram only with EMI_SIM_TELEGRAM=1)."""

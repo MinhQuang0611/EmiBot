@@ -2,6 +2,7 @@
 replies and confirmations go, how it pays, what accounting owes it, and the on-request rule. Prices are in
 tools/operator_rates.py; this file is the procedure.
 """
+import re
 from datetime import date, timedelta
 
 from .intake_schema import is_built
@@ -252,6 +253,14 @@ def render_checkouts(hits, company, first, last):
     return "\n".join(out)
 
 
+def voucher_ref(booking_ref):
+    """The operator's own reference: 'Odeon 4799222 (Coral Travel Poland; Voucher 1151155; Ref 1238448)' -> 4799222,
+    '4801957 / 26560' -> 4801957. It names the invoice tab, the PDF and the confirmation subject."""
+    s = re.sub(r"\(.*", "", (booking_ref or "").split("/")[0])
+    s = re.sub(r"^\s*(?:Odeon|Crystal Bay|Pegas|Anex|Selfie)(?=\s)\s*", "", s, flags=re.I)
+    return s.strip()
+
+
 def invoice_data(state):
     """The proforma figures for one booking (Odeon, Crystal Bay, Pegas): number, due date, lines."""
     h = state[0]
@@ -266,7 +275,7 @@ def invoice_data(state):
                        f"'HAYA - <group>': wait for the build tool")
     if arrival is None:
         raise KeyError(f"{h.get('booking_ref')}: arrival {h.get('arrival')!r} is not DD/MM/YYYY")
-    ref = h.get("booking_ref", "").split("/")[0].strip()
+    ref = voucher_ref(h.get("booking_ref", ""))
     lines = [{"room_code": r.get("room_code"), "rooms": r.get("rooms"), "nights": r.get("nights"),
               "rate": r.get("Average rate per night after discount") or r.get("rate_per_night_vnd"),
               "surcharge": r.get("surcharge"), "surcharge_amount": r.get("Surcharge amount"),
@@ -275,7 +284,7 @@ def invoice_data(state):
          "due": arrival - timedelta(days=inv["due_days_before"]), "due_rule": f"{inv['due_days_before']} days "
          f"before check-in", "company": h.get("company"), "ref": h.get("booking_ref"), "group": group,
          "guests": h.get("guest_names"), "arrival": h.get("arrival"), "departure": h.get("departure"),
-         "lines": lines, "total": sum(x["total"] for x in lines)}
+         "lines": lines, "total": sum(x["total"] for x in lines), "voucher": ref, "rows": list(state)}
     if inv.get("send_days_before"):
         d["send_by"] = arrival - timedelta(days=inv["send_days_before"])
     return d
@@ -293,6 +302,6 @@ def render_invoice(d):
     if d.get("send_by"):
         out.append(f"Send the proforma by: {d['send_by']:%d/%m/%Y}")
     out.append(f"Save the PDF as: {d['file']}")
-    out.append("The Google Sheets invoice template is not connected to Emi: a person fills it with these figures "
-               "and exports the PDF; then attach it with draft-confirmation --attach.")
+    out.append(f"Make it: invoice-make {d['ref']} (Odeon) — a new tab in the invoice workbook and the PDF in "
+               f"emi-work/out/{d['file']}")
     return "\n".join(out)

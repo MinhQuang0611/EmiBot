@@ -46,6 +46,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi confirmations-due  # job 2: built since 30/10, no confirmation from sales@
     python -m tools.emi build-stuck        # bookings the build tool stopped on or hasn't picked up (read-only)
     python -m tools.emi invoice-data <booking_ref>        # proforma figures: number, due date, lines
+    python -m tools.emi invoice-make <booking_ref> [--check]  # Odeon proforma: new tab in the workbook + PDF
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
@@ -94,6 +95,7 @@ from . import build_watch
 from . import pickup as pickups
 from .state import hold_lock
 from . import availability as avail
+from . import invoice as invoices
 from . import review, sim
 from . import intake_schema as schema
 from .state import REVIEW_OPEN, now_iso
@@ -1702,26 +1704,28 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         raise Refused(f"row {args.row} is built and has its PDF: draft-confirmation without --before-pdf")
     company = r.get("company", "")
     subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
-    # Odeon with the EZFOLIO PDF but not our invoice yet: drafted now with the PDF, red line until the invoice is on
-    no_invoice = company == "Odeon" and not before and not attach
-    body = _strip_stop_line(read_text(args.body))
-    if before:
-        body = f"{DO_NOT_SEND}\n\n{body}"
-    elif no_invoice:
-        body = f"{NO_INVOICE}\n\n{body}"
-    check_no_gaps(body, args.message_id)
-    if before:
-        check_before_pdf(r, body)
-    confirmation_check(r)(body)
     if company == "Odeon":
         odeon = operators.OPERATORS["Odeon"]
         missing = [a for a in odeon["confirm_to"] if a not in _addresses(args.to) + _addresses(args.cc)]
         if not subject or missing:
             raise Refused(f"Odeon's confirmation is a new email to {' and '.join(odeon['confirm_to'])} with both "
                           f"PDFs: --to {','.join(odeon['confirm_to'])} --subject "
-                          f"\"{odeon['confirm_subject'].format(ref=ref.split('/')[0].strip())}\" "
-                          f"--attach Invoice_<ref>.pdf (invoice-data {ref}); no invoice yet → leave --attach out, "
-                          f"first line {NO_INVOICE}, and confirmation-attach <n> --attach … adds it later")
+                          f"\"{odeon['confirm_subject'].format(ref=operators.voucher_ref(ref))}\". Our proforma: "
+                          f"made by Emi on the way (invoice-make), or --attach Invoice_<ref>.pdf made by a person")
+    body = _strip_stop_line(read_text(args.body))
+    check_no_gaps(body, args.message_id)
+    if before:
+        check_before_pdf(r, body)
+    confirmation_check(r)(body)
+    if company == "Odeon" and not before and not attach:
+        made = _auto_invoice(sheet, ref, out=out)  # dev, 2026-11-09: Emi makes the proforma itself
+        attach = [made] if made else []
+    # Odeon with the EZFOLIO PDF but no invoice could be made: drafted with the PDF, red line until it is on
+    no_invoice = company == "Odeon" and not before and not attach
+    if before:
+        body = f"{DO_NOT_SEND}\n\n{body}"
+    elif no_invoice:
+        body = f"{NO_INVOICE}\n\n{body}"
     extra = read_pdfs(attach)
     if before:
         files = extra
@@ -1747,14 +1751,14 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         meta.update(awaiting_pdf=True, action=r.get("action", ""))
     elif no_invoice:
         meta.update(awaiting_invoice=True, action=r.get("action", ""))
-    invoice = f"emi-work/out/Invoice_{ref.split('/')[0].strip()}.pdf"
+    invoice = f"emi-work/out/Invoice_{operators.voucher_ref(ref)}.pdf"
 
     def later(n):
         if before:
             return f"; WITHOUT the EZFOLIO PDF, first line {DO_NOT_SEND}. Once the row is built: confirmation-attach {n}"
         if no_invoice:
-            return (f"; WITHOUT our proforma invoice, first line {NO_INVOICE}. Once the invoice is made: "
-                    f"confirmation-attach {n} --attach {invoice}")
+            return (f"; WITHOUT our proforma invoice (NO INVOICE line above), first line {NO_INVOICE}. Once that is "
+                    f"fixed: confirmation-attach {n} (it runs invoice-make), or --attach {invoice} made by a person")
         return ""
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how=how, source=args.message_id, kind="confirmation",
@@ -1839,13 +1843,19 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
                       + (f"{r.get('ref')} is back on confirmations-due for a confirmation with the PDF the usual way; "
                          if what == "PDF" else "") + "say so in the report")
     if not r.get("awaiting_pdf"):
+        if not attach:
+            made = _auto_invoice(sheet, r.get("ref", ""), out=out)
+            attach = [made] if made else []
         return _attach_invoice(mail, st, n, r, attach, tg=tg, out=out)
     row = _booking_row(sheet, r)
     if not _built(row):
         raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
                       f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
                       f"#{n} keeps its DO NOT SEND line")
-    # Odeon's invoice is made by a person: the EZFOLIO PDF doesn't wait for it (dev, 2026-11-09, Odeon 4801957)
+    if row.get("company") == "Odeon" and not attach:
+        made = _auto_invoice(sheet, r.get("ref", ""), out=out)  # dev, 2026-11-09: Emi makes the proforma itself
+        attach = [made] if made else []
+    # no invoice could be made: the EZFOLIO PDF doesn't wait for it (dev, 2026-11-09, Odeon 4801957)
     no_invoice = row.get("company") == "Odeon" and not attach
     extra = read_pdfs(attach)
     path, name, mime, data = pdf_fetch(sheet, row["_row"], out=out)
@@ -1876,12 +1886,12 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
     st.pdf_attached(r.get("ref", ""), int(r.get("row") or 0))
     filled = ", ".join(f"{k} → {v}" for k, v in fills.items()) or "no placeholders"
     if no_invoice:
-        invoice = f"emi-work/out/Invoice_{(r.get('ref') or '').split('/')[0].strip()}.pdf"
+        invoice = f"emi-work/out/Invoice_{operators.voucher_ref(r.get('ref') or '')}.pdf"
         review.notify(tg, n, r, note="đã đính kèm PDF xác nhận; còn chờ invoice proforma (DO NOT SEND UNTIL INVOICE "
                                      "IS ATTACHED)", in_place=True)
-        out(f"#{n}: EZFOLIO PDF attached ({name}), {filled}; first line now {NO_INVOICE}. Once the invoice is made: "
-            f"confirmation-attach {n} --attach {invoice} (invoice-data {r.get('ref')}). Report: chờ invoice "
-            f"{r.get('ref')}")
+        out(f"#{n}: EZFOLIO PDF attached ({name}), {filled}; first line now {NO_INVOICE} (why: the NO INVOICE line "
+            f"above). Once that is fixed: confirmation-attach {n} (it runs invoice-make), or --attach {invoice} made "
+            f"by a person. Report: chờ invoice {r.get('ref')}")
         return
     review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
     out(f"#{n}: {len(files)} PDF(s) attached ({name}), {filled}, DO NOT SEND line removed. Ready for review.")
@@ -1891,8 +1901,9 @@ def _attach_invoice(mail, st, n, r, attach, tg=None, out=print):
     """Draft #n has the EZFOLIO PDF and waits only for our proforma invoice (Odeon): the invoice goes on, the red
     DO NOT SEND UNTIL INVOICE line comes off."""
     if not attach:
-        raise Refused(f"#{n} already has its EZFOLIO PDF and waits for our proforma invoice: confirmation-attach {n} "
-                      f"--attach Invoice_<ref>.pdf (invoice-data {r.get('ref')}). Nothing changed.")
+        raise Refused(f"#{n} already has its EZFOLIO PDF and the invoice couldn't be made (NO INVOICE line above): fix "
+                      f"that and run confirmation-attach {n} again, or --attach Invoice_<ref>.pdf made by a person. "
+                      f"Nothing changed.")
     files = read_pdfs(attach)
     if review.in_outlook(r):
         mail.fill_draft(r["draft_id"], {}, drop=NO_INVOICE)
@@ -2085,10 +2096,10 @@ def run_confirmations_due(mail, sheet, st, out=print):
     for n, r in st.data["reviews"].items():
         # has its EZFOLIO PDF, waits for the proforma a person makes: in the report, never a reason to wake job 2
         if r.get("awaiting_invoice") and r["status"] == REVIEW_OPEN:
-            ref = (r.get("ref") or "").split("/")[0].strip()
-            out(f"INVOICE #{n} {r.get('ref')}: EZFOLIO PDF on, waiting for our proforma invoice (invoice-data "
-                f"{r.get('ref')}). Once emi-work/out/Invoice_{ref}.pdf is there: confirmation-attach {n} --attach "
-                f"emi-work/out/Invoice_{ref}.pdf. Report: chờ invoice {r.get('ref')}")
+            ref = operators.voucher_ref(r.get("ref") or "")
+            out(f"INVOICE #{n} {r.get('ref')}: EZFOLIO PDF on, waiting for our proforma invoice. confirmation-attach "
+                f"{n} makes it (invoice-make) and puts it on; or --attach emi-work/out/Invoice_{ref}.pdf made by a "
+                f"person. Report: chờ invoice {r.get('ref')}")
     return items
 
 
@@ -2131,6 +2142,49 @@ def run_invoice_data(sheet, ref, out=print):
         raise Refused(str(e).strip("'\"")) from None
     out(operators.render_invoice(d))
     return d
+
+
+def _invoice_state(sheet, ref):
+    state = booking_state(sheet.rows(), ref)
+    if not state:
+        raise Refused(f"no rows for booking_ref {ref!r} on the sheet")
+    if operators.cancelled(state):
+        raise Refused(f"{ref} is cancelled on the sheet: no invoice")
+    if state[0].get("company") != "Odeon":
+        raise Refused(f"{ref} is {state[0].get('company')!r}: invoice-make is Odeon's proforma only")
+    try:
+        return operators.invoice_data(state)
+    except KeyError as e:
+        raise Refused(str(e).strip("'\"")) from None
+
+
+def run_invoice_make(sheet, ref, check=False, book=None, out=print):
+    """Odeon's proforma (dev's Odeon step 5): a copy of the workbook's latest invoice tab, the booking's cells
+    written in, exported as emi-work/out/Invoice_<ref>.pdf. --check prints the cells and writes nothing."""
+    d = _invoice_state(sheet, ref)
+    try:
+        if check:
+            out(invoices.render_check(d, invoices.today_vn()))
+            return None
+        book = book or config.invoice_book()
+        if book is None:
+            raise Refused("EMI_ODEON_INVOICE_BOOK is not set in .env: no invoice workbook to write to")
+        return invoices.make(book, d, invoices.today_vn(), os.path.join(WORK_DIR, "out"), out=out)
+    except invoices.InvoiceError as e:
+        raise Refused(str(e)) from None
+
+
+def _auto_invoice(sheet, ref, out=print):
+    """Odeon's proforma made on the way, for a confirmation: its path, or None with the reason printed (the draft
+    then waits with DO NOT SEND UNTIL INVOICE IS ATTACHED)."""
+    if config.invoice_book() is None:
+        out(f"NO INVOICE {ref}: EMI_ODEON_INVOICE_BOOK is not set, the invoice isn't made by Emi")
+        return None
+    try:
+        return run_invoice_make(sheet, ref, out=out)
+    except (Refused, httpjson.HttpError) as e:
+        out(f"NO INVOICE {ref}: {e}")
+        return None
 
 
 def run_review(mail, st, tg, args, out=print):
@@ -2402,6 +2456,9 @@ def parser():
     s.add_argument("--last-week", action="store_true", help="last Monday to Sunday")
     s = sub.add_parser("invoice-data", help="proforma invoice figures for a tour operator booking")
     s.add_argument("booking_ref")
+    s = sub.add_parser("invoice-make", help="Odeon proforma: a new tab in the invoice workbook, saved as a PDF")
+    s.add_argument("booking_ref")
+    s.add_argument("--check", action="store_true", help="print the cells it would write; nothing written")
     s = sub.add_parser("ask-karen", help="a fact for the reply is uncertain: ask Karen; the draft has a CHECK line")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
     s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
@@ -2562,6 +2619,8 @@ def main(argv=None):
             run_checkouts(config.sheet(), args)
         elif c == "invoice-data":
             run_invoice_data(config.sheet(), args.booking_ref)
+        elif c == "invoice-make":
+            run_invoice_make(config.sheet(), args.booking_ref, check=args.check)
         elif c == "draft-attach":
             draft_attach(config.mail(), st, args.draft_id, args.file)
             st.save()
