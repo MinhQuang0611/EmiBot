@@ -1,13 +1,15 @@
 """Odeon's proforma invoice, made by Emi (dev's Odeon process, step 5; done by hand until 2026-11-09).
 
 The workbook "HAYA Odeon Invoices 2026 - 2027" holds one tab per invoice, named by the Odeon reference. A new one is a
-copy of the latest tab (layout, logo, Odeon's address and the bank block exactly as the hotel last used them) with the
-booking's cells written over, then exported as Invoice_<ref>.pdf. The cells, read from tabs 4777887 / 716532:
+copy of the template tab Sheet1 (dev, 2026-11-09: "đây là mẫu"; layout, Odeon's address and the company's VND account,
+Vietcombank 1020729617) with the booking's cells written over, then exported as Invoice_<ref>.pdf. Sheet1 still prints
+USD, so the copy gets "Rate (VND)", "Net amount VND:" and a VND number format on the amounts. The cells, read from
+tabs 4777887 / 716532:
   L8 invoice no. "HAYA - <group>", M8 invoice date, N8 due date (10 days before check-in)
   rows 13-17, one per room type: B arrival "DD.MM.YYYY", C departure, D service type, F pax names, G "HAYA HOTEL",
       H Odeon ref, I accommodation, J rooms, K nights, L pax ("2" or "2+2"), M rate per room per night, N amount
   K22 =SUM(N13:N17) (kept), C20 amount in words, B23 "Payment to be settled by: DD/MM/YYYY"
-Emi never changes the bank block, Odeon's address or the layout: they come from the tab it copies.
+Emi never changes the bank block, Odeon's address or the layout: they come from the template.
 """
 import os
 import urllib.parse
@@ -20,7 +22,8 @@ SERVICE = {"BB": "Bed & Breakfast", "HB": "Half Board", "FB": "Full Board", "RO"
 ACCOMMODATION = {"STD": "STANDARD DOUBLE WITH WINDOW", "SUP-DBL": "SUPERIOR DOUBLE WITH BALCONY",
                  "SUP-TWN": "SUPERIOR TWIN WITH BALCONY", "DLX-SV": "DELUXE SEA VIEW WITH BALCONY",
                  "TPL": "TRIPLE ROOM", "QPL": "QUADRUPLE WITH BALCONY", "SUITE-SV": "SUITE SEA VIEW WITH BALCONY"}
-TEMPLATE_TAB = "Sheet1"  # the 2022 original, never copied: its bank block is not the one in use
+TEMPLATE_TAB = "Sheet1"  # the template every invoice is copied from (dev, 2026-11-09)
+VND = '#,##0" VND"'  # the amounts' format on the invoices sent in VND (tab 4609701)
 
 
 class InvoiceError(Exception):
@@ -119,7 +122,7 @@ def cells(data, today):
         raise InvoiceError(f"the lines add up to {total:,}, the booking to {data['total']:,}")
     due = data["due"].strftime("%d/%m/%Y")
     out = {"L8": data["number"], "M8": today.strftime("%d/%m/%Y"), "N8": due, "C20": in_words(total),
-           "B23": f"Payment to be settled by: {due}"}
+           "B23": f"Payment to be settled by: {due}", "M12": "Rate (VND)", "K21": "Net amount VND:"}
     for i in range(LAST - FIRST + 1):
         row = body[i] if i < len(body) else [""] * 13
         for j, value in enumerate(row):
@@ -150,6 +153,22 @@ class InvoiceBook:
         resp = self.call("POST", f"{SHEETS}/{self.id}:batchUpdate", body={"requests": [{"duplicateSheet": {
             "sourceSheetId": source_id, "newSheetName": title, "insertSheetIndex": index}}]})
         return resp["replies"][0]["duplicateSheet"]["properties"]["sheetId"]
+
+    def finish(self, gid):
+        """The amounts N13:N17 and the total K22 in VND (the template formats them as dollars), and the pax names
+        F13:F17 wrapped with the rows grown to fit (three names were cut off, 4801957)."""
+        def cell(r0, r1, c0, c1, fmt, fields):
+            return {"repeatCell": {"range": {"sheetId": gid, "startRowIndex": r0, "endRowIndex": r1,
+                                             "startColumnIndex": c0, "endColumnIndex": c1},
+                                   "cell": {"userEnteredFormat": fmt}, "fields": fields}}
+        vnd = {"numberFormat": {"type": "NUMBER", "pattern": VND}}
+        requests = [cell(FIRST - 1, LAST, 13, 14, vnd, "userEnteredFormat.numberFormat"),
+                    cell(21, 22, 10, 11, vnd, "userEnteredFormat.numberFormat"),
+                    cell(FIRST - 1, LAST, 5, 6, {"wrapStrategy": "WRAP", "verticalAlignment": "MIDDLE"},
+                         "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment"),
+                    {"autoResizeDimensions": {"dimensions": {"sheetId": gid, "dimension": "ROWS",
+                                                             "startIndex": FIRST - 1, "endIndex": LAST}}}]
+        self.call("POST", f"{SHEETS}/{self.id}:batchUpdate", body={"requests": requests})
 
     def write(self, tab, values):
         data = [{"range": f"'{tab}'!{a1}", "values": [[v]]} for a1, v in values.items()]
@@ -189,12 +208,13 @@ def make(book, data, today, out_dir, out=print):
     else:
         if not book.can_edit():
             raise InvoiceError("the invoice workbook is not shared with Emi's service account as Editor: nothing made")
-        source = max((t for t in tabs if t["title"] != TEMPLATE_TAB), key=lambda t: t["index"], default=None)
+        source = next((t for t in tabs if t["title"] == TEMPLATE_TAB), None)
         if source is None:
-            raise InvoiceError("the workbook has no invoice tab to copy")
-        gid = book.duplicate(source["sheetId"], voucher, source["index"] + 1)
+            raise InvoiceError(f"the workbook has no template tab {TEMPLATE_TAB}: nothing made")
+        gid = book.duplicate(source["sheetId"], voucher, max(t["index"] for t in tabs) + 1)
         book.write(voucher, want)
-        how = f"new tab {voucher}, copied from tab {source['title']}"
+        book.finish(gid)
+        how = f"new tab {voucher}, copied from the template {TEMPLATE_TAB}"
     data_pdf = book.pdf(gid)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, data["file"])

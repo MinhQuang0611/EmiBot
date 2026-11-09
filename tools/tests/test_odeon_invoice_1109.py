@@ -212,7 +212,7 @@ class FakeBook:
     def __init__(self, editable=True, existing=None):
         self.tab_list = [{"sheetId": 1, "title": "Sheet1", "index": 0}, {"sheetId": 2, "title": "4777887", "index": 1},
                          {"sheetId": 3, "title": "4609701", "index": 2}]
-        self.cells, self.copied, self.editable, self.exported = {}, [], editable, []
+        self.cells, self.copied, self.editable, self.exported, self.formatted = {}, [], editable, [], []
         if existing:
             self.tab_list.append({"sheetId": 9, "title": existing[0], "index": 3})
             self.cells[existing[0]] = {"L8": existing[1], "K22": existing[2]}
@@ -234,6 +234,9 @@ class FakeBook:
 
     def write(self, tab, values):
         self.cells.setdefault(tab, {}).update(values)
+
+    def finish(self, gid):
+        self.formatted.append(gid)
 
     def pdf(self, gid):
         self.exported.append(gid)
@@ -279,12 +282,15 @@ class InvoiceMakeTest(unittest.TestCase):
     def test_make_copies_the_latest_tab_writes_and_exports(self):
         book, lines = FakeBook(), []
         path = invoice.make(book, self.data, date(2026, 11, 9), self.dir.name, out=lines.append)
-        self.assertEqual(book.copied, [(3, "4801957", 3)])  # tab 4609701, never Sheet1 (2022, old bank block)
+        self.assertEqual(book.copied, [(1, "4801957", 3)])  # the template Sheet1 (dev 09/11), placed last
+        self.assertEqual(book.formatted, [50])
+        self.assertEqual(book.cells["4801957"]["M12"], "Rate (VND)")
+        self.assertEqual(book.cells["4801957"]["K21"], "Net amount VND:")
         self.assertEqual(book.cells["4801957"]["L8"], "HAYA - 30931")
         self.assertTrue(path.endswith("Invoice_4801957.pdf"))
         with open(path, "rb") as f:
             self.assertTrue(f.read().startswith(b"%PDF"))
-        self.assertIn("new tab 4801957, copied from tab 4609701", lines[0])
+        self.assertIn("new tab 4801957, copied from the template Sheet1", lines[0])
 
     def test_tab_made_before_is_exported_not_rewritten(self):
         book = FakeBook(existing=("4801957", "HAYA - 30931", "22,657,500 VND"))

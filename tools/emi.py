@@ -869,10 +869,14 @@ def sheet_schema(sheet, out=print):
     ta_names = {r["code"]: r["name_en"] for r in quoting.load()["rooms"]}
     ta_names.setdefault("STD-TWN", "Standard Twin (quoted at the Superior Twin rate)")
     # OTA listings use their own names; the live sheet maps them like this (2026-10-27).
-    ota_names = {"TW-DLX": "Deluxe Twin Sea View", "TPL": "Triple City View", "DLX-SV": "Deluxe Double Sea View"}
+    ota_names = {"TW-DLX": "Deluxe Twin Sea View", "TPL": "Triple City View",
+                 # Mytour's one listing for both beds, "Deluxe Twin/ Double" (dev, 2026-11-09, H7174280)
+                 "DLX-SV": "Deluxe Double Sea View\" or \"Deluxe Twin/ Double"}
     out("\nROOM CODES (room_code). Match the name in the email against the 'agencies call it' name:")
     for code, (name, note) in codes.items():
         alias = f" — agencies call it \"{ta_names[code]}\"" if code in ta_names else ""
+        # TA: Deluxe Double and Deluxe Twin are sold as one type, DLX-SV (dev, 2026-11-09)
+        alias += " or \"Deluxe Twin\" / \"Deluxe Double/Twin\"" if code == "DLX-SV" else ""
         alias += f" — OTAs call it \"{ota_names[code]}\"" if code in ota_names else ""
         out(f"- {code} = {name}{alias}" + (f" — {note}" if note else ""))
     out("A room name in the email that matches none of these → leave room_code blank and name it in missing_info.")
@@ -1957,12 +1961,27 @@ def _ages(text):
         raise Refused(f"--children takes ages separated by ';', e.g. '7;1' — got {text!r}") from None
 
 
+def _spo(text):
+    """The voucher's SPO line as to-price's codes. A night set with no C[...] offer inside, "7 * (Contract Revise
+    Rates)", is the plain contract rate: it adds no code (Odeon SGODOAMY4_11_1, 09/11, stopped as an unknown code).
+    A line that is only such sets is "none"."""
+    if text is None:
+        return None
+    parts = []
+    for part in re.split(r"[,;]", text):
+        if not re.search(r"C\[", part):
+            part = re.sub(r"\d+\s*\*\s*\(\s*Contract\s+Revise\s+Rates\s*\)", "", part, flags=re.I)
+            part = part.strip(" +")
+        if part.strip():
+            parts.append(part)
+    return parts or ["none"]
+
+
 def to_price(args, out=print):
     try:
         q = op_rates.price(args.operator, op_rates.parse_date(args.arrival), op_rates.parse_date(args.departure),
                            args.room, args.adults, _ages(args.children), rooms=args.rooms, meal=args.meal,
-                           booked=op_rates.parse_date(args.booked),
-                           spo=re.split(r"[,;]", args.spo) if args.spo is not None else None)
+                           booked=op_rates.parse_date(args.booked), spo=_spo(args.spo))
     except op_rates.RateError as e:
         raise Refused(str(e)) from None
     out(op_rates.render(q))
