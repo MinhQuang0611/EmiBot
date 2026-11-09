@@ -39,6 +39,20 @@ SEND_ACTIONS = {"send", "sendmail", "reply", "replyall", "forward"}
 MAX_INLINE_ATTACHMENT = 3 * 1024 * 1024
 
 
+
+def drop_line(content, line):
+    """The red stop line taken out of a draft's HTML with its paragraph, whatever order Outlook put the tags in
+    (<b><span> as Emi writes it, <span><b> after Outlook saved it: #686 kept an empty red paragraph on top, 09/11)."""
+    inline = r"(?:<(?:b|strong|span|font)\b[^>]*>\s*)*"
+    close = r"(?:</(?:b|strong|span|font)>\s*)*"
+    content = re.sub(r"<p[^>]*>\s*" + inline + re.escape(html.escape(line)) + r"\s*" + close + r"</p>\s*", "",
+                     content, flags=re.I)
+    content = content.replace(html.escape(line), "")
+    # a red paragraph left with nothing in it is the line's shell
+    red = r"(?=(?:<[^>]*>\s*)*?<[^>]*(?:255,\s*0,\s*0|#ff0000|color:\s*red)[^>]*>)"
+    return re.sub(r"<p[^>]*>\s*" + red + inline + close + r"</p>\s*", "", content, flags=re.I)
+
+
 class SendBlocked(Exception):
     pass
 
@@ -536,9 +550,7 @@ class GraphMail:
         for old, new in replacements.items():  # DO_NOT_SEND -> NO_INVOICE keeps the line's bold red markup
             content = content.replace(html.escape(old), html.escape(new)).replace(old, html.escape(new))
         if drop:
-            content = re.sub(r"<p[^>]*>\s*<b><span[^>]*>\s*" + re.escape(html.escape(drop)) +
-                             r"\s*</span></b>\s*</p>\s*", "", content, flags=re.I)
-            content = content.replace(html.escape(drop), "")  # Outlook rewrote the markup around it
+            content = drop_line(content, drop)
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
         return content
 

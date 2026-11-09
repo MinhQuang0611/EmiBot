@@ -1600,7 +1600,10 @@ def check_operator_confirmation(body, ref="", group=""):
     if group:
         need.append((f"#{group.lstrip('#')}", f"the group code #{group.lstrip('#')}"))
     if ref:
-        need.append((ref.split("/")[0].strip(), f"the operator's ref {ref.split('/')[0].strip()}"))
+        # Odeon's own number is enough: "4799222", not the sheet's "Odeon 4799222 (Coral Travel Poland; …)" (09/11)
+        short = operators.voucher_ref(ref)
+        full = ref.split("/")[0].strip()
+        need.append((full if full in body else short, f"the operator's ref {short}"))
     missing = [what for needle, what in need if needle not in body]
     if missing:
         raise Refused("the confirmation text doesn't follow skills/email-templates.md section 6: missing "
