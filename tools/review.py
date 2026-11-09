@@ -19,7 +19,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from .graph_mail import DO_NOT_SEND, clean_subject, paragraphs, reply_subject
+from .graph_mail import DO_NOT_SEND, NO_INVOICE, clean_subject, paragraphs, reply_subject
 from .state import REVIEW_OPEN
 from .telegram import esc
 
@@ -291,6 +291,26 @@ def _approvers():
     return [a.strip().lstrip("@").lower() for a in os.environ.get("EMI_APPROVERS", "").split(",") if a.strip()]
 
 
+def _invoice_added_by_hand(mail, n, r):
+    """Odeon's confirmation waiting for our proforma invoice (DO NOT SEND UNTIL INVOICE IS ATTACHED): Accept only once
+    the invoice is on. A person who attached it in Outlook themselves counts: the red line is taken off for them."""
+    known = set(r.get("attachments") or [])
+    extra = [a for a in (mail.list_draft_attachments(r["draft_id"]) if in_outlook(r) else [])
+             if not a.get("isInline") and a.get("name") not in known]
+    if not extra:
+        raise ReviewError(f"#{n} chưa có invoice proforma (DO NOT SEND UNTIL INVOICE IS ATTACHED). Đính kèm invoice "
+                          f"vào draft trong Outlook rồi Accept, hoặc Emi: confirmation-attach {n} --attach "
+                          f"Invoice_<ref>.pdf.")
+    mail.fill_draft(r["draft_id"], {}, drop=NO_INVOICE)
+    r.update(text=_without(r["text"], NO_INVOICE), awaiting_invoice=False,
+             attachments=sorted(known) + [a.get("name") for a in extra])
+
+
+def _without(text, line):
+    lines = text.strip().splitlines()
+    return "\n".join(lines[1:]).strip() if lines and lines[0].strip() == line else text
+
+
 def accept(mail, st, tg, n, by="", out=print):
     allowed = _approvers()
     if allowed and (by or "").strip().lstrip("@").lower() not in allowed:
@@ -301,6 +321,8 @@ def accept(mail, st, tg, n, by="", out=print):
         # dev, 2026-11-07: a confirmation drafted before the PDF is approved once the PDF is on it, never before
         raise ReviewError(f"#{n} chưa có PDF xác nhận (DO NOT SEND UNTIL PDF IS ATTACHED). Emi tự đính kèm PDF khi "
                           f"build tool xuất file; Accept sau đó.")
+    if r.get("awaiting_invoice"):
+        _invoice_added_by_hand(mail, n, r)
     new = not in_outlook(r)
     if new:
         _to_outlook(mail, st, r)
@@ -344,8 +366,10 @@ def replaced(mail, st, tg, n, by_n, out=print):
 
 def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     n, r = _pending(mail, st, n)
-    if r.get("awaiting_pdf") and text.strip().splitlines()[0].strip() != DO_NOT_SEND:
-        text = f"{DO_NOT_SEND}\n\n{text.strip()}"  # the line stays until the PDF is on
+    for flag, line in (("awaiting_pdf", DO_NOT_SEND), ("awaiting_invoice", NO_INVOICE)):
+        if r.get(flag):  # the line stays until the PDF / the invoice is on
+            text = f"{line}\n\n{_without(_without(text, DO_NOT_SEND), NO_INVOICE).strip()}"
+            break
     if check:
         check(text)
     r["history"].append({"at": now_iso(), "status": "rewritten", "note": feedback, "old_text": r["text"]})

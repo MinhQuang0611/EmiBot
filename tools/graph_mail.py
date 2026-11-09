@@ -23,7 +23,12 @@ CHECK_LINE = "[CHECK BEFORE SENDING"
 # A confirmation drafted before the build tool's PDF exists (dev, 2026-11-07): this first line, bold red, until
 # confirmation-attach puts the PDF on and takes the line off. Never sent with it.
 DO_NOT_SEND = "[DO NOT SEND UNTIL PDF IS ATTACHED]"
-RED_LINES = (CHECK_LINE, DO_NOT_SEND[:-1])
+# Odeon's confirmation carries our proforma invoice too, and a person still makes that PDF (dev, 2026-11-09, Odeon
+# 4801957: built 08/11 23:55, draft #652 waited all day "chờ invoice" with no PDF on it). The EZFOLIO PDF goes on as
+# soon as it exists; this line takes DO_NOT_SEND's place until the invoice is on too.
+NO_INVOICE = "[DO NOT SEND UNTIL INVOICE IS ATTACHED]"
+STOP_LINES = (DO_NOT_SEND, NO_INVOICE)
+RED_LINES = (CHECK_LINE, DO_NOT_SEND[:-1], NO_INVOICE[:-1])
 # The only address Emi may send to, and only a payment slip (send_slip_forward).
 ACCOUNTING = "accountant@palmahotel.vn"
 
@@ -528,7 +533,7 @@ class GraphMail:
         if EMI_CATEGORY not in draft.get("categories", []):
             raise PermissionError(f"{draft_id} is not an Emi draft; leaving it alone")
         content = self._call("GET", f"/messages/{draft_id}?$select=body").get("body", {}).get("content", "")
-        for old, new in replacements.items():
+        for old, new in replacements.items():  # DO_NOT_SEND -> NO_INVOICE keeps the line's bold red markup
             content = content.replace(html.escape(old), html.escape(new)).replace(old, html.escape(new))
         if drop:
             content = re.sub(r"<p[^>]*>\s*<b><span[^>]*>\s*" + re.escape(html.escape(drop)) +

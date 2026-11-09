@@ -524,7 +524,7 @@ Reservations Team
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
-Both PDFs go with it: the build tool's confirmation and our proforma invoice (`tour-operators.md` Odeon). `draft-confirmation <voucher email id> <row> <body> --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation [ref]" --attach Invoice_[ref].pdf` — it refuses an Odeon row without them.
+Both PDFs go with it: the build tool's confirmation and our proforma invoice (`tour-operators.md` Odeon). `draft-confirmation <voucher email id> <row> <body> --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation [ref]" --attach Invoice_[ref].pdf` — it refuses an Odeon row without the new-email options. No invoice yet: `--attach` left out, the PDF goes on and the first line is `[DO NOT SEND UNTIL INVOICE IS ATTACHED]` until `confirmation-attach <n> --attach` adds it (dev, 2026-11-09).
 
 **Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
 

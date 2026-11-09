@@ -62,14 +62,14 @@ Its own seven steps:
          "Voucher <no.> – Declined (on request)" emi-work/out/<ref>-decline.txt --kind decline --ref <ref>
      ```
 4. **The build tool builds it** and pastes the PDF link in column AQ. Held → Long approves it. I check the PDF against the voucher.
-5. **Proforma invoice**: from the Google Sheets template, numbered "HAYA - <group>", due 10 days before check-in, downloaded as `Invoice_<ref>.pdf`. `py -m tools.emi invoice-data <ref>` prints the number, due date and lines. **The template is not connected to Emi yet**: a person fills and exports it until its sheet ID and layout are given; the report says "chờ invoice <ref>".
+5. **Proforma invoice**: from the Google Sheets template, numbered "HAYA - <group>", due 10 days before check-in, downloaded as `Invoice_<ref>.pdf`. `py -m tools.emi invoice-data <ref>` prints the number, due date and lines. **The template is not connected to Emi yet**: a person fills and exports it until its sheet ID and layout are given; the report says "chờ invoice <ref>". **The invoice never holds back the EZFOLIO PDF (dev, 2026-11-09, Odeon 4801957 waited 13 h with no PDF on its draft):** the confirmation is drafted, or its early draft finished (`confirmation-attach <n>`), as soon as the row is built, with the PDF, group code and confirmation number on it and first line `[DO NOT SEND UNTIL INVOICE IS ATTACHED]` in bold red. Accept is refused until the invoice is on: `confirmation-attach <n> --attach emi-work/out/Invoice_<ref>.pdf`, or a person attaches it in Outlook (Accept then takes the line off). Never `confirmation-hold` for a missing invoice.
 6. **Confirmation**: a new email to both Odeon addresses with **both PDFs**, the build tool's confirmation and the invoice:
    ```
    py -m tools.emi draft-confirmation <voucher email id> <row> emi-work/out/<ref>-confirmation.txt \
        --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com \
        --subject "Odeon Reservation confirmation <ref>" --attach emi-work/out/Invoice_<ref>.pdf
    ```
-   `draft-confirmation` refuses an Odeon row without the new-email options and the invoice. Karen or front office press Send.
+   `draft-confirmation` refuses an Odeon row without the new-email options. No invoice yet → leave `--attach` out: the draft gets the PDF and the line `[DO NOT SEND UNTIL INVOICE IS ATTACHED]` (step 5). Karen or front office press Send.
 7. **Confirm on the extranet**: someone presses Confirm on hotelextranet.odeontours.com. **Who: not decided yet** — every Odeon confirmation's report line says it is still to be pressed.
 
 Changes and cancellations follow the same path, as CHANGE or CANCEL rows.

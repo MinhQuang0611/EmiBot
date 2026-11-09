@@ -82,7 +82,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive, stop_sales, telegram
-from .graph_mail import ACCOUNTING, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, SendBlocked, clean_subject, is_internal
+from .graph_mail import (ACCOUNTING, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES, SendBlocked,
+                         clean_subject, is_internal)
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -971,12 +972,13 @@ def check_no_gaps(text, message_id="<message_id>"):
     Karen answers). A gap inside the text is refused; what is uncertain goes in one first line
     '[CHECK BEFORE SENDING: …]' and to Karen with ask-karen. Karen's name is never in a draft."""
     lines = text.strip().splitlines()
-    if lines and lines[0].strip() == DO_NOT_SEND:  # a confirmation drafted before its PDF (draft-confirmation)
+    if lines and lines[0].strip() in STOP_LINES:  # a confirmation waiting for its PDF or its invoice
         lines = lines[1:]
         while lines and not lines[0].strip():
             lines.pop(0)
-    if any(x.strip().upper().startswith(DO_NOT_SEND[:-1]) for x in lines):
-        raise Refused(f"'{DO_NOT_SEND}' is only ever the first line, and draft-confirmation --before-pdf writes it")
+    if any(x.strip().upper().startswith(tuple(s[:-1] for s in STOP_LINES)) for x in lines):
+        raise Refused(f"'{DO_NOT_SEND}' / '{NO_INVOICE}' is only ever the first line, and draft-confirmation or "
+                      f"confirmation-attach writes it")
     text = "\n".join(lines)
     first = lines[0].strip() if lines else ""
     body = "\n".join(lines[1:]) if CHECK_LINE.match(first) else text
@@ -1660,6 +1662,14 @@ def _built(row):
     return payments.built_at([row]) is not None
 
 
+def _strip_stop_line(text):
+    """The text without a DO NOT SEND first line: the commands put the right one on themselves."""
+    lines = text.strip().splitlines()
+    if lines and lines[0].strip() in STOP_LINES:
+        return "\n".join(lines[1:]).strip()
+    return text.strip()
+
+
 def check_before_pdf(row, body):
     """--before-pdf: the build-only facts as placeholders, nothing else left in [brackets]."""
     stray = [b for b in dict.fromkeys(BRACKETS.findall(body)) if b not in TOKENS and b != DO_NOT_SEND
@@ -1690,27 +1700,28 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
                       f"PDF on it. No second draft.")
     if before and _built(r):
         raise Refused(f"row {args.row} is built and has its PDF: draft-confirmation without --before-pdf")
-    body = read_text(args.body)
+    company = r.get("company", "")
+    subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
+    # Odeon with the EZFOLIO PDF but not our invoice yet: drafted now with the PDF, red line until the invoice is on
+    no_invoice = company == "Odeon" and not before and not attach
+    body = _strip_stop_line(read_text(args.body))
     if before:
-        lines = body.strip().splitlines()
-        if lines and lines[0].strip() == DO_NOT_SEND:
-            body = "\n".join(lines[1:]).strip()
-        body = f"{DO_NOT_SEND}\n\n{body.strip()}"
+        body = f"{DO_NOT_SEND}\n\n{body}"
+    elif no_invoice:
+        body = f"{NO_INVOICE}\n\n{body}"
     check_no_gaps(body, args.message_id)
     if before:
         check_before_pdf(r, body)
     confirmation_check(r)(body)
-    company = r.get("company", "")
-    subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
     if company == "Odeon":
         odeon = operators.OPERATORS["Odeon"]
         missing = [a for a in odeon["confirm_to"] if a not in _addresses(args.to) + _addresses(args.cc)]
-        if not subject or missing or not (attach or before):
+        if not subject or missing:
             raise Refused(f"Odeon's confirmation is a new email to {' and '.join(odeon['confirm_to'])} with both "
                           f"PDFs: --to {','.join(odeon['confirm_to'])} --subject "
                           f"\"{odeon['confirm_subject'].format(ref=ref.split('/')[0].strip())}\" "
-                          f"--attach Invoice_<ref>.pdf (invoice-data {ref})"
-                          + (" — with --before-pdf the invoice goes on with confirmation-attach" if before else ""))
+                          f"--attach Invoice_<ref>.pdf (invoice-data {ref}); no invoice yet → leave --attach out, "
+                          f"first line {NO_INVOICE}, and confirmation-attach <n> --attach … adds it later")
     extra = read_pdfs(attach)
     if before:
         files = extra
@@ -1734,8 +1745,17 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
             "group": r.get("ezfolio_group_code", "")}
     if before:
         meta.update(awaiting_pdf=True, action=r.get("action", ""))
-    later = (f"; WITHOUT the EZFOLIO PDF, first line {DO_NOT_SEND}. Once the row is built: confirmation-attach "
-             if before else "")
+    elif no_invoice:
+        meta.update(awaiting_invoice=True, action=r.get("action", ""))
+    invoice = f"emi-work/out/Invoice_{ref.split('/')[0].strip()}.pdf"
+
+    def later(n):
+        if before:
+            return f"; WITHOUT the EZFOLIO PDF, first line {DO_NOT_SEND}. Once the row is built: confirmation-attach {n}"
+        if no_invoice:
+            return (f"; WITHOUT our proforma invoice, first line {NO_INVOICE}. Once the invoice is made: "
+                    f"confirmation-attach {n} --attach {invoice}")
+        return ""
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how=how, source=args.message_id, kind="confirmation",
                            ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
@@ -1743,7 +1763,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         st.data["reviews"][n].update(meta)
         st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation", awaiting_pdf=before)
         out(f"confirmation draft #{n} sent to Telegram for review with {len(files)} PDF(s), not in Outlook until "
-            f"Accept: {review.PENDING}{n}" + (later + n if before else ""))
+            f"Accept: {review.PENDING}{n}" + later(n))
         close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
     if how == "new":
@@ -1759,7 +1779,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     st.data["reviews"][n].update(meta)
     review.notify(tg, n, st.data["reviews"][n])
     out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc)
-        + (later + n if before else ""))
+        + later(n))
     close_replaced(mail, st, tg, older, n, out=out)
     return d
 
@@ -1805,25 +1825,28 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
     deposit deadline 48 hours from now, and the red DO NOT SEND line comes off. A person's own edits in Outlook stay."""
     now = now or datetime.now(VN)
     n, r = st.review(_review_n(args.n))
-    if r.get("kind") != "confirmation" or not r.get("awaiting_pdf"):
-        raise Refused(f"#{n} is not a confirmation waiting for its PDF")
+    attach = getattr(args, "attach", None) or []
+    if r.get("kind") != "confirmation" or not (r.get("awaiting_pdf") or r.get("awaiting_invoice")):
+        raise Refused(f"#{n} is not a confirmation waiting for its PDF or its invoice")
     if r["status"] != REVIEW_OPEN:
         raise Refused(f"#{n} is {r['status']}: nothing to attach to")
     if review.in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
-        st.close_review(n, "gone", "left Drafts before its PDF was attached")
+        what = "PDF" if r.get("awaiting_pdf") else "invoice"
+        st.close_review(n, "gone", f"left Drafts before its {what} was attached")
         st.drop_awaiting(r.get("ref", ""), int(r.get("row") or 0))
-        raise Refused(f"#{n} left Drafts before its PDF was attached: a person sent or deleted it. If it went out, the "
-                      f"agency has it without the PDF. {r.get('ref')} is back on confirmations-due for a confirmation "
-                      f"with the PDF the usual way; say so in the report")
+        raise Refused(f"#{n} left Drafts before its {what} was attached: a person sent or deleted it. If it went out, "
+                      f"the agency has it without the {what}. "
+                      + (f"{r.get('ref')} is back on confirmations-due for a confirmation with the PDF the usual way; "
+                         if what == "PDF" else "") + "say so in the report")
+    if not r.get("awaiting_pdf"):
+        return _attach_invoice(mail, st, n, r, attach, tg=tg, out=out)
     row = _booking_row(sheet, r)
     if not _built(row):
         raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
                       f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
                       f"#{n} keeps its DO NOT SEND line")
-    attach = getattr(args, "attach", None) or []
-    if row.get("company") == "Odeon" and not attach:
-        raise Refused(f"Odeon's confirmation carries our proforma invoice too: --attach Invoice_<ref>.pdf "
-                      f"(invoice-data {r.get('ref')})")
+    # Odeon's invoice is made by a person: the EZFOLIO PDF doesn't wait for it (dev, 2026-11-09, Odeon 4801957)
+    no_invoice = row.get("company") == "Odeon" and not attach
     extra = read_pdfs(attach)
     path, name, mime, data = pdf_fetch(sheet, row["_row"], out=out)
     if mime != "application/pdf":
@@ -1832,25 +1855,55 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
     text = r["text"]
     for old, new in fills.items():
         text = text.replace(old, new)
-    lines = text.strip().splitlines()
-    if lines and lines[0].strip() == DO_NOT_SEND:
-        text = "\n".join(lines[1:]).strip()
+    text = _strip_stop_line(text)
     confirmation_check(row)(text)
     check_cancellation_days(text, attachments.extract_text(path, data))
+    if no_invoice:
+        text = f"{NO_INVOICE}\n\n{text}"
     files = [(name, data, "application/pdf")] + extra
     if review.in_outlook(r):
-        mail.fill_draft(r["draft_id"], fills)
+        if no_invoice:  # the red line stays red, its words change
+            mail.fill_draft(r["draft_id"], {**fills, DO_NOT_SEND: NO_INVOICE}, drop=None)
+        else:
+            mail.fill_draft(r["draft_id"], fills)
         for fname, fdata, ctype in files:
             mail.add_attachment(r["draft_id"], fname, fdata, content_type=ctype)
     for fname, fdata, ctype in files:
         review.attached(st, r["draft_id"], fname, fdata, ctype, store=pending_store())
     r["history"].append({"at": now_iso(), "status": "pdf attached", "note": name, "old_text": r["text"]})
-    r.update(text=text, awaiting_pdf=False, group=(row.get("ezfolio_group_code") or "").strip(),
-             version=r["version"] + 1)
+    r.update(text=text, awaiting_pdf=False, awaiting_invoice=no_invoice,
+             group=(row.get("ezfolio_group_code") or "").strip(), version=r["version"] + 1)
     st.pdf_attached(r.get("ref", ""), int(r.get("row") or 0))
-    review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
     filled = ", ".join(f"{k} → {v}" for k, v in fills.items()) or "no placeholders"
+    if no_invoice:
+        invoice = f"emi-work/out/Invoice_{(r.get('ref') or '').split('/')[0].strip()}.pdf"
+        review.notify(tg, n, r, note="đã đính kèm PDF xác nhận; còn chờ invoice proforma (DO NOT SEND UNTIL INVOICE "
+                                     "IS ATTACHED)", in_place=True)
+        out(f"#{n}: EZFOLIO PDF attached ({name}), {filled}; first line now {NO_INVOICE}. Once the invoice is made: "
+            f"confirmation-attach {n} --attach {invoice} (invoice-data {r.get('ref')}). Report: chờ invoice "
+            f"{r.get('ref')}")
+        return
+    review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
     out(f"#{n}: {len(files)} PDF(s) attached ({name}), {filled}, DO NOT SEND line removed. Ready for review.")
+
+
+def _attach_invoice(mail, st, n, r, attach, tg=None, out=print):
+    """Draft #n has the EZFOLIO PDF and waits only for our proforma invoice (Odeon): the invoice goes on, the red
+    DO NOT SEND UNTIL INVOICE line comes off."""
+    if not attach:
+        raise Refused(f"#{n} already has its EZFOLIO PDF and waits for our proforma invoice: confirmation-attach {n} "
+                      f"--attach Invoice_<ref>.pdf (invoice-data {r.get('ref')}). Nothing changed.")
+    files = read_pdfs(attach)
+    if review.in_outlook(r):
+        mail.fill_draft(r["draft_id"], {}, drop=NO_INVOICE)
+        for fname, fdata, ctype in files:
+            mail.add_attachment(r["draft_id"], fname, fdata, content_type=ctype)
+    for fname, fdata, ctype in files:
+        review.attached(st, r["draft_id"], fname, fdata, ctype, store=pending_store())
+    r["history"].append({"at": now_iso(), "status": "invoice attached", "note": files[0][0], "old_text": r["text"]})
+    r.update(text=_strip_stop_line(r["text"]), awaiting_invoice=False, version=r["version"] + 1)
+    review.notify(tg, n, r, note="đã đính kèm invoice proforma và bỏ dòng DO NOT SEND", in_place=True)
+    out(f"#{n}: invoice attached ({', '.join(f[0] for f in files)}), DO NOT SEND line removed. Ready for review.")
 
 
 def draft_new(mail, st, args, tg=None, out=print):
@@ -2029,6 +2082,13 @@ def run_confirmations_due(mail, sheet, st, out=print):
     tidy_awaiting(mail, sheet, st, out=out)
     items = payments.needs_confirmation(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, _today_vn())
     out(payments.render_confirmations(items))
+    for n, r in st.data["reviews"].items():
+        # has its EZFOLIO PDF, waits for the proforma a person makes: in the report, never a reason to wake job 2
+        if r.get("awaiting_invoice") and r["status"] == REVIEW_OPEN:
+            ref = (r.get("ref") or "").split("/")[0].strip()
+            out(f"INVOICE #{n} {r.get('ref')}: EZFOLIO PDF on, waiting for our proforma invoice (invoice-data "
+                f"{r.get('ref')}). Once emi-work/out/Invoice_{ref}.pdf is there: confirmation-attach {n} --attach "
+                f"emi-work/out/Invoice_{ref}.pdf. Report: chờ invoice {r.get('ref')}")
     return items
 
 

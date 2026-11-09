@@ -484,6 +484,11 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
     for i in out:
         # a confirmation drafted before the PDF (dev, 07/11): job 2 puts the PDF on it, no second draft
         draft = next((d for (ref, row), d in waiting.items() if ref == i["ref"] and row in i["rows"]), None)
+        if draft is None:
+            # the build tool inserts rows above, so the row the draft was written on may have moved: the same booking
+            # with one waiting draft is that draft (a second confirmation draft would be refused anyway)
+            same = [d for (ref, _), d in waiting.items() if ref == i["ref"]]
+            draft = same[0] if len(same) == 1 else None
         if draft:
             i["attach"] = st.review_by_draft(draft)
     return sorted(out, key=lambda i: i["arrival"])
