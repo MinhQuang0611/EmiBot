@@ -629,6 +629,31 @@ A guest asking the same (via a booking platform's relay address): `Dear Guest,` 
 
 ---
 
+## 10. Front office sent a voucher as a link — ask for the PDF (`draft-reply <id> <body> --kind reply --internal`)
+Dev, 2026-11-09: front office has to send vouchers as a PDF attached to the email, never a OneDrive / SharePoint link (Odeon 8649178 came as a link twice; row 1609 went to the sheet blank). The reply goes to front office (haya@), the sender of the email; reply on the same email. Gentle: a reminder to a colleague, not a reprimand. Vietnamese, the internal voice (`em`):
+```
+Chào [chị/anh Tên, or anh/chị when the email has no name],
+
+Em cảm ơn [chị/anh] đã chuyển voucher [Odeon 8649178] sang bộ phận Đặt phòng.
+
+Email này chỉ có link OneDrive, em không mở được voucher. [Chị/Anh] gửi lại giúp em file PDF đính kèm trực tiếp trong email nhé.
+
+Những lần sau, [chị/anh] gửi voucher dạng file PDF đính kèm giúp em, không gửi link ạ.
+
+Em cảm ơn [chị/anh]!
+
+Trân trọng,
+Bộ phận Đặt phòng
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+- The ref as the email or the link names it; several vouchers in one email → `các voucher [ref], [ref]`.
+- The voucher is already here (row on the sheet, or the PDF in another email): leave out the "gửi lại" paragraph, keep the thanks and the "những lần sau" line.
+- `show` opened the link (`[link file saved: …]`): same as above, the voucher is here; the row is written from the file.
+- Never Karen's name, never the intake sheet (front office doesn't know it).
+
+---
+
 ## What HAYA's sent mail does that Emi does not copy
 - Promising something free that isn't written policy ("early check-in … free of charge") — AGENTS.md rule 8.
 - Holding replies ("our reservations team is checking … we will send … as soon as possible", "Bộ phận Kinh doanh sẽ gửi … trong thời gian sớm nhất") — rule 9.

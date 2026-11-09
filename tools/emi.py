@@ -237,8 +237,8 @@ def show(mail, message_id, work_dir=None, out=print):
 
 def _show_links(mail, message_id, text, work_dir, out, opened):
     """A voucher sent as a OneDrive/SharePoint link (dev, 2026-11-09, Odeon 8649178 row 1609 left blank): the file
-    is opened with the sign-in's Files.Read.All and read like an attachment. Not opened → the line says so, and the
-    voucher is asked for as a PDF (tour-operators.md)."""
+    is opened with the sign-in's Files.Read.All and read like an attachment. Not opened → the line says so. Either
+    way front office is asked to send the PDF attached, not a link (email-templates.md 10)."""
     if not hasattr(mail, "fetch_shared"):
         return
     folder = attachments.message_dir(work_dir, message_id)
@@ -254,7 +254,7 @@ def _show_links(mail, message_id, text, work_dir, out, opened):
                                                                                                          "error")
             detail = " ".join(e.body.split())[:160]
             out(f"\n[link not opened: {url} — HTTP {e.status}, {why} ({detail}). "
-                "Ask for the file as a PDF attachment]")
+                "Front office: ask for the PDF attached, email-templates.md 10]")
             continue
         for f in files:
             if "data" not in f:
