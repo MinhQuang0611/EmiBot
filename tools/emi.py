@@ -203,6 +203,72 @@ def _index_message(mail, m, work_dir):
     return _read_index(work_dir, m["id"])
 
 
+# An operator voucher's own ref as its PDF prints it, and the other numbers on it (dev, 2026-11-10). Odeon's extranet
+# print: "VoucherNo 1151077 Reference No 1238366" / "Operator Voucher No OV613LLPX_11_1 ProviderReservationNo".
+# A ref always has a digit, so a label pypdf moved next to the field is never taken for one.
+_REF = r"((?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9][A-Za-z0-9_\-]{3,})"
+VOUCHER_FORMS = [
+    ("Odeon", re.compile(r"Operator\s*Voucher\s*No\.?\s*:?\s*" + _REF),
+     [re.compile(r"(?<!Operator )VoucherNo\.?\s*:?\s*(\d{5,})"), re.compile(r"Reference\s*No\.?\s*:?\s*(\d{5,})")]),
+]
+
+
+def vouchers_in(name, text):
+    """[(operator, ref, [other numbers])], one per voucher in the file's text."""
+    found = []
+    for operator, main, others in VOUCHER_FORMS:
+        for m in main.finditer(text or ""):
+            found.append((operator, m.group(1), sorted({x.group(1) for o in others for x in o.finditer(text)})))
+    return found
+
+
+def _email_files(work_dir, message_id):
+    """Each attached file's text for one email: the mail-find/show index, else the files show saved before it."""
+    idx = _read_index(work_dir, message_id)
+    if idx is not None:
+        return [(f["name"], f.get("text") or "") for f in idx.get("files", [])]
+    folder = attachments.message_dir(work_dir, message_id)
+    if not os.path.isdir(folder):
+        return []
+    files = []
+    for name in sorted(os.listdir(folder)):
+        with open(os.path.join(folder, name), "rb") as f:
+            files.append((name, attachments.search_text(name, f.read())))
+    return files
+
+
+def check_vouchers_handled(message_id, outcome, load_rows, work_dir=None, out=print):
+    """done refuses an email whose attached voucher has no row and isn't named in the outcome (dev, 2026-11-10):
+    front office's 05/11 17:47 email carried two Odeon vouchers; on 08/11 Emi wrote row 1710 for 4799222, marked the
+    email done and OV613LLPX_11_1 was never written, until Odeon's reminder made a row with guests TBA.
+    load_rows() gives both sheets' rows, read only when a voucher isn't named in the outcome; None = not readable,
+    so only the outcome is checked and that is said."""
+    work_dir = work_dir or WORK_DIR
+    said = _squash(outcome)
+    unnamed = [(operator, ref, name) for name, text in _email_files(work_dir, message_id)
+               for operator, ref, others in vouchers_in(name, text)
+               if not any(_squash(n) in said for n in [ref] + others)]
+    if not unnamed:
+        return
+    rows = load_rows()
+    if rows is None:
+        out("GAP: sheet not readable, vouchers checked against the outcome only")
+    refs_on_sheet = [_squash(r.get("booking_ref")) for r in rows or []]
+    missing = [f"{operator} {ref} ({name})" for operator, ref, name in unnamed
+               if not any(_squash(ref) in r for r in refs_on_sheet)]
+    if missing:
+        raise Refused("VOUCHER NOT HANDLED: " + "; ".join(missing) + ". Every voucher in the email gets its row "
+                      "from that voucher; one already handled another way is named in the outcome with what happened "
+                      "(e.g. 'OV613LLPX_11_1 duplicate of row 1777'). Then run done again.")
+
+
+def _rows_for_done():
+    try:
+        return config.sheet().rows() + live_rows(config.live_sheet(), out=lambda *_: None)
+    except Exception:
+        return None
+
+
 def mail_find(mail, text, out=print, work_dir=None, days=ATTACHMENT_LOOKBACK_DAYS):
     """Emails matching text in subject, body or sender (Graph search), and, since 2026-11-09, emails whose attached
     file carries it: Graph doesn't search inside a PDF, and front office's vouchers come with no subject, the ref only
@@ -2697,6 +2763,7 @@ def main(argv=None):
         elif c == "sent-dump":
             sent_dump(config.mail(), args.days, args.out)
         elif c == "done":
+            check_vouchers_handled(args.message_id, " ".join(args.outcome), _rows_for_done)
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
             print("marked handled")
