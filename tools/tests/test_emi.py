@@ -353,6 +353,20 @@ class SheetCommandsTest(unittest.TestCase):
         self.assertEqual(len(emi.sheet_find(sh, "31/10/2026", out=quiet)), 2)
         self.assertEqual(emi.sheet_find(sh, "1/10/2026", out=quiet), [])  # a date matches whole, not part
 
+    def test_find_ignores_accents_and_word_order(self):
+        # dev 10/11: 'Edita Šarenac' (Booking.com 5859857089) was live row 1792 'EDITA SARENAC', SynXis only
+        sh, _ = sheet_with([["NEW", "SynXis 92777EF003335 (Booking.com)", "EDITA SARENAC", "Booking.com",
+                             "13/11/2026"]])
+        quiet = lambda *_: None
+        for text in ("Šarenac", "Edita Šarenac", "Šarenac Edita", "sarenac"):
+            self.assertEqual(len(emi.sheet_find(sh, text, out=quiet)), 1, text)
+        lines = []
+        self.assertEqual(emi.sheet_find(sh, "5859857089", out=lines.append), [])
+        self.assertTrue(any(l.startswith("NOT FOUND BY NUMBER") for l in lines))
+        lines = []
+        emi.sheet_find(sh, "Petrov", out=lines.append)
+        self.assertFalse(any(l.startswith("NOT FOUND BY NUMBER") for l in lines))
+
 
 def sheet_row(**cells):
     return [cells.get(h, "") for h in REAL_HEADER]

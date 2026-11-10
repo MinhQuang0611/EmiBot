@@ -129,7 +129,7 @@ def _offers(data, spo, ahead, gaps):
         return (tier or None) if eb else None, bool(data.get("free_nights")), []
     if spo is None:
         raise RateError(f"{data['operator']} is priced with exactly the offer the voucher's SPO code applies: pass "
-                        f"--spo <code[,code]> as printed on the voucher, or --spo none")
+                        f" FO gửi voucher của Pegas rồi mà sao Emi không tạo email confirm hay reject booking này <code[,code]> as printed on the voucher, or --spo none")
     eb_pct, free, extra = None, False, []
     # An Odeon voucher prints its offers inside the SPOCode line, a night count per offer set (dev, 2026-11-05):
     # "10 * (Contract Revise Rates(C[D45REB10%]) (C[S10P09]) ) + 3 * (Contract Revise Rates(C[S10P09]) )".

@@ -278,6 +278,14 @@ def _date(v, fmt):
         return None
 
 
+def _named_ota(name):
+    """An OTA of the channel-type list (Oh My Hotel, MG, Mytour…), its legal name included; not the B2B sites."""
+    from . import payments
+    words = f" {_norm(name or '')} "
+    return canonical_company(name or "") in payments.OTA_COMPANIES or any(
+        f" {k} " in words for k in payments._OTA_KEYS if k not in payments.B2B_KEYS)
+
+
 def check_row(rec, room_codes=None, earlier_arrivals=None):
     """(errors, warnings) for one row. Errors block the write; warnings are printed.
     earlier_arrivals: the arrival dates on the booking's rows already on the sheet (a CHANGE's past arrival is
@@ -376,8 +384,15 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
     if g("room_code"):
         if room_codes is not None and g("room_code") not in room_codes:
             errors.append(f"room_code: {g('room_code')!r} is not on the Room codes tab; use one of {sorted(room_codes)}")
-        if g("room_code") in NEVER_FOR_AGENCIES and g("channel_type") in AGENCY_CHANNELS:
+        from . import payments  # here, not at the top: payments imports this module
+        online = payments.ota_company(g("company"))
+        # dev 10/11, Ohmyhotel V26082610068H01: the backfill wrote Ohmyhotel as "TA", a CHANGE copied it, this
+        # check then refused the booking's own TW-DLX and the row went in as DLX-SV. An online site sells TW-DLX.
+        if g("room_code") in NEVER_FOR_AGENCIES and g("channel_type") in AGENCY_CHANNELS and not online:
             errors.append(f"room_code: {g('room_code')} is never sold to agencies")
+    if action in ("NEW", "CHANGE", "CANCEL") and g("channel_type") == "TA" and _named_ota(g("company")):
+        errors.append(f"channel_type: {g('company')} is an OTA (booking-intake.md, Channel type), not TA — the "
+                      f"EZFOLIO backfill wrote some OTAs as TA; write OTA, and COD the OTA way")
     if re.search(r"https?://|AAMk", g("source_email") + " " + g("notes")):
         errors.append("source_email/notes: no links or email IDs")
     for k in NOT_EMI:

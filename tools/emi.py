@@ -465,9 +465,13 @@ def _where(r):
 def sheet_find(sheet, text, out=print, live=None):
     """booking_ref, guest_names or confirmation_no containing text, or arrival equal to it (DD/MM/YYYY): a guest
     writing with the OTA's own number and a Cyrillic name is found by the arrival date (dev 30/10, Booking.com
-    5486733008, on the sheet only as SynXis 92777EF003114 'Anna Ivanova')."""
-    t = text.strip().lower()
-    match = lambda r: (any(t in r.get(c, "").lower() for c in ("booking_ref", "guest_names", "confirmation_no"))
+    5486733008, on the sheet only as SynXis 92777EF003114 'Anna Ivanova').
+    Accents and word order don't count (dev 10/11: 'Edita Šarenac' writing with Booking.com 5859857089 was live
+    row 1792 'EDITA SARENAC', SynXis 92777EF003335 (Booking.com), and the draft said 'not found on the sheet')."""
+    t = text.strip()
+    words = payments._plain(t).split()
+    match = lambda r: (any(words and all(w in payments._plain(r.get(c, "")) for w in words)
+                           for c in ("booking_ref", "guest_names", "confirmation_no"))
                        or t == r.get("arrival", "").strip())
     hits = [r for r in sheet.rows() if match(r)]
     found_live = [r for r in live_rows(live, out) if match(r)]
@@ -475,6 +479,11 @@ def sheet_find(sheet, text, out=print, live=None):
                                        "'_sheet': 'live')" if live is not None else ""))
     for r in hits + found_live:
         out(json.dumps({k: v for k, v in r.items() if v}, ensure_ascii=False))
+    if not (hits or found_live) and re.fullmatch(r"[A-Za-z]{0,4}\d{6,}\w*", t):
+        out("NOT FOUND BY NUMBER — not yet 'not on the sheet'. An OTA booking is often on the sheet only under its "
+            "SynXis number ('SynXis 92777EF003335 (Booking.com)', no Booking.com number). Run sheet-find <guest "
+            "surname> and sheet-find <arrival DD/MM/YYYY> (the Booking.com / Agoda message prints the stay), and "
+            "mail-find this number for the SynXis notice.")
     return hits + found_live
 
 
@@ -774,6 +783,27 @@ def check_not_a_repeat(records, state):
                   f"change something, put it in its column")
 
 
+def keep_room_types(records, state):
+    """A CHANGE keeps the booking's room types unless the email changes them (dev, 2026-11-10, Ohmyhotel
+    V26082610068H01: a pick-up request went on CHANGE row 1784 as DLX-SV, the booking being TW-DLX on row 1459, and
+    the build tool stopped to move 2 rooms to another type). A room-type change names old and new code in
+    what_changed ('Room type TW-DLX → DLX-SV')."""
+    changes = [r for r in records if r.get("action") == "CHANGE"]
+    old = {s.get("room_code") for s in state or [] if s.get("action") != "CANCEL" and s.get("room_code")}
+    new = {r.get("room_code") for r in changes if r.get("room_code")}
+    if not changes or not old or not new or new == old:
+        return
+    said = " ".join(str(r.get("what_changed") or "") for r in changes).upper()
+    if any(c.upper() in said for c in old - new) and any(c.upper() in said for c in new - old):
+        return
+    src = state[0]
+    raise Refused(f"{changes[0].get('booking_ref')}: the booking is {', '.join(sorted(old))} ({_where(src)}); this "
+                  f"CHANGE writes {', '.join(sorted(new))}. A CHANGE keeps the booking's room_code unless the email "
+                  f"itself changes the room type: then what_changed names both ('Room type {sorted(old)[0]} → "
+                  f"{sorted(new - old)[0]}'). Otherwise copy room_code from {_where(src)}. An OTA's or B2B site's "
+                  f"'Deluxe Twin Sea View' is TW-DLX; only a TA's 'Deluxe Twin' is DLX-SV")
+
+
 PROVISIONAL = re.compile(r"provisional|tạm tính|giá tạm", re.I)
 
 
@@ -1013,6 +1043,7 @@ def sheet_append(sheet, data, out=print, live=None):
         records = carry_over(records, current, out=out)
         records = payments_of_booking(records, current, out=out)
         check_not_a_repeat(records, current)
+        keep_room_types(records, current)
         records = fill_group_code(records, rows + elsewhere, sheet.group_code_columns(), out=out)
         keep_known_rate(records, rows + elsewhere, sheet.group_code_columns())
     sheet_check(sheet, records, out=out)
