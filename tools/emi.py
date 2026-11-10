@@ -536,6 +536,10 @@ def check_rows(sheet, records, fresh=True):
                      f"back. If the thread shows HAYA already has this booking (its confirmation, a confirmation "
                      f"number or group code, a modification, a payment, the guest in house), it is in EZFOLIO: "
                      f"CHANGE rows with 'original booking not on the sheet', not NEW (booking-intake.md)")
+        if fresh and rec.get("action") == "NEW" and str(rec.get("channel_type") or "").strip() == "Tour operator":
+            gate = operators.on_request_gate(rec, sheet.header)
+            if gate:
+                e = e + [gate]
         errors += [f"{label}: {x}" for x in e]
         warnings += [f"{label}: {x}" for x in w]
     if len({r.get("booking_ref", "") for r in records}) > 1:
@@ -2316,22 +2320,20 @@ def run_on_request(args, data, out=print):
     verdict, why = operators.on_request(result, avail.fits(result, alloc), quoting.parse_date(args.arrival),
                                         _today_vn())
     age = _stale(data)
-    if age:  # a decline or an accept on old figures is not Emi's to make
+    if age:  # a suggestion on old figures is no suggestion
         verdict, why = "ASK KAREN", [f"availability sheet {age}"] + why
-    out(f"\nON REQUEST: {verdict} — {'; '.join(why)}")
-    if verdict == "REJECT":
-        out(f"Next: CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\"), then the decline "
-            f"draft (email-templates.md section 6): Odeon -> draft-new to "
-            f"{','.join(operators.OPERATORS['Odeon']['confirm_to'])} --kind decline; others -> draft-reply "
-            f"--kind decline on the operator's email.")
-    elif verdict == "ACCEPT":
-        out("Next: NEW rows, as for an allotment booking (tour-operators.md step 4): to-price, rate_source "
-            "\"<Operator> contract\", internal_notes \"On request, accepted by the on-request rule\". No draft now: "
-            "the reply is the confirmation once pdf_link is there (job 2). done <message_id> \"on request accepted, "
-            "confirmation once pdf_link is there\".")
-    else:
-        out("Next: no row yet. ask-karen <message_id> \"<booking, dates, rooms: can we accept it?>\" --ref <ref>, "
-            "then done <message_id> \"waiting on Karen E-…\". Her yes -> NEW rows; her no -> the REJECT path.")
+    hint = {"REJECT": "Emi đề xuất TỪ CHỐI", "ACCEPT": "Emi đề xuất NHẬN"}.get(verdict, "Emi không đề xuất được")
+    out(f"\nON REQUEST: suggest {verdict} — {'; '.join(why)}")
+    # dev, 2026-11-10, Pegas 11131133: Karen decides every on-request booking; the rule is only the suggestion.
+    out(f"Next: Karen decides (dev 10/11). No row, no draft now. ask-karen <message_id> \"<operator> <ref> on "
+        f"request, <dates, rooms, pax>: nhận không? {hint}: {'; '.join(why)}\" --ref <ref>, then done <message_id> "
+        f"\"on request, waiting on Karen E-…\".\n"
+        f"  Her yes -> NEW rows as for an allotment booking (tour-operators.md step 4), internal_notes \"On request, "
+        f"accepted by Karen E-…\", and the confirmation --before-pdf.\n"
+        f"  Her no -> CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\"), then the decline "
+        f"draft (email-templates.md section 6): Odeon -> draft-new to "
+        f"{','.join(operators.OPERATORS['Odeon']['confirm_to'])} --kind decline; others -> draft-reply "
+        f"--kind decline on the operator's email.")
     return verdict
 
 

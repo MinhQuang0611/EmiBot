@@ -61,6 +61,59 @@ class OnRequestTest(unittest.TestCase):
         self.assertEqual(v, "ACCEPT")  # within 30 days occupancy doesn't decide
 
 
+class OnRequestGateTest(unittest.TestCase):
+    """dev, 2026-11-10, Pegas 11131133 'Allotment: No (on request)' went on the sheet and got its confirmation with
+    nobody asked: every on-request booking is Karen's call, no NEW row until she says yes."""
+    HEADER = ("action", "channel_type", "internal_notes", "notes")
+
+    def gate(self, **kw):
+        return operators.on_request_gate(dict(action="NEW", channel_type="Tour operator", **kw), self.HEADER)
+
+    def test_pegas_on_request_refused(self):
+        self.assertIn("Karen", self.gate(internal_notes="Pegas robot: Allotment: No (on request)"))
+        self.assertIn("Karen", self.gate(internal_notes="Allotment", notes="1. Pegas 11131133, on request"))
+        self.assertIn("Karen", self.gate(internal_notes="On request, accepted by the on-request rule"))
+        self.assertIn("Karen", self.gate(internal_notes="Allotment: No"))
+        self.assertIn("Karen", self.gate(internal_notes="Anex Partly Allotment"))
+
+    def test_karen_yes_passes(self):
+        self.assertIsNone(self.gate(internal_notes="On request, accepted by Karen E-301"))
+
+    def test_allotment_passes(self):
+        self.assertIsNone(self.gate(internal_notes="Allotment"))
+        self.assertIsNone(self.gate(internal_notes="Allotment", notes="5. Baby cot upon request"))
+
+    def test_unsaid_refused(self):
+        self.assertIn("internal_notes must say", self.gate(internal_notes=""))
+
+    def test_sheet_without_internal_notes_only_checks_words(self):
+        self.assertIsNone(operators.on_request_gate({"notes": "Pegas 11131200"}, ("notes",)))
+
+    def test_check_rows_blocks_new_not_change(self):
+        sheet = SimpleNamespace(header=list(self.HEADER))
+        rec = dict(action="NEW", channel_type="Tour operator", internal_notes="Allotment: No (on request)")
+        with mock.patch.object(emi.schema, "room_codes", return_value=None), \
+                mock.patch.object(emi.schema, "check_row", return_value=([], [])), \
+                mock.patch.object(emi, "_earlier_arrivals", return_value={}):
+            errors, _ = emi.check_rows(sheet, [rec])
+            self.assertTrue(any("Karen" in e for e in errors), errors)
+            errors, _ = emi.check_rows(sheet, [dict(rec, action="CHANGE")])
+            self.assertEqual(errors, [])
+
+    def test_on_request_output_asks_karen_even_when_free(self):
+        lines = []
+        with mock.patch.object(emi, "run_availability", return_value=occupancy([40])), \
+                mock.patch.object(emi.avail, "fits", return_value=[]), \
+                mock.patch.object(emi, "_stale", return_value=None), \
+                mock.patch.object(emi, "_today_vn", return_value=date(2026, 11, 10)):
+            v = emi.run_on_request(SimpleNamespace(alloc="QDPL:1", arrival="10/12/2026"), {}, out=lines.append)
+        self.assertEqual(v, "ACCEPT")
+        text = "\n".join(lines)
+        self.assertIn("suggest ACCEPT", text)
+        self.assertIn("ask-karen", text)
+        self.assertIn("No row, no draft now", text)
+
+
 class AnexRobotTest(unittest.TestCase):
     def setUp(self):
         self._mode = os.environ.pop("EMI_DRAFT_MODE", None)

@@ -122,10 +122,11 @@ COMMON_STEPS = [
     "Price it from that operator's own contract (to-price): early bird, stay/pay and surcharges, the full "
     "calculation in notes item 6.",
     "Allotment: NEW row, one row per room type.",
-    "On request (release passed or allotment used up): on-request. No availability, or occupancy over 60% with "
-    "check-in more than 30 days away -> reject: CANCEL row 'On request booking cannot be accommodated' + decline "
-    "draft. Anything else -> accepted: NEW rows like an allotment booking, reply = the confirmation once pdf_link "
-    "is there (dev 07/11). Ask Karen only when the availability sheet is stale or unreadable.",
+    "On request (release passed or allotment used up): Karen decides, every time (dev 10/11). on-request gives "
+    "Emi's suggestion (no availability, or occupancy over 60% with check-in more than 30 days away -> REJECT; "
+    "else ACCEPT); ask-karen with it, no row, no draft. Her yes -> NEW rows (internal_notes 'On request, "
+    "accepted by Karen E-…') + the confirmation --before-pdf; her no -> CANCEL row 'On request booking cannot be "
+    "accommodated' + decline draft.",
     "The build tool builds it and puts the PDF link in pdf_link (column AQ). Held -> Long approves it. Check the "
     "PDF against the booking.",
     "Confirmation: a reply draft on the original thread with the group code and the EZFOLIO PDF.",
@@ -163,10 +164,39 @@ def info(operator):
 
 # --- on request ---
 
+# dev, 2026-11-10, Pegas 11131133 ("Allotment: No (on request)"): "Booking on request thì phải xin ý kiến có nhận
+# hay không. Nhưng Emi vẫn tự nhập vào." Replaces 07/11's "not rejected = accepted": every on-request booking goes
+# to Karen; no NEW row until she says yes.
+_ON_REQUEST = re.compile(r"\bon[\s_-]*request|partly\s+allotment|after\s+release|allotment\s*:\s*no\b|"
+                         r"ngoài\s+allotment|không\s+(?:có\s+)?allotment", re.I)
+_KAREN_YES = re.compile(r"accepted\s+by\s+karen|karen\s+(?:accepted|said\s+yes|ok|đồng\s+ý|duyệt)", re.I)
+_ALLOTMENT = re.compile(r"\ballotment\b", re.I)
+_GATE_FIELDS = ("internal_notes", "notes", "missing_info", "what_changed", "rate_source",
+                "discount_promo")
+
+
+def on_request_gate(rec, header):
+    """An error for a tour operator NEW row that would book an on-request booking Karen hasn't accepted, else None.
+    internal_notes says which it is: 'Allotment' or 'On request, accepted by Karen E-nnn'."""
+    inote = str(rec.get("internal_notes") or "")
+    text = " ".join(str(rec.get(k) or "") for k in _GATE_FIELDS)
+    if _ON_REQUEST.search(text):
+        if _KAREN_YES.search(inote):
+            return None
+        return ("on request: no NEW row until Karen says yes (dev, 10/11, Pegas 11131133). on-request for the "
+                "check, then ask-karen <id> \"<operator> <ref> on request, <dates, rooms>: nhận không? Emi đề xuất "
+                "<ACCEPT/REJECT, why>\" --ref <ref>, done <id> \"waiting on Karen E-…\". Her yes -> these rows with "
+                "internal_notes 'On request, accepted by Karen E-…'; her no -> CANCEL rows + decline draft")
+    if "internal_notes" in (header or ()) and not _ALLOTMENT.search(inote):
+        return ("tour operator NEW: internal_notes must say 'Allotment' (the booking says allotment, inside the "
+                "release) or 'On request, accepted by Karen E-…' (dev, 10/11): an on-request booking is Karen's call")
+    return None
+
+
 def on_request(result, problems, arrival, today):
-    """('REJECT' | 'ACCEPT' | 'ASK KAREN', reasons). result = availability.check(), problems = availability.fits().
-    Not rejected = accepted (dev, 2026-11-07, Anex 112976780: 'nếu không thì accept'); ASK KAREN only when the
-    rule can't be checked: check-in more than 30 days away and a night's occupancy missing from the sheet."""
+    """('REJECT' | 'ACCEPT' | 'ASK KAREN', reasons): Emi's suggestion to Karen, never the decision (dev, 10/11).
+    result = availability.check(), problems = availability.fits(). REJECT: no room, or occupancy over 60% with
+    check-in more than 30 days away; ASK KAREN: the 60% rule can't be checked; otherwise ACCEPT."""
     if problems:
         return "REJECT", [f"no availability: {'; '.join(problems)}"]
     away = (arrival - today).days

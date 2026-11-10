@@ -528,7 +528,7 @@ Both PDFs go with it: the build tool's confirmation and our proforma invoice (`t
 
 **Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
 
-**Decline on request** — when `on-request` says REJECT (no availability, or occupancy over 60% with check-in more than 30 days away; dev, 2026-10-29), or Karen has said no. `--kind decline`. Reply on the operator's email (Anex: to reservation@anexvietnam.com); subject `Booking [no.] – Declined (on request)`:
+**Decline on request** — only once Karen has said no (dev, 2026-11-10: every on-request booking is her call; `on-request`'s REJECT is only my suggestion to her). `--kind decline`. Reply on the operator's email (Anex: to reservation@anexvietnam.com); subject `Booking [no.] – Declined (on request)`:
 ```
 Dear [Pegas / Selfie Travel] team,
 
