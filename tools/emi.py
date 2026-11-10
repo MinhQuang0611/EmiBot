@@ -15,6 +15,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi direct-ref                        # next booking_ref for a direct guest, HAYA-D + number
     python -m tools.emi sheet-rows <first> [<last>]       # rows as they are on the sheet, filled cells only
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
+    python -m tools.emi change-replay                     # every CHANGE on the live sheet through the CHANGE rules
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json> --ref <booking_ref>  # change named cells on one row
     python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N] [--replaces N]
@@ -575,6 +576,38 @@ def sheet_rows(sheet, first, last=None, out=print):
     out(f"{len(rows)} row(s)")
 
 
+def change_replay(rows, out=print):
+    """Every CHANGE email on the sheet, against the booking as it stood before it, through the CHANGE checks that
+    compare with the booking (keep_room_types). Read only. Run it after a new CHANGE rule: a rule tried on the one
+    case that prompted it collided with others (dev, 2026-11-10: 'never TW-DLX to agencies' + a backfill 'TA' +
+    09/11's 'TA Deluxe Twin = DLX-SV' wrote row 1784 DLX-SV)."""
+    def when(r):
+        try:
+            return datetime.strptime(str(r.get("received_at", "")).strip(), "%d/%m/%Y %H:%M")
+        except ValueError:
+            return None
+    groups = {}
+    for r in rows:
+        if r.get("action") == "CHANGE" and when(r) and _parts(r.get("booking_ref")):
+            groups.setdefault((min(_parts(r["booking_ref"])), r["received_at"]), []).append(r)
+    checked = refused = 0
+    for recs in groups.values():
+        mine, at = _parts(recs[0]["booking_ref"]), when(recs[0])
+        earlier = sorted((x for x in rows if _parts(x.get("booking_ref")) & mine and when(x) and when(x) < at
+                          and x.get("action") in ("NEW", "CHANGE", "EXISTING BOOKING")),
+                         key=lambda x: (when(x), x["_row"]))
+        if not earlier:
+            continue
+        checked += 1
+        try:
+            keep_room_types(recs, [x for x in earlier if when(x) == when(earlier[-1])])
+        except Refused as e:
+            refused += 1
+            out(f"rows {', '.join(str(r['_row']) for r in recs)} ({recs[0].get('ez_status') or 'no ez_status'}): {e}")
+    out(f"{refused} of {checked} CHANGE emails would be refused today")
+    return refused
+
+
 def sheet_audit(sheet, first_row=3, out=print):
     """Check rows already on the sheet (from first_row on) with the same rules as sheet-check, one line each.
     For finding rows written before a rule existed, or by hand."""
@@ -783,25 +816,42 @@ def check_not_a_repeat(records, state):
                   f"change something, put it in its column")
 
 
+ROOM_WORDS = re.compile(r"room|phòng|hạng|twin|double|triple|quad|suite|deluxe|superior|standard|family", re.I)
+ROOM_MOVE = re.compile(r"→|->|chang|upgrad|downgrad|replac|remov|add|adjust|split|mix|lock|more|instead|swap|extra|"
+                       r"đổi|thay|nâng|chuyển|thêm|bớt|bỏ|tách", re.I)
+ROOM_GONE = re.compile(r"→|->|remov|cancel|drop|replac|instead|release|no longer|bỏ|hủy|huỷ|thay|bớt", re.I)
+
+
 def keep_room_types(records, state):
-    """A CHANGE keeps the booking's room types unless the email changes them (dev, 2026-11-10, Ohmyhotel
-    V26082610068H01: a pick-up request went on CHANGE row 1784 as DLX-SV, the booking being TW-DLX on row 1459, and
-    the build tool stopped to move 2 rooms to another type). A room-type change names old and new code in
-    what_changed ('Room type TW-DLX → DLX-SV')."""
+    """A CHANGE keeps the booking's room types unless the email changes them, and says so in what_changed.
+    - A type that appears or swaps: what_changed names a room and a move (dev, 2026-11-10, Ohmyhotel
+      V26082610068H01: a pick-up request went on CHANGE row 1784 as DLX-SV, the booking being TW-DLX on row 1459,
+      and the build tool stopped to move 2 rooms to another type).
+    - A type left out: the CHANGE is the whole booking as it stands, so a type it leaves out is gone (the scan of
+      10/11: AAT261116.553 row 250 'add 2 children' and 141C0127Y row 668 'fix child surcharge' each wrote one room
+      type of three). what_changed names that type or its removal.
+    A payment CHANGE leaving a type out is refused earlier in sheet_append."""
     changes = [r for r in records if r.get("action") == "CHANGE"]
     old = {s.get("room_code") for s in state or [] if s.get("action") != "CANCEL" and s.get("room_code")}
     new = {r.get("room_code") for r in changes if r.get("room_code")}
     if not changes or not old or not new or new == old:
         return
-    said = " ".join(str(r.get("what_changed") or "") for r in changes).upper()
-    if any(c.upper() in said for c in old - new) and any(c.upper() in said for c in new - old):
-        return
-    src = state[0]
-    raise Refused(f"{changes[0].get('booking_ref')}: the booking is {', '.join(sorted(old))} ({_where(src)}); this "
-                  f"CHANGE writes {', '.join(sorted(new))}. A CHANGE keeps the booking's room_code unless the email "
-                  f"itself changes the room type: then what_changed names both ('Room type {sorted(old)[0]} → "
-                  f"{sorted(new - old)[0]}'). Otherwise copy room_code from {_where(src)}. An OTA's or B2B site's "
-                  f"'Deluxe Twin Sea View' is TW-DLX; only a TA's 'Deluxe Twin' is DLX-SV")
+    said = " ".join(str(r.get("what_changed") or "") for r in changes)
+    src, ref = state[0], changes[0].get("booking_ref")
+    room_named = ROOM_WORDS.search(said) or any(c.lower() in said.lower() for c in old | new)
+    if new - old and not (room_named and ROOM_MOVE.search(said)):
+        raise Refused(f"{ref}: the booking is {', '.join(sorted(old))} ({_where(src)}); this CHANGE writes "
+                      f"{', '.join(sorted(new))} and what_changed says nothing about a room change. A CHANGE keeps the "
+                      f"booking's room_code: copy it from {_where(src)}, or leave room_code blank for a one-type "
+                      f"booking and sheet-append copies it. Only when the email itself changes the room type, "
+                      f"what_changed says it ('Room type {sorted(old)[0]} → {sorted(new - old)[0]}'). An OTA's or B2B "
+                      f"site's 'Deluxe Twin Sea View' is TW-DLX; only a travel company's 'Deluxe Twin' is DLX-SV")
+    gone = sorted(c for c in old - new if c.lower() not in said.lower())
+    if gone and not (new - old) and not ROOM_GONE.search(said):  # a stated swap (passed above) replaces the old type
+        raise Refused(f"{ref}: the booking also has {', '.join(gone)} ({_where(src)}), which this CHANGE leaves out. A "
+                      f"CHANGE repeats every room type of the booking as it stands (one room_lines entry each, copied "
+                      f"from {_where(src)}); a type the email removes is named in what_changed ('{gone[0]} "
+                      f"removed')")
 
 
 PROVISIONAL = re.compile(r"provisional|tạm tính|giá tạm", re.I)
@@ -2618,6 +2668,7 @@ def parser():
     s.add_argument("first", type=int); s.add_argument("last", type=int, nargs="?")
     s = sub.add_parser("sheet-audit", help="check rows already on the sheet with the sheet-check rules")
     s.add_argument("--from-row", type=int, default=3)
+    sub.add_parser("change-replay", help="every CHANGE on the live sheet through today's CHANGE checks (read-only)")
     s = sub.add_parser("sheet-append"); s.add_argument("file")
     s = sub.add_parser("forward-slip", help="a payment slip to accounting: sent at once with EMI_SEND_SLIPS=1")
     s.add_argument("message_id")
@@ -2774,7 +2825,7 @@ def parser():
 
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
-READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "quote", "availability", "payments-due",
+READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "change-replay", "quote", "availability", "payments-due",
              "confirmations-due", "pickup", "build-stuck", "deposit-extension")
 
 
@@ -2822,6 +2873,8 @@ def main(argv=None):
             sheet_rows(config.sheet(), args.first, args.last)
         elif c == "sheet-audit":
             sheet_audit(config.sheet(), args.from_row)
+        elif c == "change-replay":
+            change_replay((config.live_sheet() or config.sheet()).rows())
         elif c == "sheet-append":
             sheet_append(config.sheet(), read_json(args.file), live=config.live_sheet())
         elif c == "sheet-update":

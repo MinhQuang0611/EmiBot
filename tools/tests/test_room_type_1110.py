@@ -20,13 +20,38 @@ class KeepRoomTypesTest(unittest.TestCase):
             emi.keep_room_types([PICKUP], [BACKFILL])
         emi.keep_room_types([dict(PICKUP, room_code="TW-DLX")], [BACKFILL])
 
-    def test_a_room_type_change_names_both_codes(self):
+    def test_a_room_type_change_says_so(self):
         emi.keep_room_types([dict(PICKUP, what_changed="Room type TW-DLX → DLX-SV, guest asked")], [BACKFILL])
+        # live row 1181, in words: Metta Voyage MV09-COD26-1206
+        emi.keep_room_types([dict(PICKUP, what_changed="Room type Superior Double Pool View → Deluxe Double Sea View")],
+                            [BACKFILL])
+        emi.keep_room_types([dict(PICKUP, what_changed="Room mix adjusted to 2 Deluxe Double")], [BACKFILL])
+
+    def test_a_type_left_out_is_named(self):
+        # scan 10/11: AAT261116.553 row 250 'add 2 children' wrote only DLX-SV of DLX-SV + STD + SUP-DBL
+        state = [dict(BACKFILL, room_code=c) for c in ("DLX-SV", "STD", "SUP-DBL")]
+        kids = dict(PICKUP, room_code="DLX-SV", what_changed="Agency asks to add 2 children aged 9 sharing bed. "
+                                                              "Rooms/dates unchanged")
+        with self.assertRaisesRegex(emi.Refused, "leaves out"):
+            emi.keep_room_types([kids], state)
+        emi.keep_room_types([dict(kids, room_code=c) for c in ("DLX-SV", "STD", "SUP-DBL")], state)
+        emi.keep_room_types([dict(kids, what_changed="Standard Garden and Superior Double removed")], state)
+        emi.keep_room_types([dict(kids, what_changed="STD, SUP-DBL cancelled by the agency")], state)
 
     def test_nothing_to_compare(self):
         emi.keep_room_types([PICKUP], [dict(BACKFILL, room_code="")])
         emi.keep_room_types([PICKUP], [])
         emi.keep_room_types([dict(PICKUP, action="CANCEL")], [BACKFILL])
+
+
+class ChangeReplayTest(unittest.TestCase):
+    def test_replays_each_change_email_against_the_booking_before_it(self):
+        rows = [BACKFILL, dict(PICKUP, _row=1784, received_at="10/11/2026 08:02"),
+                dict(PICKUP, _row=1800, received_at="11/11/2026 09:00", room_code="TW-DLX", booking_ref="OTHER-1")]
+        lines = []
+        self.assertEqual(emi.change_replay(rows, out=lines.append), 1)
+        self.assertIn("rows 1784", lines[0])
+        self.assertIn("1 of 1 CHANGE emails", lines[-1])
 
 
 class OnlineSitesTest(unittest.TestCase):
