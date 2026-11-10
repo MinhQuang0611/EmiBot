@@ -76,6 +76,26 @@ def extract_text(path, data):
         return f"(could not read file: {type(e).__name__}: {e})"
 
 
+def search_text(name, data):
+    """The file's text layer only, for mail-find to search: no page images rendered, never raises, "" when there is
+    none. Front office sends Odeon vouchers in emails with no subject, the ref only inside the PDF (dev, 2026-11-09,
+    OV613LLPX_11_1: the 05/11 voucher wasn't found and the booking was built from Odeon's reminder with no names)."""
+    ext = os.path.splitext(name or "")[1].lower()
+    try:
+        if ext == ".pdf":
+            from pypdf import PdfReader
+            return "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages)
+        if ext in (".xlsx", ".xlsm"):
+            return _xlsx(data)
+        if ext == ".docx":
+            return _docx(data)
+        if ext in (".csv", ".txt"):
+            return _decode(data)
+    except Exception:
+        return ""
+    return ""
+
+
 def _decode(data):
     for enc in ("utf-8-sig", "cp1258", "latin-1"):
         try:

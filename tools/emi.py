@@ -3,7 +3,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
 
     python -m tools.emi inbox-new                         # emails since the last scan, not yet handled
     python -m tools.emi show <message_id>                 # whole thread + attachments saved and read
-    python -m tools.emi mail-find <text>                  # emails matching text (ref, subject, sender): their ids
+    python -m tools.emi mail-find <text> [--days 14]      # emails matching text (ref, subject, sender, attached file)
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
     python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
@@ -167,13 +167,90 @@ def inbox_new(mail, st, out=print):
     return msgs, started
 
 
-def mail_find(mail, text, out=print):
+ATTACHMENT_LOOKBACK_DAYS = 14  # mail-find reads the files of the inbox's emails this far back
+ATTACHMENT_SCAN_MAX = 40       # emails whose files are downloaded per mail-find; the rest on the next run
+INDEX_DIR = "_file-text"       # in emi-work: one JSON per email, its details and each attached file's text
+
+
+def _squash(s):
+    return re.sub(r"\s+", "", s or "").lower()
+
+
+def _index_path(work_dir, message_id):
+    return os.path.join(work_dir, INDEX_DIR, os.path.basename(attachments.message_dir(work_dir, message_id)) + ".json")
+
+
+def _write_index(work_dir, m, files):
+    path = _index_path(work_dir, m["id"])
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"id": m["id"], "received": m.get("receivedDateTime"), "from": addr(m.get("from")),
+                   "subject": m.get("subject", ""), "files": files}, f, ensure_ascii=False)
+
+
+def _read_index(work_dir, message_id):
+    try:
+        with open(_index_path(work_dir, message_id), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _index_message(mail, m, work_dir):
+    files = [{"name": a.get("name") or "", "text": attachments.search_text(a.get("name"), a["data"])}
+             for a in mail.list_attachments(m["id"]) if "data" in a and not attachments.skip(a)]
+    _write_index(work_dir, m, files)
+    return _read_index(work_dir, m["id"])
+
+
+def mail_find(mail, text, out=print, work_dir=None, days=ATTACHMENT_LOOKBACK_DAYS):
+    """Emails matching text in subject, body or sender (Graph search), and, since 2026-11-09, emails whose attached
+    file carries it: Graph doesn't search inside a PDF, and front office's vouchers come with no subject, the ref only
+    in the PDF (OV613LLPX_11_1: voucher in on 05/11 17:47, booking built 09/11 from Odeon's reminder, guests TBA,
+    no offers). The inbox's emails with files of the last `days` days are read once each; their text stays in
+    emi-work, so the next search doesn't download them again."""
+    work_dir = work_dir or WORK_DIR
     hits = mail.search(text)
     out(f"emails found: {len(hits)} (newest first)")
     for m in hits:
         out(f"\n- id: {m['id']}\n  received: {vn(m.get('receivedDateTime'))}\n  from: {addr(m.get('from'))}"
             f"\n  subject: {m.get('subject', '')}")
-    return hits
+    if not _squash(text) or days <= 0:
+        return hits
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        with_files = [m for m in mail.list_inbox_since(since) if m.get("hasAttachments")]
+    except Exception as e:  # network or permission: the subject/body search above still stands, and the gap is said
+        out(f"\nGAP: attached files not searched ({str(e).splitlines()[0][:120]}) — read front office's emails "
+            f"with files by hand")
+        return hits
+    with_files.sort(key=lambda m: m.get("receivedDateTime") or "", reverse=True)
+    want, seen = _squash(text), {m["id"] for m in hits}
+    in_files, downloaded, left = [], 0, 0
+    for m in with_files:
+        idx = _read_index(work_dir, m["id"])
+        if idx is None:
+            if downloaded >= ATTACHMENT_SCAN_MAX:
+                left += 1
+                continue
+            downloaded += 1
+            try:
+                idx = _index_message(mail, m, work_dir)
+            except Exception as e:
+                out(f"\nGAP: files of {m['id']} ({vn(m.get('receivedDateTime'))}, {addr(m.get('from'))}) not read: "
+                    f"{str(e).splitlines()[0][:120]}")
+                continue
+        names = [f["name"] for f in (idx or {}).get("files", []) if want in _squash(f.get("text"))]
+        if names and m["id"] not in seen:
+            in_files.append(m)
+            seen.add(m["id"])
+            out(f"\n- id: {m['id']}\n  received: {vn(m.get('receivedDateTime'))}\n  from: {addr(m.get('from'))}"
+                f"\n  subject: {m.get('subject', '') or '(no subject)'}\n  found in attached file: {', '.join(names)}")
+    out(f"\nin attached files: {len(in_files)} email(s) (inbox, last {days} days, {len(with_files)} with files, "
+        f"{downloaded} read now)")
+    if left:
+        out(f"NOT ALL READ: {left} email(s) with files not read yet — run mail-find again before saying it isn't here")
+    return hits + in_files
 
 
 def sent_dump(mail, days, path, own_chars=3000, quoted_chars=800, out=print):
@@ -231,7 +308,7 @@ def show(mail, message_id, work_dir=None, out=print):
         out(body.get("content", "").strip())
         # Not gated on hasAttachments: Graph leaves inline images out of it, and a UNC pasted into the
         # body is an inline image (UMA AVD-4246445, 05/11: slip never read, payment not recorded).
-        _show_attachments(mail, m["id"], work_dir, out)
+        _show_attachments(mail, m, work_dir, out)
         _show_links(mail, m["id"], body.get("content", ""), work_dir, out, opened)
 
 
@@ -265,9 +342,10 @@ def _show_links(mail, message_id, text, work_dir, out, opened):
             out(attachments.clip(attachments.extract_text(path, f["data"])))
 
 
-def _show_attachments(mail, message_id, work_dir, out):
-    folder = attachments.message_dir(work_dir, message_id)
-    for att in mail.list_attachments(message_id):
+def _show_attachments(mail, m, work_dir, out):
+    folder = attachments.message_dir(work_dir, m["id"])
+    files = []
+    for att in mail.list_attachments(m["id"]):
         if "data" not in att:
             out(f"\n[attachment {att.get('name')!r}: {att.get('@odata.type', '')} — not a file, not saved]")
             continue
@@ -276,6 +354,9 @@ def _show_attachments(mail, message_id, work_dir, out):
         path = attachments.save(folder, att)
         out(f"\n[attachment saved: {os.path.abspath(path)} ({len(att['data'])} bytes)]")
         out(attachments.clip(attachments.extract_text(path, att["data"])))
+        files.append({"name": att.get("name") or "", "text": attachments.search_text(att.get("name"), att["data"])})
+    if files:  # mail-find searches this text: a ref printed only inside the file is found later (OV613LLPX_11_1)
+        _write_index(work_dir, m, files)
 
 
 # --- sheet ---
@@ -2423,6 +2504,8 @@ def parser():
     sub.add_parser("inbox-new")
     s = sub.add_parser("show"); s.add_argument("message_id")
     s = sub.add_parser("mail-find"); s.add_argument("text")
+    s.add_argument("--days", type=int, default=ATTACHMENT_LOOKBACK_DAYS,
+                   help="how far back the inbox's attached files are searched (0 = subject/body/sender only)")
     s = sub.add_parser("sent-dump", help="HAYA's sent mail of the last N days to a text file (read-only)")
     s.add_argument("--days", type=int, default=14)
     s.add_argument("--out", default=os.path.join(WORK_DIR, "sent-dump.txt"))
@@ -2610,7 +2693,7 @@ def main(argv=None):
         elif c == "show":
             show(config.mail(), args.message_id)
         elif c == "mail-find":
-            mail_find(config.mail(), args.text)
+            mail_find(config.mail(), args.text, days=args.days)
         elif c == "sent-dump":
             sent_dump(config.mail(), args.days, args.out)
         elif c == "done":
