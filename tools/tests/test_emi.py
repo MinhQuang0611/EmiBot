@@ -591,6 +591,27 @@ class DraftCommandsTest(unittest.TestCase):
         self.assertIn("d1", st.data["drafts"])
         self.assertFalse(any(c[1].endswith(("/send", "/reply")) for c in http.calls))
 
+    def test_reply_to_booking_com_has_no_quoted_thread(self):
+        # The dev, 12/11 (KEN LUU 6672900474): Booking.com shows the whole email to the guest.
+        for to in ("noreply@booking.com", "123-abc@guest.booking.com"):
+            mail, http = mail_with([("POST", "/createReply", {
+                "id": "d1", "toRecipients": [{"emailAddress": {"address": to}}]})])
+            mail.reply_draft_with_text("m1", "Dear Mr Luu,\n\nNoted.\n\nBest regards,\nReservations Team")
+            self.assertFalse([c for c in http.calls if c[0] == "GET" and "$select=body" in c[1]], to)
+            patch = [c for c in http.calls if c[0] == "PATCH" and "body" in (c[2] or {})][0][2]["body"]["content"]
+            self.assertIn("Dear Mr Luu,", patch)
+            self.assertNotIn("quoted", patch)
+            self.assertTrue(patch.endswith("</div></body></html>"))
+
+    def test_reply_to_an_agency_keeps_the_thread(self):
+        mail, http = mail_with([("POST", "/createReply", {
+                                    "id": "d1", "toRecipients": [{"emailAddress": {"address": "res@agency.vn"}}]}),
+                                ("GET", "/messages/d1?$select=body",
+                                 {"body": {"content": "<html><body><p>quoted</p></body></html>"}})])
+        mail.reply_draft_with_text("m1", "Dear Team,\n\nNoted.\n\nBest regards,\nReservations Team")
+        patch = [c for c in http.calls if c[0] == "PATCH" and "body" in (c[2] or {})][0][2]["body"]["content"]
+        self.assertTrue(patch.endswith("<p>quoted</p></body></html>"))
+
     def test_text_to_html_bold_lists_paragraphs(self):
         from tools.graph_mail import text_to_html
         h = text_to_html("Kính gửi chị Ân,\n\n**Mã đoàn:** #29519\n**Số xác nhận:** 25694\n\n"

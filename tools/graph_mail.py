@@ -377,6 +377,17 @@ INTERNAL_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
 _PREFIX = re.compile(r"^\s*(re|aw|sv|fw|fwd|tr|trả lời|chuyển tiếp)\s*:\s*", re.I)
 
 
+# The dev, 12/11 (Booking.com 6672900474, KEN LUU): the extranet forwards the whole email to the guest, so the
+# quoted thread below our reply (Booking.com's own notice) went to the guest too. A reply to a Booking.com
+# address carries only our text, nothing below the signature.
+NO_QUOTE_DOMAINS = ("booking.com",)
+
+
+def _no_quote(address):
+    a = (address or "").strip().lower()
+    return any(a.endswith("@" + d) or a.endswith("." + d) for d in NO_QUOTE_DOMAINS)
+
+
 def is_internal(address):
     a = (address or "").strip().lower()
     return any(a.endswith("@" + d) or a.endswith("." + d) for d in INTERNAL_DOMAINS)
@@ -566,7 +577,12 @@ class GraphMail:
             fields["subject"] = f"{fields.get('subject') or draft.get('subject', '')} {subject_suffix}".strip()
         if fields:
             self._call("PATCH", f"/messages/{draft['id']}", body=fields)
-        self._prepend_text(draft["id"], text)
+        recipients = to or [r.get("emailAddress", {}).get("address", "") for r in draft.get("toRecipients") or []]
+        if any(_no_quote(a) for a in recipients):
+            self._call("PATCH", f"/messages/{draft['id']}",
+                       body={"body": {"contentType": "HTML", "content": f"<html><body>{email_html(text)}</body></html>"}})
+        else:
+            self._prepend_text(draft["id"], text)
         return draft
 
     def forward_draft_with_text(self, message_id, to, text):
