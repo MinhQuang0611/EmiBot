@@ -99,7 +99,25 @@ COUNTRY_CODES = {
     "UZB": "Uzbekistan", "IR": "Iran", "IRN": "Iran", "IL": "Israel", "ISR": "Israel",
     "AE": "United Arab Emirates", "ARE": "United Arab Emirates", "UAE": "United Arab Emirates",
 }
-NATIONALITY_FALLBACK = "Vietnam"  # no nationality and no clue in the names (Rules tab)
+NATIONALITY_FALLBACK = "Vietnam"  # was the Rules tab's "no clue at all" value; never written as a guess now (13/11)
+# Dev, 2026-11-13 (Trip.com 1653718335673330, JAMIL HUSSAIN: no nationality in the SynXis notice, the row held two days
+# for a question to Karen): a booking with something missing is still written at once, and what is missing is listed
+# in `transfer` (column AJ) as one line "THIẾU: Country; Số WhatsApp; …". No nationality guessed from the name any
+# more: not given → blank + "THIẾU: Country". missing_info stays for what stops the build (a REQUIRED blank, a rate
+# Karen must decide, a new company); a soft gap there would stop the build tool for nothing.
+MISSING_LINE = re.compile(r"^\s*THIẾU\s*:[ \t]*(.*)$", re.I | re.M)
+SOFT_GAPS = re.compile(r"\b(?:nationality|country|quốc tịch|whats\s*app|zalo|phone|số điện thoại|flight|chuyến bay|"
+                       r"luggage|vali|arrival time|giờ (?:đến|đáp))\b", re.I)
+
+
+def missing_listed(transfer):
+    """The items of the transfer column's 'THIẾU: …' line, lower case."""
+    m = MISSING_LINE.search(transfer or "")
+    return [x.strip().lower() for x in re.split(r"[;,]", m.group(1)) if x.strip()] if m else []
+
+
+def country_listed(transfer):
+    return any(x in ("country", "quốc tịch", "nationality") for x in missing_listed(transfer))
 REF_EXAMPLE = ("'Agoda 1783017402 / SynXis 92777EF002717', 'Booking.com 5486733008 / SynXis 92777EF003114', "
                "'SynXis 92777EF002715 (Booking.com)' when only the SynXis number is known, "
                "'MG AGIN3415562610364927 / HB2610161458', 'Trip.com 1400829871007810'")
@@ -267,7 +285,8 @@ def nationality_problem(value):
             continue
         name = COUNTRY_CODES.get(part.upper())
         return (f"nationality: {part!r} — write the full country name" + (f" {name!r}" if name else ", e.g. 'Vietnam'")
-                + " (the booking's nationality, else the passport, else the guest's name, else Vietnam)")
+                + " (the booking's nationality, else the passport; not given → blank and 'THIẾU: Country' in "
+                  "transfer)")
     return None
 
 
@@ -306,11 +325,14 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
     for k in ALWAYS:
         if k == "booking_ref" and g("channel_type") == "Direct":
             continue  # checked below: HAYA-D + number
+        if k == "nationality" and _blank(rec.get(k)) and country_listed(g("transfer")):
+            continue  # dev 13/11: not given, and listed as missing in AJ
         if _blank(rec.get(k)):
             errors.append(f"{k}: never blank" + {
                 "guest_names": " (TBA if names not given)",
-                "nationality": f" — the booking's nationality, else the passport, else inferred from the guest's "
-                               f"name; no clue at all: {NATIONALITY_FALLBACK}"}.get(k, ""))
+                "nationality": " — the booking's nationality, else the passport; neither gives it → leave it "
+                               "blank and write 'THIẾU: Country' as the last line of transfer (column AJ). Never "
+                               "guessed from the name (dev, 13/11)"}.get(k, ""))
     direct = g("channel_type") == "Direct"
     # dev 30/10 (live sheet row 2): a direct guest's booking_ref is HAYA-D + a running number, from direct-ref
     if direct and action == "NEW" and not built and not re.fullmatch(r"HAYA-D\d{3,}", g("booking_ref")):
@@ -460,6 +482,14 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
     if action in ("NEW", "CHANGE") and not built and re.search(r"nationality inferred", note, re.I):
         errors.append("missing_info: 'nationality inferred …' is not missing info (inferring from the name is step "
                       "3 of the rule) and it stops the build: take it out; say it in the scan report if needed")
+    if action in ("NEW", "CHANGE") and not built and SOFT_GAPS.search(note):
+        # dev 13/11: a gap the build can go on without is listed in transfer (AJ), not in missing_info
+        errors.append(f"missing_info: {note!r} — a missing nationality, phone, flight or luggage count doesn't stop "
+                      f"the build: take it out of missing_info and list it in transfer (column AJ) as one last line "
+                      f"'THIẾU: Country; Số WhatsApp; …' (dev, 13/11). missing_info is only for what stops the build "
+                      f"(REQUIRED blank, a rate for Karen, a new company)")
+    if MISSING_LINE.search(g("transfer")) and not missing_listed(g("transfer")):
+        errors.append("transfer: 'THIẾU:' with nothing after it — name what is missing, or drop the line")
     nat = nationality_problem(g("nationality")) if g("nationality") else None
     if nat:
         # rows written 29-30/10 carry a 3-letter code: a CHANGE copying it is not blocked
@@ -480,8 +510,9 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
     if g("nationality") == NATIONALITY_FALLBACK and not built and _foreign_names(g("guest_names")):
         # Tracy 31/10, rows 860-861: NISAR KHAN, HAROON OMAR went in as Vietnam; Rules tab: infer from the names
         errors.append(f"nationality: {NATIONALITY_FALLBACK} for {g('guest_names')!r} — no Vietnamese name in "
-                        f"it. Vietnam is only for no clue at all: infer the country from the names (Khan, Omar, "
-                        f"Malik → Pakistan; Kim → South Korea), or from the guest's earlier rows")
+                        f"it, so Vietnam is a guess. The booking's nationality, the passport, or the guest's earlier "
+                        f"rows; none → leave it blank and write 'THIẾU: Country' in transfer (column AJ). Never "
+                        f"guessed from the name (dev, 13/11)")
     # dev 30/10: the live sheet writes COD with every row (645 of 818), as text
     if "COD" in rec and action in ("NEW", "CHANGE", "CANCEL") and not built and not g("COD"):
         # rows already on the sheet from before 30/10: a warning

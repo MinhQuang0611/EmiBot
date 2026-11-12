@@ -263,6 +263,64 @@ def check_vouchers_handled(message_id, outcome, load_rows, work_dir=None, out=pr
                       "(e.g. 'OV613LLPX_11_1 duplicate of row 1777'). Then run done again.")
 
 
+# Dev, 2026-11-13: "TẤT CẢ CÁC EMAIL ĐỀU PHẢI CÓ REPLY HẾT NHÉ. Ghi noreply thì vẫn phải reply". done refuses an email
+# that has no draft of its own, unless the outcome says why there is none in one of the dev's four exceptions, or a
+# person at HAYA already answered it. The Trip.com notices of 10/11 were closed with "waits on Karen … no row written".
+NO_REPLY_OK = re.compile(r"^\s*NO REPLY:\s*(?:spam|marketing|newsletter|quảng cáo|phishing|otp|passcode|mã otp|alert|"
+                         r"cảnh báo|maintenance|bảo trì|system|hệ thống|internal|nội bộ|palma)\b", re.I)
+ANSWERED_BY_STAFF = re.compile(r"^\s*ANSWERED BY STAFF\b", re.I)
+OTA_NOTICE_DOMAINS = ("synxis.com", "agoda.com", "booking.com", "expedia.com", "expediapartnercentral.com", "trip.com",
+                      "ctrip.com", "traveloka.com", "ohmyhotel.com", "mytour.vn", "vntrip.vn", "didatravel.com",
+                      "makemytrip.com", "hotelbeds.com", "webbeds.com", "dotw.com")
+OTA_NOTICE_SUBJECT = re.compile(r"\bRes(?:ervation)?\b.{0,25}\b(?:Confirm|Modif|Chang|Cancel)|\bbooking\b|"
+                                r"\breservation\b|đặt phòng", re.I)
+NO_ROW = re.compile(r"\bno rows?\b|không ghi row|chưa ghi row|no row written", re.I)
+ROW_NAMED = re.compile(r"\brows?\s+\d+|\bduplicate\b|\btrùng\b", re.I)
+
+
+def is_ota_notice(sender, subject):
+    """An OTA's or the channel manager's own booking notice (not a guest writing through the OTA's relay)."""
+    domain = (sender or "").lower().rpartition("@")[2]
+    if domain.startswith("guest.") or ".guest." in domain:
+        return False
+    return (any(domain == d or domain.endswith("." + d) for d in OTA_NOTICE_DOMAINS)
+            and bool(OTA_NOTICE_SUBJECT.search(subject or "")))
+
+
+def check_email_answered(st, message_id, outcome, load_message, out=print):
+    """done's second check (dev, 2026-11-13): the email has its reply, or the outcome says why not.
+    load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP."""
+    if NO_REPLY_OK.search(outcome) or ANSWERED_BY_STAFF.search(outcome):
+        return
+    try:
+        msg = load_message() or {}
+    except Exception as e:
+        msg = {}
+        out(f"GAP: email not readable for the reply check ({str(e).splitlines()[0][:120]})")
+    sender = ((msg.get("from") or {}).get("emailAddress") or {}).get("address", "")
+    ota = is_ota_notice(sender, msg.get("subject", ""))
+    if ota and NO_ROW.search(outcome) and not ROW_NAMED.search(outcome):
+        raise Refused("OTA BOOKING WITHOUT A ROW: an OTA or SynXis booking notice always gets its rows (OTA bookings "
+                      "are always accepted, Karen 04/11) and is never held for a question to Karen. A missing field "
+                      "is listed in transfer (column AJ) as 'THIẾU: Country; …' and the row goes in (dev, 13/11). "
+                      "Write the rows, draft the confirmation (draft-confirmation --before-pdf, email-templates.md "
+                      "1c), then done with the row numbers. Not marked.")
+    reviews = st.data["reviews"]
+    if any(r.get("source") == message_id for r in reviews.values()):
+        return
+    if any(n in reviews for n in re.findall(r"#(\d+)", outcome)):
+        return  # answered by a draft written on another email of the same booking (Agoda + SynXis pair)
+    waiting = [q for q, v in st.open_questions().items() if v.get("message_id") == message_id]
+    if waiting and not ota:
+        return  # on request: Karen decides first (tour-operators.md); her answer brings the draft
+    raise Refused("NO REPLY DRAFTED: every email gets its reply, a no-reply sender too (dev, 2026-11-13). Draft it "
+                  "first (draft-reply / draft-confirmation; a no-reply notice is answered to the email printed in "
+                  "the booking, draft-reply finds it). Answered on another email of the same booking → name that "
+                  "draft in the outcome ('same booking as #712'). No reply only for: 'NO REPLY: spam' / 'NO REPLY: "
+                  "OTP' / 'NO REPLY: alert' / 'NO REPLY: internal' / 'NO REPLY: Palma' (forwarded), or 'ANSWERED BY "
+                  "STAFF <when>' when a person at HAYA already replied (Sent Items). Not marked.")
+
+
 def _rows_for_done():
     try:
         return config.sheet().rows() + live_rows(config.live_sheet(), out=lambda *_: None)
@@ -1265,6 +1323,26 @@ def _sender_of(mail, message_id):
     return (mail.get_message_text(message_id).get("from") or {}).get("emailAddress", {}).get("address", "")
 
 
+# Dev, 2026-11-13 (Trip.com / SynXis 92777EF003348–3350, missed 10/11): every email gets its reply, a no-reply sender
+# too. A no-reply notice is answered to the email address printed in the booking (SynXis "Email : lodgingsupport@
+# trip.com", the guest's own or the OTA's); none printed → to the no-reply address itself, as the dev chose.
+NO_REPLY_SENDER = re.compile(r"(?:^|[._-])(?:no-?reply|do-?not-?reply|donotreply)", re.I)
+EMAIL_IN_BOOKING = re.compile(r"\bE-?mail(?:\s*address)?\s*:?\s*([\w.+-]+@[\w-]+(?:\.[\w-]+)+)", re.I)
+
+
+def is_no_reply(address):
+    return bool(NO_REPLY_SENDER.search((address or "").split("@")[0]))
+
+
+def booking_email(text):
+    """The first 'Email: …' address in a notice that is neither ours nor another no-reply robot."""
+    for m in EMAIL_IN_BOOKING.finditer(text or ""):
+        a = m.group(1).strip(".").lower()
+        if not is_internal(a) and not is_no_reply(a):
+            return a
+    return ""
+
+
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
 GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder")
 REMINDERS = ("deposit_reminder", "balance_reminder")
@@ -1293,11 +1371,17 @@ def reply_recipients(mail, args, kind):
             raise Refused(f"--to {', '.join(ours)} is our own address. Put the guest's or agency's address in --to "
                           f"(the 'From:' of the forwarded mail) and our colleague in --cc")
         return to, cc
-    sender = _sender_of(mail, args.message_id)
+    msg = mail.get_message_text(args.message_id)
+    sender = (msg.get("from") or {}).get("emailAddress", {}).get("address", "")
     robot = operators.robot_operator(sender)
     if robot:
         # tour-operators.md: Anex mails from a no-reply robot; replies go to its reservations desk
         return list(operators.OPERATORS[robot]["reply_to"]), []
+    if is_no_reply(sender):
+        found = booking_email((msg.get("body") or {}).get("content", ""))
+        if found:
+            return [found], []
+        return None, None  # no address in the booking: the reply goes to the no-reply sender (dev, 13/11)
     if is_internal(sender) and not internal:
         raise Refused(FORWARDED_IN.format(sender=sender))
     return None, None
@@ -1974,11 +2058,54 @@ def check_cancellation_days(body, pdf_text):
                       f"the PDF is wrong, it goes to Karen (ask-karen), no draft. No draft made.")
 
 
+def _money_forms(value):
+    """'3347324' → {'3,347,324', '3.347.324', '3347324'}: how an amount may be written in a draft."""
+    s = str(value or "").strip()
+    if re.fullmatch(r"\d+\.\d{1,2}", s):  # 1859625.0 / 1859625.00
+        s = s.split(".")[0]
+    digits = re.sub(r"\D", "", s)
+    if len(digits) < 5:
+        return set()
+    n = int(digits)
+    return {f"{n:,}", f"{n:,}".replace(",", "."), str(n)}
+
+
+def check_ota_confirmation(body, row):
+    """An OTA booking's confirmation (dev, 2026-11-13: every email gets its reply, the OTA's no-reply notice too;
+    email-templates.md 1c). It reaches the guest or the OTA: the booking's number and the sign-off, never HAYA's bank
+    block or a deposit (the OTA has the money), and never the net rate or total on the row, which is what the OTA pays
+    the hotel, not what the guest paid."""
+    numbers = [p for p in re.split(r"[\s/,;()]+", row.get("booking_ref", "")) if sum(c.isdigit() for c in p) >= 6]
+    missing = []
+    if numbers and not any(n in body for n in numbers):
+        missing.append(f"the booking number ({' or '.join(numbers)})")
+    if "Reservations Team" not in body:
+        missing.append("the sign-off 'Best regards, / Reservations Team / HAYA Hotel Phu Quoc…'")
+    if missing:
+        raise Refused("the OTA confirmation doesn't follow skills/email-templates.md section 1c: missing "
+                      f"{', '.join(missing)}. No draft made.")
+    if "1020729617" in body or re.search(r"đặt cọc|deposit", body, re.I):
+        raise Refused("an OTA booking's confirmation carries no bank details and no deposit: the OTA has the money "
+                      "(email-templates.md 1c). No draft made.")
+    net = [f for k in ("total_vnd", "rate_per_night_vnd", "Average rate per night after discount")
+           for f in _money_forms(row.get(k)) if f in body]
+    if net:
+        raise Refused(f"the OTA confirmation shows {', '.join(sorted(set(net)))}: that is the row's net figure, what "
+                      f"the OTA pays the hotel, not what the guest paid. No amount in an OTA confirmation "
+                      f"(email-templates.md 1c). No draft made.")
+
+
+def is_ota_row(row):
+    return (row.get("channel_type") or "").strip() == "OTA"
+
+
 def confirmation_check(row):
-    """The text check for this row's confirmation: tour operator or agency/guest."""
+    """The text check for this row's confirmation: tour operator, OTA, or agency/guest."""
     if row.get("channel_type") == "Tour operator":
         return lambda body: check_operator_confirmation(body, row.get("booking_ref", ""),
                                                         row.get("ezfolio_group_code", ""))
+    if is_ota_row(row):
+        return lambda body: check_ota_confirmation(body, row)
     return check_confirmation_text
 
 
@@ -2099,6 +2226,9 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     # kept on the review so a Rewrite is checked the same way
     meta = {"operator": company if r.get("channel_type") == "Tour operator" else "",
             "group": r.get("ezfolio_group_code", "")}
+    if is_ota_row(r):  # a Rewrite is checked as an OTA confirmation too (no bank block, no net figure)
+        meta["ota_row"] = {k: r.get(k, "") for k in ("channel_type", "booking_ref", "total_vnd", "rate_per_night_vnd",
+                                                     "Average rate per night after discount")}
     if before:
         meta.update(awaiting_pdf=True, action=r.get("action", ""))
     elif no_invoice:
@@ -2576,7 +2706,9 @@ def run_review(mail, st, tg, args, out=print):
             text = read_text(args.body)
             check_no_gaps(text, r.get("source") or "<message_id>")
             check = None
-            if r["kind"] == "confirmation":
+            if r["kind"] == "confirmation" and r.get("ota_row"):
+                check = lambda body: check_ota_confirmation(body, r["ota_row"])  # noqa: E731
+            elif r["kind"] == "confirmation":
                 check = (check_confirmation_text if not r.get("operator") else
                          lambda body: check_operator_confirmation(body, r.get("ref", ""), r.get("group", "")))
             review.rewrite(mail, st, tg, n, text, feedback=args.feedback, check=check, out=out)
@@ -2596,12 +2728,30 @@ def run_review(mail, st, tg, args, out=print):
 
 # --- questions to Karen: a fact Emi doesn't have, so the email waits instead of getting a draft with a gap ---
 
+# Dev, 2026-11-13: on 10/11 the three SynXis notices of Trip.com 1653718335673330 (JAMIL HUSSAIN, 13–15/11) went to
+# Karen as E-377/378/379 "không nêu quốc tịch; cần xác nhận quốc tịch trước khi ghi row", were marked done with no row,
+# nobody answered, and the booking reached the sheet only on 12/11 when Karen saw it. A missing nationality is never a
+# question: the booking's, else the passport's; neither → blank, and 'THIẾU: Country' in transfer (column AJ). Not
+# guessed from the name (dev, 13/11).
+MISSING_NATIONALITY = re.compile(
+    r"(?:không\s+(?:nêu|ghi|có)|thiếu|chưa\s+(?:có|rõ|biết)|absent|missing|not\s+(?:given|stated|shown)|unknown|no)"
+    r"\W+(?:\w+\W+){0,3}?(?:quốc\s+tịch|nationality)"
+    r"|(?:quốc\s+tịch|nationality)\W+(?:\w+\W+){0,3}?(?:absent|missing|not\s+(?:given|stated|shown)|unknown|"
+    r"không\s+(?:nêu|ghi|có|rõ)|thiếu|chưa\s+(?:có|rõ))", re.I)
+NATIONALITY_NOT_A_QUESTION = (
+    "a missing nationality is never a question for Karen and never holds a row back (dev, 13/11): the booking's "
+    "nationality, else the passport; neither → leave nationality blank and write 'THIẾU: Country' as the last line of "
+    "transfer (column AJ), nothing in missing_info, no guess from the name (booking-intake.md, Nationality). Write the "
+    "row now with sheet-append. Not asked.")
+
 def ask_karen(st, tg, message_id, question, ref="", out=print):
     question = " ".join(question.split())
     if not question:
         raise Refused("the question is empty")
     if GAP.search(question):
         raise Refused("write the question in words, not as a '[...: hotel to confirm]' gap")
+    if MISSING_NATIONALITY.search(question):
+        raise Refused(NATIONALITY_NOT_A_QUESTION)
     for qid, q in st.open_questions().items():
         if q.get("message_id") == message_id and q["ask"] == question:
             out(f"{qid} already asked for this email, still open: {question}")
@@ -2875,6 +3025,8 @@ def main(argv=None):
             sent_dump(config.mail(), args.days, args.out)
         elif c == "done":
             check_vouchers_handled(args.message_id, " ".join(args.outcome), _rows_for_done)
+            check_email_answered(st, args.message_id, " ".join(args.outcome),
+                                 lambda: config.mail().get_message_text(args.message_id))
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
             print("marked handled")

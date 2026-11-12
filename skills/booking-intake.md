@@ -91,15 +91,25 @@ Written the way the live sheet writes it (dev, 2026-10-30, "theo sheet thật"; 
 - `sheet-check` warns on a known variant. These spellings are a working list: Karen hasn't confirmed them against EZFOLIO's company list yet.
 
 ## Nationality
-The full country name in English: `Vietnam`, `India`, `United Kingdom`, `Russia`, `South Korea`, `Kazakhstan` (dev, 2026-10-30, after comparing with the live sheet; replaces the 3-letter code of Tracy's audit 29/10). Never blank. `sheet-check` refuses a 2- or 3-letter code on a NEW row and says which name to write; rows of 29–30/10 with a code only get a warning on a CHANGE.
+The full country name in English: `Vietnam`, `India`, `United Kingdom`, `Russia`, `South Korea`, `Kazakhstan` (dev, 2026-10-30, after comparing with the live sheet; replaces the 3-letter code of Tracy's audit 29/10). `sheet-check` refuses a 2- or 3-letter code on a NEW row and says which name to write; rows of 29–30/10 with a code only get a warning on a CHANGE.
 1. The nationality the booking lists (a nationality field in the email or voucher).
 2. Else the passport, if the agency sends one.
-3. Else inferred from the guest's name.
-4. The name gives no clue (or TBA): `Vietnam` (the sheet's Rules tab still says VNM).
-- A "market", "source market", "country of residence" or "POS" field is **not** nationality. Never copy the market across; go on to the passport and the name.
-- **An inferred nationality is not missing info** (audit 30/10, rows 373, 375): inferring from the name is step 3 of this rule, and a non-blank `missing_info` stops the build. Never "nationality inferred …" in `missing_info` (`sheet-check` refuses it); say it in the scan report if it matters.
+3. Else the guest's earlier rows on the sheet.
+4. Else **blank**, and `THIẾU: Country` in `transfer` (see "Missing information: column AJ" below). **Never guessed from the name, never `Vietnam` as a fallback** (dev, 2026-11-13; replaces "infer from the name, else Vietnam" of 30/10–31/10).
+- A "market", "source market", "country of residence" or "POS" field is **not** nationality. Never copy the market across.
 - A SynXis or OTA address "Country" is not nationality either (row 377: "Dmytro Soboliev – VNM", a Ukrainian name).
-- Vietnam is only for no clue at all. Names are a clue: NISAR KHAN, HAROON OMAR, ABDUL RAHIM MALIK → Pakistan (Tracy 31/10, rows 860–861 went in as Vietnam); KIM IN SIK → South Korea. A CANCEL copies the nationality of the booking's rows; if those are blank, infer it the same way. `sheet-check` refuses Vietnam when no part of the names is Vietnamese.
+- **Never a question to Karen, never a reason to hold the row** (dev, 2026-11-13): Trip.com 1653718335673330 (JAMIL HUSSAIN) waited two days with no row on E-377–379 "không nêu quốc tịch". `ask-karen` refuses that question; the row goes in at once with nationality blank and `THIẾU: Country`.
+- `sheet-check` refuses a blank nationality without that line, and `Vietnam` for a guest with no Vietnamese name (a guess). A CANCEL copies the nationality of the booking's rows.
+
+## Missing information: column AJ (`transfer`) (dev, 2026-11-13)
+A booking with something missing is **still written at once**. What the email doesn't say goes as **one last line of `transfer`** (column AJ on the live sheet):
+```
+THIẾU: Country; Số WhatsApp; Chuyến bay + giờ đáp; SL vali
+```
+- AJ's header lists what front office needs: 1. Name, 2. Country, 3. Số WhatsApp, 4. Chuyến bay + giờ đáp, 5. SL người, 6. SL vali. Use those words. Pick-up details, when there are any, come first and the `THIẾU:` line under them.
+- Applies to every booking (TA, OTA, direct, tour operator), not only pick-ups. No guessing to fill a gap.
+- **`missing_info` is only for what stops the build**: a REQUIRED blank (`REQUIRED blank: rate_per_night_vnd – …`), a rate Karen must decide, a new company. A nationality, phone, flight or luggage count there is refused by `sheet-check`: the build tool would stop for nothing.
+- A later email that gives the missing item: a CHANGE row (or `sheet-update` before the build) with the item filled and the `THIẾU:` line shortened or dropped.
 - Changing `nationality` on an existing row means a document said so. Say which one in the report ("voucher page 2: Nationality Malaysia").
 
 ## Room code

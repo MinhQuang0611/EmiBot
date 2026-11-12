@@ -69,7 +69,7 @@ Internal forward: `Trân trọng,` / `Reservations team / HAYA Hotel Phu Quoc` /
 ## Who the reply goes to (dev, 2026-10-22)
 A reply goes to the person who wrote the email, not to whoever put it in our inbox.
 - **Forwarded in by our own staff** (`@haya-hotels.com`, `@palmahotel.vn`, usually `haya@`): the writer is the From: of the quoted block. `mail-find` the original first; if it also reached sales@, reply on that and mark the forward `done` as a duplicate. Otherwise `draft-reply <forward id> <body> --kind <kind> --to <writer> --cc <colleague>`: To the writer, **cc haya@haya-hotels.com** (HAYA does this on every reconfirmation and guest reply that came through front office). `draft-reply` refuses an internal sender. Never `--internal` for a guest or agency.
-- No usable address, or a no-reply robot (OTA notice, `noreply@`): no reply, a report line. **Exception:** the Anex, Pegas and Selfie robots. Pegas (`pegasys-notifications@pegast.su`): its mail says "confirm … by answering this email", so it gets its reply, the confirmation included, **to** `reservation.vtm@pegast.com`; `draft-reply` / `draft-confirmation` set that by themselves (dev, 2026-11-07, Pegas 11124455). Anex (`vn.robot@ms.anextour.com`): every email gets a reply, and it goes **to** `reservation@anexvietnam.com` — `draft-reply` sets that by itself (dev, 2026-10-29, `tour-operators.md`). Selfie (`mailrobot@selfietravel.asia`): HAYA answers it, cc `vietnam@selfietravel.asia`.
+- **A no-reply sender still gets its reply (dev, 2026-11-13).** An OTA or SynXis notice from `noreply@…` / `NOREPLYWyndhamReservations@synxis.com`: the reply goes to the email printed in the booking (`Email : lodgingsupport@trip.com`, the guest's own or the OTA's). `draft-reply` / `draft-confirmation` find that address by themselves when the sender is a no-reply address and print it in the `(to …)` line; nothing printed → the reply goes to the no-reply address itself. **Tour operator robots** keep their own desk: the Anex, Pegas and Selfie robots. Pegas (`pegasys-notifications@pegast.su`): its mail says "confirm … by answering this email", so it gets its reply, the confirmation included, **to** `reservation.vtm@pegast.com`; `draft-reply` / `draft-confirmation` set that by themselves (dev, 2026-11-07, Pegas 11124455). Anex (`vn.robot@ms.anextour.com`): every email gets a reply, and it goes **to** `reservation@anexvietnam.com` — `draft-reply` sets that by itself (dev, 2026-10-29, `tour-operators.md`). Selfie (`mailrobot@selfietravel.asia`): HAYA answers it, cc `vietnam@selfietravel.asia`.
 - Confirmation on a request forwarded in: `draft-confirmation <id> <row> <body> --to <agency> --cc <colleague>`.
 - Reply-all (`--all`) when the sender cc'd their own colleagues (accounts, managers) — HAYA keeps them on.
 
@@ -169,7 +169,7 @@ sales@haya-hotels.com
 - **Booked type differs from what they asked** (asked twin, booked Standard Double): confirm what was booked, then a `Room type note:` paragraph with the other type's rate lines and total, "Please let us know if you would like to switch, and we will send an updated confirmation." (Travel Concierge 2779479.)
 - **Check-in within 7 days:** one payment line instead of two — `Do ngày nhận phòng là [date] (còn chưa đến 07 ngày), khách sạn đề nghị Quý Đối tác thanh toán 100% tổng tiền trước [HH:MM] ngày [DD/MM/YYYY] (giờ Việt Nam, UTC+7).`
 - Cancellation lines are the TA policy (`docs/rate-knowledge/ta.md`). A tour operator: its contract's own lines, or leave the line out.
-- Tour operators (Anex, Odeon…): section 6. OTA bookings: no confirmation email.
+- Tour operators (Anex, Odeon…): section 6. OTA bookings: section 1c.
 
 ### 1b. New booking, payment slip already sent (`draft-confirmation`)
 The agency sent a UNC with the booking or before the confirmation went out, and the row has its `pdf_link`. Same form as section 1, except (dev, 2026-10-30):
@@ -187,6 +187,38 @@ The agency sent a UNC with the booking or before the confirmation went out, and 
 - **Slip for 100%:** one line, `– Thanh toán 100% = [tổng] VND: khách sạn đã nhận ủy nhiệm chi [số tiền] VND (…) và đã chuyển bộ phận Kế toán đối chiếu.` No balance line, no slip ask.
 - **Accounting already confirmed the money arrived:** `Đã nhận cọc 50%: [số tiền] VND (tiền về tài khoản khách sạn ngày [DD/MM/YYYY]).` / `Deposit received: VND [amount] (credited on [DD/MM/YYYY]).`
 - Also drafted: the slip forward to accounting (4c), and the CHANGE row with the payment.
+
+### 1c. OTA booking confirmation (`draft-confirmation`, dev 2026-11-13)
+Every OTA notice gets its reply (SynXis, Agoda, Booking.com, Expedia, Trip.com, Traveloka…): the confirmation with the EZFOLIO PDF, drafted in job 1 with `--before-pdf` and finished by job 2, to the email printed in the booking (see "Who the reply goes to"). The notice's language decides: SynXis and the OTAs write English, so English unless the guest wrote in another language. A change: the same form, "Please find the revised booking confirmation below", `Room: [new] (instead of [old])`, "It replaces the earlier confirmation." A cancellation: section 3.
+
+```
+Dear [Guest name / Trip.com team],
+
+Thank you for your booking with HAYA Hotel Phu Quoc, Trademark Collection by Wyndham. Please find the confirmation below and the PDF attached.
+
+Group code: #[GROUP CODE]
+Confirmation number: [CONF NO]
+Booking reference: [booking_ref as on the row: Trip.com 1653718335673330 / SynXis 92777EF003350]
+Guest name: [lead guest]
+Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+Room: [n] [room type as the OTA names it], [n] adults[ + n children], [breakfast included / room only]
+Payment: [prepaid through Trip.com / guaranteed by card through Booking.com, payable at the hotel]
+Cancellation: [as the notice and the PDF say: non-refundable / free until DD/MM/YYYY]
+[Special requests noted: [what the notice asked; subject to availability at check-in]]
+
+Check-in is from 14:00 and check-out is by 12:00.
+
+We look forward to welcoming you.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+- **No amount at all.** The row's rate and total are what the OTA pays the hotel (net, VCC), not what the guest paid; the guest's price is the OTA's business. `draft-confirmation` refuses the row's `total_vnd`, `rate_per_night_vnd` or average rate in the text.
+- **No bank details, no deposit, no deadline:** the OTA holds the money. Refused too. Booking.com card guarantee: "payable at the hotel", nothing more.
+- `#[GROUP CODE]` and `[CONF NO]` stay placeholders before the build; `confirmation-attach` fills them. No `[DEPOSIT DEADLINE]`.
+- Cancellation words follow the PDF (`draft-confirmation` compares the days).
 
 ## 2. Changed booking (`draft-confirmation`)
 Sources: PZL06270114X (22/10, VI), Victoria NPKM00130000016 (15/10, VI).
@@ -625,7 +657,7 @@ A guest asking the same (via a booking platform's relay address): `Dear Guest,` 
 ## 9. Short replies — decline, "thank you", fully booked (`--kind reply`)
 - **They decline our offer:** `Thank you for letting us know.` + `We look forward to welcoming you on [DD/MM/YYYY].` (they still have a booking) or `We hope to welcome you on another occasion.` Don't try to win them back with a price (Karen's).
 - **The hotel is full for their dates** (availability sheet: nothing free on some night): `Thank you for your email and your interest in HAYA Hotel Phu Quoc. Unfortunately, the hotel is fully booked for [dates], so we are unable to offer a room for these dates.` / `We hope to welcome your guests on another occasion.` Only when no type is free every night; otherwise offer the type that is (`inquiries-and-quotes.md`).
-- **A plain "thank you", "received", "ok"** → no draft, one report line.
+- **A plain "thank you", "received", "ok"** → a one-line reply all the same (dev, 2026-11-13: every email gets its reply): `Thank you for your email. We look forward to welcoming your guests.` / `Khách sạn đã nhận được, xin cảm ơn anh/chị.` + the sign-off.
 
 ---
 

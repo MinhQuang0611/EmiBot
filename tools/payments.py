@@ -25,6 +25,10 @@ BALANCE_DAYS = 7      # balance due this many days before check-in; reminder the
 FIRST_RUN_HOUR, LAST_RUN_HOUR = 7, 21  # the hourly check's window, Vietnam time
 CONFIRM_FROM = date(2026, 10, 30)      # Emi's first day on the live sheet: older bookings were confirmed by hand
 CHANGE_FROM = date(2026, 11, 5)        # changes built before this were confirmed by hand (dev, 05/11, Amara #30124)
+# Dev, 2026-11-13: every email gets its reply, an OTA's no-reply notice too, and the reply to a booking is its
+# confirmation with the PDF (Trip.com / SynXis 92777EF003348–3350 missed 10/11). Owed for OTA bookings from this day:
+# older ones were never confirmed and the guests have stayed or are about to.
+OTA_CONFIRM_FROM = date(2026, 11, 13)
 SEARCH_TOP = 25
 
 
@@ -438,7 +442,8 @@ def since_rebook(hits):
 def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
     """Bookings built since Emi went live that sales@ hasn't confirmed: a NEW never confirmed, one line on its NEW row,
     or a change of dates, rooms or total built and not yet confirmed, one line on the change's first row (dev, 05/11:
-    the reply to a change is the new confirmation with the PDF). An OTA confirms to the guest itself."""
+    the reply to a change is the new confirmation with the PDF). OTA bookings too, from OTA_CONFIRM_FROM (dev, 13/11);
+    before that only an OTA change a person at the agency asked for."""
     drafted = st.confirmation_drafted()
     done = {ref for ref, _ in drafted}
     waiting_refs = {ref for ref, _ in st.awaiting_pdf()}
@@ -472,7 +477,8 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
         if changed and code:
             since = built_at(changed)
             first = changed[0]
-            if ota and not asked_by_agency(changed):
+            changed_on = operators._date((first.get("received_at") or "").split(" ")[0])
+            if ota and not asked_by_agency(changed) and (not changed_on or changed_on < OTA_CONFIRM_FROM):
                 continue
             if (since and since.date() >= CHANGE_FROM and not _held(st, ref, first)
                     and not any(row == r["_row"] for _, row in drafted for r in changed)
@@ -488,7 +494,7 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
                     item["rate_moved"] = (total_of(before), total_of(changed))
                 out.append(item)
             continue  # changed since the NEW: its first confirmation is not what is owed
-        if ota or not total_of(state):
+        if not total_of(state):
             continue
         if ref in done and not rebooked:
             continue
@@ -498,7 +504,7 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
         if new is None:
             continue
         received = operators._date((new.get("received_at") or "").split(" ")[0])
-        if not code or not received or received < CONFIRM_FROM or _held(st, ref, new):
+        if not code or not received or received < (OTA_CONFIRM_FROM if ota else CONFIRM_FROM) or _held(st, ref, new):
             continue
         if find_confirmation(mail, code, mailbox, mine) is None:
             out.append({"ref": ref, "row": new["_row"], "company": head.get("company", ""), "group": code,
