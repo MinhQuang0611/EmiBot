@@ -35,6 +35,16 @@ def _status(r):
     return (r.get("ez_status") or "").strip()
 
 
+# Dev, 2026-11-12, Pegas 11131133 row 1864: a CHANGE on a group the build tool had cancelled gets ez_status no_change,
+# "group 31000 đã huỷ (CX) … bản sửa này không còn cần làm". No PDF comes and nobody is told. If the booking is wanted
+# again it is a rebuild (NEW rows, sheet-append's "Rebooked after cancellation row N"); that is Karen's call.
+CANCELLED_GROUP = re.compile(r"đã hu[ỷỳ]|\(CX\)", re.I)
+
+
+def on_cancelled_group(r):
+    return r.get("action") == "CHANGE" and _status(r) == "no_change" and bool(CANCELLED_GROUP.search(r.get("ez_note") or ""))
+
+
 def stuck(rows, state_of, now):
     """One item per booking whose latest email's rows the build tool stopped on ('stuck'), or hasn't touched for
     more than WAIT ('waiting'). A later email's rows replace the earlier ones (the build tool marks those
@@ -47,7 +57,8 @@ def stuck(rows, state_of, now):
         arrival = operators._date(head.get("arrival"))
         if arrival and arrival < now.date():
             continue
-        bad = [r for r in state if (_status(r) in STUCK or (not _status(r) and (r.get("ez_error") or "").strip()))
+        bad = [r for r in state if (_status(r) in STUCK or (not _status(r) and (r.get("ez_error") or "").strip())
+                                    or on_cancelled_group(r))
                and not any(d in (r.get("ez_note") or "") for d in DECIDED)]
         if bad:
             note = next((x for r in bad for x in ((r.get("ez_error") or "").strip(), (r.get("ez_note") or "").strip())

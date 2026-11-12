@@ -399,10 +399,15 @@ def confirmed_since(mail, code, mailbox, since):
     return False
 
 
+# 'existing' (dev, 2026-11-12, Odeon V9SLHPMH5_11_1 row 1738): front office made the group by hand, the build tool
+# found it and pasted its PDF (30948.pdf, matching the row). Built all the same.
+BUILT_STATUSES = ("done", "existing")
+
+
 def built_at(batch):
     """When the build tool finished these rows (the sheet's time is Vietnam time). None until every row is done with
     its PDF. The PDF keeps its Drive link when it is remade, so ez_processed_at is the signal, not the link."""
-    if any(r.get("ez_status") != "done" or not (r.get("pdf_link") or "").strip() for r in batch):
+    if any(r.get("ez_status") not in BUILT_STATUSES or not (r.get("pdf_link") or "").strip() for r in batch):
         return None
     try:
         return datetime.fromisoformat(max(r.get("ez_processed_at") or "" for r in batch)[:19]).replace(tzinfo=VN)
@@ -418,12 +423,25 @@ def _held(st, ref, row):
     return bool(hold) and hold.get("pdf_link") == row.get("pdf_link") and hold.get("processed", processed) == processed
 
 
+def since_rebook(hits):
+    """The booking's rows from its last rebuild on: a NEW written after a CANCEL of the same ref starts it again
+    (dev, 2026-11-12, Pegas 11131133: QPL on request declined and cancelled in EZFOLIO, TPL booked again in the
+    allotment under the same number). The cancelled group, its CHANGE rows and its confirmations are history."""
+    start = 0
+    for i, r in enumerate(hits):
+        if r.get("action") == "NEW" and any(h.get("action") == "CANCEL" for h in hits[:i]):
+            if i == 0 or hits[i - 1].get("action") != "NEW" or hits[i - 1].get("received_at") != r.get("received_at"):
+                start = i
+    return hits[start:]
+
+
 def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
     """Bookings built since Emi went live that sales@ hasn't confirmed: a NEW never confirmed, one line on its NEW row,
     or a change of dates, rooms or total built and not yet confirmed, one line on the change's first row (dev, 05/11:
     the reply to a change is the new confirmation with the PDF). An OTA confirms to the guest itself."""
     drafted = st.confirmation_drafted()
     done = {ref for ref, _ in drafted}
+    waiting_refs = {ref for ref, _ in st.awaiting_pdf()}
     out, groups_seen = [], set()
     for state in operators.bookings(rows, state_of):
         head = state[0]
@@ -433,16 +451,20 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
         ota = channel == "OTA"
         if not (ota or channel in ("TA", "Direct") or channel.startswith("Tour operator")) or operators.cancelled(state):
             continue
-        if not arrival or arrival < today:
+        # a confirmation already drafted before the PDF is finished even when the guest has arrived meanwhile (dev,
+        # 2026-11-12, Odeon V9SLHPMH5_11_1: booked and arriving 09/11, its draft sat without the PDF)
+        if not arrival or (arrival < today and ref not in waiting_refs):
             continue
         mine = parts_of(ref)
-        hits = [r for r in rows if mine & parts_of(r.get("booking_ref"))]
+        hits = since_rebook([r for r in rows if mine & parts_of(r.get("booking_ref"))])
+        rebooked = bool(hits) and any(r.get("action") == "CANCEL" for r in rows
+                                      if mine & parts_of(r.get("booking_ref")) and r["_row"] < hits[0]["_row"])
         code = _group(hits)
         if code:
             # Ohmyhotel #27984 (06/11): the name change went on the sheet under the group code as its ref, the
             # booking under the OTA number; both are one booking.
             mine_rows = {r["_row"] for r in hits}
-            hits = [r for r in rows if r["_row"] in mine_rows or code in _codes(r)]
+            hits = [r for r in rows if r["_row"] in mine_rows or (code in _codes(r) and r["_row"] >= hits[0]["_row"])]
             if code in groups_seen:
                 continue
             groups_seen.add(code)
@@ -468,8 +490,10 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
             continue  # changed since the NEW: its first confirmation is not what is owed
         if ota or not total_of(state):
             continue
-        if ref in done:
+        if ref in done and not rebooked:
             continue
+        if rebooked and any(d == ref and row >= hits[0]["_row"] for d, row in drafted):
+            continue  # the rebuilt booking's own confirmation; the cancelled group's ones don't count
         new = next((r for r in hits if r.get("action") == "NEW" and (r.get("pdf_link") or "").strip()), None)
         if new is None:
             continue

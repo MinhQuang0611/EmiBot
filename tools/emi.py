@@ -1026,6 +1026,23 @@ def rooms_still_booked(rows, ref):
         [r for r in mine[last + 1:] if r.get("action") == "CANCEL"])
 
 
+REBOOK = re.compile(r"\brebook", re.I)
+
+
+def cancelled_in_ezfolio(rows, ref):
+    """The booking's last CANCEL row, when the build tool has cancelled the group (ez_status done) and nothing was
+    built on it since: a later CHANGE there gets ez_status no_change ("group đã huỷ (CX)", Pegas 11131133 row 1864).
+    None otherwise."""
+    mine = [r for r in rows if _parts(r.get("booking_ref")) & _parts(ref)]
+    cancels = [i for i, r in enumerate(mine) if r.get("action") == "CANCEL" and (r.get("ez_status") or "") == "done"]
+    if not cancels:
+        return None
+    after = mine[cancels[-1] + 1:]
+    if any(r.get("action") == "NEW" or (r.get("ez_status") or "") in payments.BUILT_STATUSES for r in after):
+        return None
+    return mine[cancels[-1]]
+
+
 def sheet_append(sheet, data, out=print, live=None):
     data = split_payments(data, out)
     records = expand_booking(data)
@@ -1048,6 +1065,16 @@ def sheet_append(sheet, data, out=print, live=None):
             # Except a cancel-and-rebuild (GD0512, 26/10): CANCEL rows and NEW rows from the same email.
             rebuild = bool(_parts(ref) & cancelled_here) or (
                 state[0].get("action") == "CANCEL" and state[0].get("received_at") == rec.get("received_at"))
+            rebook = cancelled_in_ezfolio(rows + elsewhere, ref)
+            if rebook and REBOOK.search(str(rec.get("internal_notes") or "")):
+                rebuild = True  # dev, 2026-11-12, Pegas 11131133: the cancelled group is not built again by a CHANGE
+            if not rebuild and rebook:
+                raise Refused(f"booking_ref {ref!r} was cancelled in EZFOLIO (CANCEL row {rebook['_row']}, ez_status "
+                              f"done). Booked again under the same number (a tour operator's on-request type declined, "
+                              f"another type sent in the allotment): NEW rows are right, the build tool makes a new "
+                              f"group. Write internal_notes \"Rebooked after cancellation row {rebook['_row']}\" (plus "
+                              f"\"Allotment\" for a tour operator) and run this again. A CHANGE row would get "
+                              f"ez_status no_change and no PDF")
             if not rebuild:
                 hit = next(r for r in rows + elsewhere if _parts(r.get("booking_ref")) & _parts(ref))
                 raise Refused(f"booking_ref {ref!r}: {', '.join(sorted(_parts(hit['booking_ref']) & _parts(ref)))} "
