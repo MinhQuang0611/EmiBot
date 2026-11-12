@@ -45,6 +45,31 @@ SHARE_HOSTS = ("sharepoint.com", "1drv.ms", "onedrive.live.com")
 _URL = re.compile(r"https?://[^\s<>\"'\]\)]+", re.I)
 
 
+def fetch_public_link(url, timeout=30):
+    """TEST (Dũng, 2026-11-11): the file behind a public ("Anyone with the link") OneDrive/SharePoint share, with no
+    sign-in: a cookie jar keeps the FedAuth cookie SharePoint sets on the guest-access redirect, and download=1 asks
+    for the file itself. {name, data}, or None when the link isn't public (403, a sign-in page, an HTML viewer)."""
+    import http.cookiejar
+    import urllib.error
+    import urllib.request
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    link = url + ("&" if "?" in url else "?") + "download=1"
+    try:
+        with opener.open(urllib.request.Request(link, headers={"User-Agent": "Mozilla/5.0"}), timeout=timeout) as r:
+            ctype = r.headers.get("Content-Type", "")
+            disp = r.headers.get("Content-Disposition", "")
+            data = r.read(MAX_LINK_FILE + 1)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    if not data or len(data) > MAX_LINK_FILE or "html" in ctype.lower():
+        return None
+    m = re.search(r"filename\*=UTF-8''([^;]+)", disp, re.I) or re.search(r'filename="?([^";]+)"?', disp, re.I)
+    name = urllib.parse.unquote(m.group(1)).strip() if m else ""
+    if not name:
+        name = "linked-file.pdf" if data[:5] == b"%PDF-" else "linked-file"
+    return {"name": name, "data": data}
+
+
 def share_links(text):
     """OneDrive / SharePoint links in an email body, each once, in order. Outlook's SafeLinks wrapper
     (…safelinks.protection.outlook.com/?url=…) is taken off first."""
@@ -518,7 +543,18 @@ class GraphMail:
         needs the sign-in's Files.Read.All and a link sales@ may open. Raises httpjson.HttpError when it can't."""
         sid = "u!" + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
         redeem = {"Prefer": "redeemSharingLinkIfNecessary"}
-        item = self._call("GET", f"{GRAPH}/shares/{sid}/driveItem", headers=redeem)
+        try:
+            item = self._call("GET", f"{GRAPH}/shares/{sid}/driveItem", headers=redeem)
+        except httpjson.HttpError as e:
+            # TEST (Dũng, 2026-11-11): an "Anyone with the link" share opens without Graph or Files.Read.All, the way a
+            # browser does: the first redirect (guestaccess) sets the FedAuth cookie, then ?download=1 gives the file.
+            # Only when Graph refused; a link that isn't public still raises Graph's own error.
+            if e.status not in (401, 403, 404):
+                raise
+            got = fetch_public_link(url)
+            if got is None:
+                raise
+            return [got]
         if "folder" in item:
             items = [k for k in self._pages(f"{GRAPH}/shares/{sid}/driveItem/children") if "file" in k]
             items = items[:MAX_LINK_FILES]
