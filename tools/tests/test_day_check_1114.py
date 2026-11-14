@@ -78,6 +78,13 @@ class DayCheckTest(unittest.TestCase):
         self.st.data["reviews"]["950"] = {"draft_id": "d", "status": "open", "source": "n", "kind": "ota_note"}
         self.assertEqual(self.run_check(messages, [row(1937)])["OK"], 1)
 
+    def test_a_day_check_reason_closes_a_check_not_a_miss(self):
+        messages = {"tacx": msg("res@agency.vn", "Cancel booking Hoang family", "2026-11-14T06:00:00Z"),
+                    "cx": msg(SYNXIS, "SynXis Res Cancelled (92777EF003350 )", "2026-11-14T05:00:00Z")}
+        self.st.mark_processed("tacx", "DAY CHECK: agency withdrew the cancellation in its next mail")
+        self.st.mark_processed("cx", "DAY CHECK: fine")
+        self.assertEqual(self.marks(self.run_check(messages, [row(1937)])), {"cx": "MISSING"})
+
     def test_the_telegram_line(self):
         ok = {"OK": 40, "CHECK": 0, "MISSING": 0, "RECENT": 2, "items": []}
         self.assertIn("tất cả đã xử lý", day_check.summary(ok, "14/11"))

@@ -11,7 +11,7 @@ Runs every day including weekends — agencies email on Saturdays and Sundays.
 | 3 | Payments | `0 8,15 * * *`, plus `35 7-21 * * *` command check for a reminder due | 08:00 and 15:00, and hourly when a reminder falls due |
 | 4 | Daily report to Karen | `30 21 * * *` | 21:30 |
 | 5 | Stop-sell list | `0 8,9 * * *` command job, no model | 08:00; 09:00 only makes it if 08:00 failed |
-| 6 | End-of-day check | `30 23 * * *` command job; the agent only when a line needs a look | 23:30 |
+| 6 | End-of-day check | `30 23 * * *` command job; the agent only when a line needs a look; agent safety run `0 6 * * *` | 23:30, and 06:00 for what is left |
 
 ## 1. Inbox scan
 Hourly (Karen, 2026-10-08). The 06:00–22:00 window is Monica's, matched to job 2.
@@ -120,7 +120,7 @@ OpenClaw command job, no model: `.venv/bin/python -m tools.emi stop-sales`, from
 ## 6. End-of-day check — `30 23 * * *` (dev, 2026-11-14)
 "Cuối ngày thì AI cũng phải tự check lại là nó làm đúng hay sai. Ví dụ 23:30 --> sẽ vào từng email một để kiểm tra lại là đã log vào intake sheet chưa." Same day as Karen's "rất nhiều New booking hoặc cancel bị miss".
 
-**Automations (to create):** "Emi day check" (command job, `30 23 * * *` Asia/Ho_Chi_Minh, no model): `.venv/bin/python -m tools.day_check <job 6 id>` from `/data/emi`. It puts every email of the last 25 hours (and any of the 3 days before never marked done) against Emi's record and the intake sheet, posts one Telegram line (all fine, or how many were missed and which), and starts "Emi job 6 - day check" (isolated agent run, no schedule of its own, report to Telegram) only when a line says `MISSING` or `CHECK`.
+**Automations (to create):** "Emi day check" (command job, `30 23 * * *` Asia/Ho_Chi_Minh, no model): `.venv/bin/python -m tools.day_check <job 6 id>` from `/data/emi`. It puts every email of the last 25 hours (and any of the 3 days before never marked done) against Emi's record and the intake sheet, posts one Telegram line (all fine, or how many were missed and which), and starts "Emi job 6 - day check" (isolated agent run, report to Telegram) only when a line says `MISSING` or `CHECK`. Job 6 also runs by itself at 06:00 with `day-check --hours 32` as a safety net (the 23:30 run failed, or left more than 15 emails); nothing to look at → `NO_REPLY`. An outcome beginning `DAY CHECK:` closes a CHECK line (job 6 looked and said why); a MISSING line (no row, no CANCEL row) stays until the row is there.
 
 ### Job 6 — the commands
 1. `py -m tools.emi day-check` → one block per email that needs a look, with its `id`, rows found, outcome and the reason. `MISSING`: never handled, an OTA notice with no row, a cancellation with no CANCEL row, an outcome naming rows the sheet doesn't have. `CHECK`: a booking-like email with no row and no reason in its outcome, a cancellation with no CANCEL row and no question to Karen, an OTA notice without its intake note, a booking-like email closed as noise.

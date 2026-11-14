@@ -91,6 +91,8 @@ def judge(m, st, rows, now):
             check.append("a cancellation with no CANCEL row and no question to Karen")
         elif BOOKING_SUBJECT.search(subject) and not hits and not NO_ROW_REASON.search(outcome):
             check.append("looks like a booking, no row, and the outcome doesn't say why")
+    if outcome.strip().upper().startswith("DAY CHECK:"):
+        check = []  # job 6 opened it and said why it is fine; a MISSING fact (no row, no CANCEL row) still counts
     mark = "MISSING" if missing else "CHECK" if check else "OK"
     return mark, missing + check, hits
 
