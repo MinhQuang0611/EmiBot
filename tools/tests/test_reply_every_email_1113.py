@@ -60,11 +60,16 @@ class NoReplySenderTest(unittest.TestCase):
                          "g@x.com")
         self.assertEqual(emi.booking_email("Email :\nCity :"), "")
 
-    def test_a_synxis_notice_is_answered_to_the_booking_email(self):
-        self.assertEqual(recipients(SYNXIS, NOTICE_3350), (["lodgingsupport@trip.com"], []))
+    def test_a_synxis_notice_now_gets_only_the_intake_note(self):
+        # Karen 14/11 replaced this day's rule: no reply to the booking email, ota-note on the SynXis thread
+        for body in (NOTICE_3350, "Last Name : HUSSAIN\nEmail :\n"):
+            with self.assertRaises(emi.Refused) as e:
+                recipients(SYNXIS, body)
+            self.assertIn("ota-note", str(e.exception))
 
-    def test_no_email_in_the_booking_goes_back_to_the_no_reply_address(self):
-        self.assertEqual(recipients(SYNXIS, "Last Name : HUSSAIN\nEmail :\n"), (None, None))
+    def test_another_robot_is_answered_to_the_booking_email(self):
+        self.assertEqual(recipients("noreply@hotelnotice.example", NOTICE_3350), (["lodgingsupport@trip.com"], []))
+        self.assertEqual(recipients("noreply@hotelnotice.example", "Email :\n"), (None, None))
 
     def test_an_agency_is_answered_as_before(self):
         self.assertEqual(recipients("res@agency.vn", "Email: other@x.com"), (None, None))
@@ -146,19 +151,19 @@ class DoneNeedsAReplyTest(unittest.TestCase):
         self.st.ask("SynXis 92777EF003350 (Trip.com)", "something", "m1")
         with self.assertRaises(emi.Refused) as e:
             self.check("waits on Karen E-001")
-        self.assertIn("NO REPLY DRAFTED", str(e.exception))
+        self.assertIn("NO OTA NOTE", str(e.exception))
 
-    def test_rows_and_a_draft_pass(self):
-        self.st.data["reviews"]["760"] = {"draft_id": "d1", "status": "open", "source": "m1"}
-        self.check("NEW row 1937 Trip.com 1653718335673330 / SynXis 92777EF003350; confirmation #760 before PDF")
+    def test_rows_and_the_note_pass(self):  # Karen 14/11: the intake note, not a confirmation (test_ota_note_1114)
+        self.st.data["reviews"]["760"] = {"draft_id": "d1", "status": "open", "source": "m1", "kind": "ota_note"}
+        self.check("NEW row 1937 Trip.com 1653718335673330 / SynXis 92777EF003350; note #760")
 
     def test_rows_without_a_draft_are_refused(self):
         with self.assertRaises(emi.Refused) as e:
             self.check("NEW row 1937 Trip.com 1653718335673330 / SynXis 92777EF003350")
-        self.assertIn("NO REPLY DRAFTED", str(e.exception))
+        self.assertIn("NO OTA NOTE", str(e.exception))
 
     def test_the_other_email_of_the_same_booking_names_its_draft(self):
-        self.st.data["reviews"]["760"] = {"draft_id": "d1", "status": "open", "source": "agoda-mail"}
+        self.st.data["reviews"]["760"] = {"draft_id": "d1", "status": "open", "source": "agoda-mail", "kind": "ota_note"}
         self.check("SynXis copy of Agoda 1783017402, row 1937; same booking as #760")
         with self.assertRaises(emi.Refused):
             self.check("SynXis copy, same booking as #999")  # no such draft
@@ -252,18 +257,20 @@ def owed(rows, st=None):
 
 
 class OtaConfirmationOwedTest(unittest.TestCase):
-    def test_an_ota_booking_from_today_is_owed_its_confirmation(self):
-        self.assertEqual([i["ref"] for i in owed([ota(3400, "13/11/2026 09:00")])], ["SynXis 92777EF003400 (Trip.com)"])
+    def test_an_ota_booking_is_owed_no_confirmation_any_more(self):  # Karen 14/11: the intake note only
+        self.assertEqual(owed([ota(3400, "13/11/2026 09:00")]), [])
 
     def test_older_ota_bookings_are_not_chased_back(self):
         self.assertEqual(owed([ota(3350, "10/11/2026 16:38")]), [])
 
-    def test_an_ota_change_from_today_is_owed(self):
+    def test_an_ota_change_is_owed_only_when_a_person_asked(self):
         rows = [ota(3401, "13/11/2026 08:00"),
                 ota(3402, "13/11/2026 09:00", action="CHANGE", booking_ref="SynXis 92777EF003401 (Trip.com)",
                     ezfolio_group_code="34401", departure="23/11/2026", total_vnd="5020986",
                     what_changed="Departure 22/11 → 23/11", company_email=SYNXIS)]
         rows[0]["ezfolio_group_code"] = "34401"
+        self.assertEqual(owed(rows), [])  # the SynXis modification itself: its intake note only
+        rows[1]["company_email"] = "ops@trip-agent.example"  # a person at the agency asked: still confirmed
         self.assertEqual([i.get("change") for i in owed(rows)], ["Departure 22/11 → 23/11"])
 
 

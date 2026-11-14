@@ -17,9 +17,17 @@ from datetime import datetime
 from . import build_watch, config, payments
 
 
-def inbox_has_work(mail, state):
+def inbox_has_work(mail, state, leftovers=False):
+    """New mail since the last scan. leftovers=True (job 1's own first step, and so its 3-hourly safety run): also an
+    email from the last days nobody marked done (Karen, 14/11, missed bookings), which inbox-new now lists again.
+    The every-minute watcher keeps the one cheap call."""
     since = state.data["last_scan"]
-    return since is None or mail.has_new_inbox_mail(since)
+    if since is None or mail.has_new_inbox_mail(since):
+        return True
+    if not leftovers:
+        return False
+    from .emi import unhandled_inbox
+    return bool(unhandled_inbox(mail, state, since))
 
 
 def confirmations_have_work(mail, sheet, state):
@@ -63,7 +71,7 @@ def main(argv):
     try:
         st = config.state()
         if argv[0] == "inbox":
-            work = inbox_has_work(config.mail(), st)
+            work = inbox_has_work(config.mail(), st, leftovers=agent)
         elif argv[0] == "confirmations":
             mail, sheet = config.mail(), config.sheet()
             work = confirmations_have_work(mail, sheet, st)

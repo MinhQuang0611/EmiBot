@@ -5,6 +5,9 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi show <message_id>                 # whole thread + attachments saved and read
     python -m tools.emi mail-find <text> [--days 14]      # emails matching text (ref, subject, sender, attached file)
     python -m tools.emi done <message_id> <outcome>       # mark one email handled
+    python -m tools.emi ota-note <message_id> --ref <booking_ref>  # OTA/SynXis notice: note on its thread, after the rows
+    python -m tools.emi ota-audit [--days 7]              # OTA notices vs the intake sheet: OK / CHECK / MISSING
+    python -m tools.emi day-check [--hours 25]            # end of day: every email vs Emi's record and the sheet
     python -m tools.emi mark-scanned <scan_started>       # end of job 1: move the scan clock
     python -m tools.emi sheet-schema                      # every column: level, required, allowed values, sheet instruction
     python -m tools.emi sheet-access                      # the sheet Emi writes to, and whether it has edit access
@@ -104,6 +107,7 @@ from .state import REVIEW_OPEN, now_iso
 VN = timezone(timedelta(hours=7))
 WORK_DIR = os.environ.get("EMI_WORK_DIR", "emi-work")
 FIRST_SCAN_LOOKBACK = timedelta(hours=24)   # inbox-triage.md: no last scan -> the last 24 hours
+LEFTOVER_LOOKBACK = timedelta(days=3)       # inbox-new also lists emails this far before the last scan, never done
 # Fake "new booking" senders (Tracy audit 29/10): never listed, logged, drafted, clicked or reported.
 PHISHING_SENDERS = {"care@mail.myjorney.com", "vip@mail.voyageandco.com"}
 
@@ -140,14 +144,31 @@ def read_text(path):
 
 # --- inbox ---
 
+def _leftover_since(since):
+    """How far back inbox-new looks for an email nobody marked done (Karen, 14/11: "rất nhiều New booking hoặc cancel
+    bị miss"). Before this an email received before the scan clock was never listed again: a run that moved the clock
+    with mail still unread, or one left 'not done' after three refusals, lost it for good. Processed ids are kept 7
+    days before the clock (State.mark_scanned), so 3 days back never re-lists a handled email."""
+    t = datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ") - LEFTOVER_LOOKBACK
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def unhandled_inbox(mail, st, since):
+    """The inbox's emails from LEFTOVER_LOOKBACK before `since` on, not yet done and not phishing, oldest first."""
+    return [m for m in mail.list_inbox_since(_leftover_since(since)) if not st.is_processed(m["id"])
+            and _sender(m) not in PHISHING_SENDERS]
+
+
 def inbox_new(mail, st, out=print):
     started = now_iso()
     since = st.data["last_scan"]
     if since is None:
         since = (datetime.now(timezone.utc) - FIRST_SCAN_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
         out(f"first scan: no last_scan saved, reading the last {FIRST_SCAN_LOOKBACK.total_seconds() / 3600:.0f} hours")
-    msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])
-            and _sender(m) not in PHISHING_SENDERS]
+        msgs = [m for m in mail.list_inbox_since(since) if not st.is_processed(m["id"])
+                and _sender(m) not in PHISHING_SENDERS]
+    else:
+        msgs = unhandled_inbox(mail, st, since)
     if config.SIM_DIR:
         out(f"SIM MODE: emails from {config.SIM_DIR}/inbox, drafts to files — the real mailbox is not touched")
     only = [] if config.SIM_DIR else [a.strip().lower() for a in os.environ.get("EMI_TEST_ONLY_FROM", "").split(",")
@@ -160,11 +181,14 @@ def inbox_new(mail, st, out=print):
             f"{len(skipped)} other email(s) in the window ignored")
     out(f"scan_started={started}")
     out(f"since={since} ({vn(since)} Vietnam time)")
-    out(f"new emails: {len(msgs)}")
+    earlier = [m for m in msgs if (m.get("receivedDateTime") or "")[:19] < since[:19]]
+    out(f"new emails: {len(msgs)}" + (f" ({len(earlier)} received before the last scan and never marked done: "
+                                       f"handle them first, they were missed)" if earlier else ""))
     for m in msgs:
         clip = " [attachments]" if m.get("hasAttachments") else ""
+        late = "\n  MISSED EARLIER: received before the last scan, never done" if m in earlier else ""
         out(f"\n- id: {m['id']}\n  received: {vn(m['receivedDateTime'])}\n  from: {addr(m.get('from'))}"
-            f"\n  subject: {m.get('subject', '')}{clip}")
+            f"\n  subject: {m.get('subject', '')}{clip}{late}")
     return msgs, started
 
 
@@ -287,6 +311,179 @@ def is_ota_notice(sender, subject):
             and bool(OTA_NOTICE_SUBJECT.search(subject or "")))
 
 
+def is_ota_robot_notice(sender, subject):
+    """An OTA or SynXis booking notice sent by a robot: answered only by ota-note, to the robot itself (Karen, 14/11)."""
+    domain = (sender or "").lower().rpartition("@")[2]
+    return is_ota_notice(sender, subject) and (is_no_reply(sender) or domain == "synxis.com"
+                                               or domain.endswith(".synxis.com"))
+
+
+# --- OTA notices: the intake note (Karen, 2026-11-14) ---
+# "việc reply cho booking OTA thì chỉ cần reply cho email Synxis no reply để chị biết được là Emi nhận thông tin bổ
+# sung vào intake sheet rồi. Chị thấy rất nhiều New booking hoặc cancel bị miss." Replaces the dev's 13/11 rule (the
+# OTA confirmation with the PDF, to the email printed in the booking): an OTA notice is answered by a short note on
+# its own thread, to the no-reply sender, saying which intake rows hold it. Written only once the rows are there, so
+# a notice without its note in the thread is one Emi hasn't put on the sheet.
+NOTICE_ACTIONS = (("CANCEL", re.compile(r"cancel|huỷ|hủy", re.I)),
+                  ("CHANGE", re.compile(r"modif|chang|amend|thay đổi", re.I)))
+ACTION_VI = {"NEW": "booking mới", "CHANGE": "thay đổi", "CANCEL": "huỷ"}
+
+
+def notice_action(subject):
+    """'SynXis Res Cancelled (…)' → CANCEL, '… (MODIFICATION)' → CHANGE, anything else → NEW."""
+    for action, rx in NOTICE_ACTIONS:
+        if rx.search(subject or ""):
+            return action
+    return "NEW"
+
+
+def booking_numbers(text):
+    """The booking numbers in a ref or a subject: 6+ digits, so a date or a room count never counts."""
+    return {n.lower() for n in schema.ref_numbers(text or "") if sum(c.isdigit() for c in n) >= 6}
+
+
+def rows_for_numbers(rows, numbers):
+    return [r for r in rows if numbers & (booking_numbers(r.get("booking_ref")) | booking_numbers(r.get("confirmation_no")))]
+
+
+def _dedupe(rows):
+    seen, out = set(), []
+    for r in rows:
+        key = (r.get("_sheet", ""), r.get("_row"))
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
+def ota_note_text(action, rows):
+    """The note: the booking, the guest, the stay and the intake rows, in Vietnamese (it is for the team, not the
+    robot). What is missing (column AJ's 'THIẾU:' line) is named, so nobody has to open the sheet to see it."""
+    head = rows[0]
+    rooms = ", ".join(f"{r['_row']} ({r.get('action', '')} {(r.get('rooms') or '').strip()} "
+                      f"{(r.get('room_code') or '').strip()})".replace("  ", " ").replace(" )", ")") for r in rows)
+    lines = ["Đã nhận và đã ghi vào intake sheet.", "",
+             f"Booking: {head.get('booking_ref', '').strip()}",
+             f"Khách: {(head.get('guest_names') or '').strip() or '(chưa có tên)'}",
+             f"Ngày ở: {head.get('arrival', '').strip()} – {head.get('departure', '').strip()}",
+             f"Loại: {ACTION_VI.get(action, action)}",
+             f"Dòng intake: {rooms}"]
+    gaps = sorted({g for r in rows for g in schema.missing_listed(r.get("transfer") or "")})
+    if gaps:
+        lines.append(f"Còn thiếu (cột AJ): {'; '.join(gaps)}")
+    lines += ["", "Reservations Team", "HAYA Hotel Phu Quoc, Trademark Collection by Wyndham"]
+    return "\n".join(lines)
+
+
+def ota_note(mail, sheet, st, args, tg=None, out=print, live=None):
+    """ota-note <message_id> --ref <booking_ref>: the reply to an OTA or SynXis notice, after its rows are written."""
+    msg = mail.get_message_text(args.message_id)
+    sender = ((msg.get("from") or {}).get("emailAddress") or {}).get("address", "")
+    subject = msg.get("subject", "")
+    if not is_ota_notice(sender, subject):
+        raise Refused(f"{sender} '{subject}' is not an OTA or SynXis booking notice: answer it with draft-reply")
+    had = [n for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
+           and r.get("kind") == "ota_note" and r.get("status") in (REVIEW_OPEN, "approved")]
+    if had:
+        raise Refused(f"this notice already has its note #{had[0]}: no second one")
+    action = notice_action(subject)
+    numbers = booking_numbers(args.ref) | booking_numbers(subject)
+    if not numbers:
+        raise Refused("--ref has no booking number (6+ digits): give the booking_ref written on the rows")
+    rows = _dedupe(sheet.rows() + live_rows(live, out))
+    hits = rows_for_numbers(rows, numbers)
+    if not hits:
+        raise Refused(f"ROW NOT ON THE SHEET: no intake row carries {' / '.join(sorted(numbers))}. The note tells "
+                      f"the team the booking is on the sheet, so it comes after the rows: sheet-append first "
+                      f"(an OTA booking is always accepted, gaps go in column AJ), then ota-note. No draft made.")
+    if action == "CANCEL" and not any(r.get("action") == "CANCEL" for r in hits):
+        raise Refused(f"NO CANCEL ROW: '{subject}' cancels the booking but its rows ({', '.join(str(r['_row']) for r in hits)}) "
+                      f"have no CANCEL: write the CANCEL rows first (sheet-template CANCEL, sheet-append), then "
+                      f"ota-note. No draft made.")
+    state = booking_state(hits, hits[-1].get("booking_ref", ""))
+    if action == "CANCEL":
+        state = [r for r in state if r.get("action") == "CANCEL"] or [r for r in hits if r.get("action") == "CANCEL"]
+    text = ota_note_text(action, state)
+    args.body, args.kind, args.row = None, "ota_note", str(state[0]["_row"])
+    args.ref = args.ref or state[0].get("booking_ref", "")
+    args.to, args.cc, args.internal, args.sender_only = sender, "", False, True
+    args.replaces = getattr(args, "replaces", "")
+    return draft_reply(mail, st, args, tg=tg, out=out, text=text)
+
+
+SYNXIS_LAST_NAME = re.compile(r"Last\s*Name\s*:[ \t]*([^\r\n]+)", re.I)
+SYNXIS_ARRIVAL = re.compile(r"Arrival\s*(?:Date)?\s*:\s*(?:[A-Za-z]+,\s*)?([A-Za-z]+\s+\d{1,2},\s*\d{4}|\d{1,2}/\d{1,2}/\d{4})", re.I)
+
+
+def notice_rows(mail, m, rows):
+    """The intake rows of one notice: by the numbers in its subject, then in its body (a multi-room booking's row may
+    carry the OTA's number and the first SynXis number only), then by surname + arrival. (rows, how)."""
+    numbers = booking_numbers(m.get("subject", ""))
+    hits = rows_for_numbers(rows, numbers) if numbers else []
+    if hits:
+        return hits, "number"
+    try:
+        body = (mail.get_message_text(m["id"]).get("body") or {}).get("content", "")
+    except Exception:
+        return [], "body not readable"
+    hits = rows_for_numbers(rows, booking_numbers(body))
+    if hits:
+        return hits, "number in the email"
+    name, arrival = SYNXIS_LAST_NAME.search(body), SYNXIS_ARRIVAL.search(body)
+    if name and arrival:
+        try:
+            raw = arrival.group(1)
+            day = (datetime.strptime(raw, "%d/%m/%Y") if "/" in raw else datetime.strptime(raw, "%B %d, %Y"))
+        except ValueError:
+            return [], "no match"
+        surname, when = payments._plain(name.group(1)).strip(), day.strftime("%d/%m/%Y")
+        hits = [r for r in rows if surname and surname in payments._plain(r.get("guest_names", ""))
+                and (r.get("arrival") or "").strip() == when]
+        if hits:
+            return hits, f"surname {surname.upper()} + arrival {when}"
+    return [], "no match"
+
+
+def ota_audit(mail, st, rows, days=7, out=print):
+    """ota-audit [--days N], read only (Karen, 14/11: "rất nhiều New booking hoặc cancel bị miss"): every OTA or
+    SynXis booking notice in the inbox of the last N days against the intake sheet and Emi's own record. One line per
+    notice: OK, CHECK (on the sheet, something to look at) or MISSING (not on the sheet as it should be). Done-ness is
+    known for 7 days (processed ids are kept that long)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    notices = [m for m in mail.list_inbox_since(since) if is_ota_notice(_sender(m), m.get("subject", ""))]
+    rows = _dedupe(rows)
+    drafts = {}
+    for n, r in st.data["reviews"].items():
+        if r.get("status") != "denied" and r.get("source"):
+            drafts.setdefault(r["source"], []).append(f"#{n} {r.get('kind', '')}")
+    counts = {"OK": 0, "CHECK": 0, "MISSING": 0}
+    out(f"OTA notices in the inbox since {vn(since)} Vietnam time: {len(notices)}")
+    for m in notices:
+        subject = m.get("subject", "")
+        action = notice_action(subject)
+        hits, how = notice_rows(mail, m, rows)
+        done = st.data["processed"].get(m["id"])
+        missing, check = [], []
+        if not hits:
+            missing.append(f"no row on the sheet ({how})")
+        elif action == "CANCEL" and not any(r.get("action") == "CANCEL" for r in hits):
+            missing.append("cancelled, but no CANCEL row")
+        elif action == "CHANGE" and not any(r.get("action") == "CHANGE" for r in hits):
+            check.append("modification: no CHANGE row (fine only if the NEW row was updated before the build)")
+        if done is None:
+            (missing if not hits else check).append("never marked done by Emi")
+        mark = "MISSING" if missing else "CHECK" if check else "OK"
+        counts[mark] += 1
+        where = ", ".join(f"{r['_row']} {r.get('action', '')}" for r in hits[-6:]) or "-"
+        if hits and how != "number":
+            where += f" (found by {how})"
+        out(f"{mark} {vn(m['receivedDateTime'])} {action} | {subject[:80]}\n    rows: {where} | drafts: "
+            f"{', '.join(drafts.get(m['id'], [])) or 'none'}" + (f" | done: {done['outcome'][:100]}" if done else "")
+            + (f"\n    → {'; '.join(missing + check)}" if missing or check else ""))
+    out(f"\nOK {counts['OK']}, CHECK {counts['CHECK']}, MISSING {counts['MISSING']}")
+    return counts
+
+
 def check_email_answered(st, message_id, outcome, load_message, out=print):
     """done's second check (dev, 2026-11-13): the email has its reply, or the outcome says why not.
     load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP."""
@@ -303,9 +500,16 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
         raise Refused("OTA BOOKING WITHOUT A ROW: an OTA or SynXis booking notice always gets its rows (OTA bookings "
                       "are always accepted, Karen 04/11) and is never held for a question to Karen. A missing field "
                       "is listed in transfer (column AJ) as 'THIẾU: Country; …' and the row goes in (dev, 13/11). "
-                      "Write the rows, draft the confirmation (draft-confirmation --before-pdf, email-templates.md "
-                      "1c), then done with the row numbers. Not marked.")
+                      "Write the rows, then ota-note <id> --ref <booking_ref>, then done with the row numbers. "
+                      "Not marked.")
     reviews = st.data["reviews"]
+    if ota and is_ota_robot_notice(sender, msg.get("subject", "")):
+        notes = {n for n, r in reviews.items() if r.get("kind") == "ota_note" and r.get("status") != "denied"}
+        if any(reviews[n].get("source") == message_id for n in notes) or set(re.findall(r"#(\d+)", outcome)) & notes:
+            return
+        raise Refused("NO OTA NOTE: an OTA or SynXis notice is answered by its intake note (Karen, 14/11): rows "
+                      "first, then 'ota-note <id> --ref <booking_ref>'. The other email of the same booking (the "
+                      "Agoda copy of a SynXis notice) names that note: 'same booking as #712'. Not marked.")
     if any(r.get("source") == message_id for r in reviews.values()):
         return
     if any(n in reviews for n in re.findall(r"#(\d+)", outcome)):
@@ -314,8 +518,8 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
     if waiting and not ota:
         return  # on request: Karen decides first (tour-operators.md); her answer brings the draft
     raise Refused("NO REPLY DRAFTED: every email gets its reply, a no-reply sender too (dev, 2026-11-13). Draft it "
-                  "first (draft-reply / draft-confirmation; a no-reply notice is answered to the email printed in "
-                  "the booking, draft-reply finds it). Answered on another email of the same booking → name that "
+                  "first (draft-reply / draft-confirmation; an OTA or SynXis notice: ota-note; another no-reply "
+                  "notice is answered to the email printed in the booking, draft-reply finds it). Answered on another email of the same booking → name that "
                   "draft in the outcome ('same booking as #712'). No reply only for: 'NO REPLY: spam' / 'NO REPLY: "
                   "OTP' / 'NO REPLY: alert' / 'NO REPLY: internal' / 'NO REPLY: Palma' (forwarded), or 'ANSWERED BY "
                   "STAFF <when>' when a person at HAYA already replied (Sent Items). Not marked.")
@@ -1377,6 +1581,10 @@ def reply_recipients(mail, args, kind):
     if robot:
         # tour-operators.md: Anex mails from a no-reply robot; replies go to its reservations desk
         return list(operators.OPERATORS[robot]["reply_to"]), []
+    if is_ota_robot_notice(sender, msg.get("subject", "")):
+        raise Refused("OTA NOTICE: an OTA or SynXis booking notice gets no confirmation and no reply to the guest "
+                      "(Karen, 14/11). Write its rows, then 'ota-note <message_id> --ref <booking_ref>': a short "
+                      "note on this thread to the no-reply sender saying which intake rows hold it. No draft made.")
     if is_no_reply(sender):
         found = booking_email((msg.get("body") or {}).get("content", ""))
         if found:
@@ -1442,7 +1650,8 @@ def reply_all_default(args, to):
     return not to and not getattr(args, "sender_only", False)
 
 
-def draft_reply(mail, st, args, tg=None, out=print):
+def draft_reply(mail, st, args, tg=None, out=print, text=None):
+    """text: the body made by the command itself (ota-note); otherwise read from args.body."""
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     if args.kind in REMINDERS:
@@ -1452,7 +1661,7 @@ def draft_reply(mail, st, args, tg=None, out=print):
             raise Refused(f"{args.ref} already had its {args.kind}: one reminder per deadline. Overdue → report to "
                           f"Karen (confirmation-replies.md)")
     check_not_stop_sales(args.kind)
-    text = read_text(args.body)
+    text = read_text(args.body) if text is None else text
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
@@ -2578,6 +2787,11 @@ def tidy_awaiting(mail, sheet, st, out=print):
                 out(f"WARNING #{n} {ref}: left Drafts before its PDF was attached (sent or deleted by a person). "
                     f"Back on confirmations-due for a confirmation with the PDF")
             continue
+        if r.get("ota_row") and r.get("action") == "NEW":
+            out(f"DENY #{n} {ref}: an OTA booking's confirmation drafted before the PDF (13–14/11). OTA bookings get "
+                f"no confirmation now, only the intake note on the SynXis notice (Karen, 14/11): review-deny {n} "
+                f"\"OTA: intake note instead\"")
+            continue
         rows = sheet.rows() if rows is None else rows
         if operators.cancelled(booking_state(rows, ref) or []):
             out(f"DENY #{n} {ref}: confirmation drafted before the PDF, and the booking is cancelled now: "
@@ -2832,6 +3046,13 @@ def parser():
     s = sub.add_parser("mail-find"); s.add_argument("text")
     s.add_argument("--days", type=int, default=ATTACHMENT_LOOKBACK_DAYS,
                    help="how far back the inbox's attached files are searched (0 = subject/body/sender only)")
+    s = sub.add_parser("ota-note", help="the reply to an OTA or SynXis notice: a note on its thread naming its rows")
+    s.add_argument("message_id"); s.add_argument("--ref", required=True, help="the booking_ref written on the rows")
+    s.add_argument("--replaces", default="")
+    s = sub.add_parser("day-check", help="every email of the day against Emi's record and the sheet (read only)")
+    s.add_argument("--hours", type=int, default=25)
+    s = sub.add_parser("ota-audit", help="OTA notices of the last N days against the intake sheet (read only)")
+    s.add_argument("--days", type=int, default=7)
     s = sub.add_parser("sent-dump", help="HAYA's sent mail of the last N days to a text file (read-only)")
     s.add_argument("--days", type=int, default=14)
     s.add_argument("--out", default=os.path.join(WORK_DIR, "sent-dump.txt"))
@@ -3004,7 +3225,7 @@ def parser():
 
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
-READ_ONLY = ("show", "mail-find", "inbox-new", "status", "sheet-find", "change-replay", "quote", "availability", "payments-due",
+READ_ONLY = ("show", "mail-find", "inbox-new", "status", "ota-audit", "day-check", "sheet-find", "change-replay", "quote", "availability", "payments-due",
              "confirmations-due", "pickup", "build-stuck", "deposit-extension")
 
 
@@ -3063,6 +3284,14 @@ def main(argv=None):
         elif c == "draft-reply":
             draft_reply(config.mail(), st, args, tg=config.telegram())
             st.save()
+        elif c == "ota-note":
+            ota_note(config.mail(), config.sheet(), st, args, tg=config.telegram(), live=config.live_sheet())
+            st.save()
+        elif c == "day-check":
+            from . import day_check
+            day_check.run(config.mail(), st, config.sheet().rows() + live_rows(config.live_sheet()), hours=args.hours)
+        elif c == "ota-audit":
+            ota_audit(config.mail(), st, config.sheet().rows() + live_rows(config.live_sheet()), days=args.days)
         elif c == "draft-forward":
             draft_forward(config.mail(), st, args, tg=config.telegram())
             st.save()

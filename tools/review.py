@@ -30,7 +30,7 @@ KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
     "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
     "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking on request",
-    "stop_sales": "Danh sách stop sell",
+    "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
 }
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 

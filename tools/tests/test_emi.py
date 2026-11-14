@@ -53,7 +53,23 @@ class InboxNewTest(unittest.TestCase):
         self.assertIn(f"scan_started={started}", text)
         self.assertIn("15/10/2026 10:12", text)  # Vietnam time
         self.assertIn("[attachments]", text)
-        self.assertIn("receivedDateTime ge 2026-10-15T00:00:00Z", http.calls[0][1])
+        # Karen 14/11 (missed bookings): three days before the clock, for emails never marked done
+        self.assertIn("receivedDateTime ge 2026-10-12T00:00:00Z", http.calls[0][1])
+
+    def test_an_email_before_the_clock_never_done_is_listed_again(self):
+        st = State(os.devnull + "-none")
+        st.mark_scanned("2026-10-15T00:00:00Z")
+        st.mark_processed("m0", "done")
+        mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
+            {"id": "m0", "receivedDateTime": "2026-10-14T20:00:00Z", "subject": "handled"},
+            {"id": "lost", "receivedDateTime": "2026-10-14T21:00:00Z", "subject": "SynXis Res Cancelled (92777EF003400 )"},
+            {"id": "m2", "receivedDateTime": "2026-10-15T03:12:00Z", "subject": "NEW BOOKING"}]})])
+        lines = []
+        msgs, _ = emi.inbox_new(mail, st, out=lines.append)
+        self.assertEqual([m["id"] for m in msgs], ["lost", "m2"])
+        text = "\n".join(lines)
+        self.assertIn("1 received before the last scan and never marked done", text)
+        self.assertEqual(text.count("MISSED EARLIER"), 1)
 
     def test_test_mode_reads_only_the_test_sender(self):
         st = State(os.devnull + "-none")
