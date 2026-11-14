@@ -38,6 +38,10 @@ OPERATORS = {
     "Odeon": {
         "contract": "1033494 (W26/S27)",
         "confirm_to": ("vietnamreservations@odeontours.com", "vietnamaccounts@odeontours.com"),
+        # 14/11, 4788749: a reply to the Extranet Reminder's sender, hotelextranet.vietnam@odeontours.com, came back
+        # as an NDR. The 6b reply to an extranet notice goes to the reservations desk instead.
+        "robots": ("hotelextranet.vietnam@odeontours.com",),
+        "reply_to": ("vietnamreservations@odeontours.com",),
         "confirm_subject": "Odeon Reservation confirmation {ref}",
         "decline_subject": "Voucher {ref} – Declined (on request)",
         "invoice": {"number": "HAYA - {group}", "due_days_before": 10, "file": "Invoice_{ref}.pdf"},

@@ -139,6 +139,8 @@ class AnexRobotTest(unittest.TestCase):
     def test_robot_lookup(self):
         self.assertEqual(operators.robot_operator("VN.Robot@ms.anextour.com"), "Anex")
         self.assertIsNone(operators.robot_operator("reservation@anexvietnam.com"))
+        self.assertEqual(operators.robot_operator("HotelExtranet.Vietnam@odeontours.com"), "Odeon")
+        self.assertIsNone(operators.robot_operator("vietnamreservations@odeontours.com"))
         # dev 07/11, Pegas 11124455: the Pegas robot asks for a reply; it goes to the reservation desk
         self.assertEqual(operators.robot_operator("pegasys-notifications@pegast.su"), "Pegas")
         self.assertEqual(operators.OPERATORS["Pegas"]["reply_to"], ("reservation.vtm@pegast.com",))
