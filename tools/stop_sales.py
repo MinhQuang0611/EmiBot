@@ -3,10 +3,11 @@
 Room types are first merged into the names the partners sell (MAPPED). A merged type with 1 room or fewer free on a
 night is STOP SELL for that night. The PDF follows docs/Stop-Sell-Room-Types-HAYA--AGENCY-through-Feb2027 plus a last
 column, NEW UPDATE, filled only on the day a line changes. The list is made every day; the partners get it only when
-it differs from the day before.
+it differs from the day before. Every room type is STOP SELL from 24/12/2026 to 06/01/2027, whatever the sheet says
+(dev, 2026-11-14; this season only).
 """
 import os
-from datetime import date
+from datetime import date, timedelta
 
 # Sheet code -> the name the partners see. None = never on the list (apartments aren't sold through them).
 MAPPED = {
@@ -24,16 +25,20 @@ MAPPED = {
     "APT-04": None,
 }
 STOP_AT = 1
+# Dev, 2026-11-14: "Emi luôn luôn stop sales all hạng phòng trong giai đoạn 24/12 - 06/01", then "không chỉ thời gian
+# hiện tại năm 2026 thôi": this season only, not every year. First and last night closed, both included.
+ALWAYS_CLOSED = (date(2026, 12, 24), date(2027, 1, 6))
 PROPERTY = "HAYA Hotel Phu Quoc"
 SUBJECT = "Stop Sale / Sold Out Room Type Chart"
 # Bcc: the partners compete, and HAYA's own list went out with an empty To (10/09).
+# Dev, 2026-11-13: WebBeds' second and third, Traveloka's last five and Trip.com's khoi.duong added; HotelBeds dropped.
 RECIPIENTS = (
-    "suppliers@webbeds.com",  # WebBeds
-    "e.zhang@hbxgroup.com",  # HotelBeds
+    "suppliers@webbeds.com", "Stopsales.APAC@webbeds.com", "tuankhang.truong@webbeds.com",  # WebBeds
     "info.partner@tiket.com",  # Tiket
-    "hotelsupport@trip.com",  # Trip.com B2B
+    "hotelsupport@trip.com", "khoi.duong@trip.com",  # Trip.com B2B
     "roomupdate@mgholiday.com",  # MG
-    "phuong.truong@traveloka.com", "hotel@traveloka.com",  # Traveloka
+    "phuong.truong@traveloka.com", "hotel@traveloka.com", "loi.le@traveloka.com", "hotel-mm-vn@traveloka.com",
+    "phuong.tran@traveloka.com", "long.duong@traveloka.com", "dung.huynh@traveloka.com",  # Traveloka
     "booking@ohmyhotel.com", "stopsell@ohmyhotel.com",  # OhMyHotel
 )
 STOP_SELL, OPEN = "STOP SELL", "OPEN"
@@ -51,9 +56,21 @@ def code_problem(data):
         + (f", gone: {', '.join(missing)}" if missing else "")
 
 
+def always_closed(today):
+    """The ALWAYS_CLOSED nights from today on; none once the period is over."""
+    first, last = ALWAYS_CLOSED
+    night = max(today, first)
+    nights = set()
+    while night <= last:
+        nights.add(night)
+        night += timedelta(days=1)
+    return nights
+
+
 def closed(data, today):
     """{(night, merged room type)} from today on with STOP_AT or fewer rooms free, the merged rows added together:
-    an overbooked -1 beside 3 free leaves 2."""
+    an overbooked -1 beside 3 free leaves 2. Every merged type on the ALWAYS_CLOSED nights, sheet or no sheet."""
+    shut = {(night, room) for night in always_closed(today) for room in set(MAPPED.values()) - {None}}
     free = {}
     for code, r in data["rooms"].items():
         room = MAPPED[code]
@@ -62,7 +79,7 @@ def closed(data, today):
         for night, rooms in r["free"].items():
             if night >= today and rooms is not None:
                 free[night, room] = free.get((night, room), 0) + rooms
-    return {key for key, rooms in free.items() if rooms <= STOP_AT}
+    return shut | {key for key, rooms in free.items() if rooms <= STOP_AT}
 
 
 def lines(now, before, data, today):

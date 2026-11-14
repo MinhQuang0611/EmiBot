@@ -13,7 +13,7 @@ from tools import stop_sales as ss
 from tools.graph_mail import GraphMail
 from tools.tests.test_replies import Base, SOURCE
 
-D1 = date(2026, 12, 30)
+D1 = date(2027, 2, 10)  # after the 24/12/2026-06/01/2027 close
 NIGHTS = [D1 + timedelta(days=i) for i in range(4)]
 PLENTY = 5
 
@@ -22,10 +22,19 @@ def sheet(**cells):
     """Every mapped code with PLENTY free every night; cells={'STD': [0, 5, 5, 5]} overrides a row. - is _ in a key."""
     rooms = {c: {"name": c, "total": 9, "free": dict(zip(NIGHTS, cells.get(c.replace("-", "_"), [PLENTY] * 4)))}
              for c in ss.MAPPED}
-    return {"title": "Future Availability — HAYA — 2026-12-30_2027-04-01", "dates": NIGHTS, "rooms": rooms}
+    return {"title": "Future Availability — HAYA — 2027-02-10_2027-05-01", "dates": NIGHTS, "rooms": rooms}
 
 
-class MergeTest(Base):
+class SheetOnly(Base):
+    """The sheet's own lines, the 24/12-06/01 close switched off (YearEndTest has it)."""
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.object(ss, "always_closed", lambda today: set())
+        p.start()
+        self.addCleanup(p.stop)
+
+
+class MergeTest(SheetOnly):
     def test_merged_rows_are_added_before_the_limit(self):
         d = sheet(STD_TWN=[1, 0, 0, 2], SUP_TWN=[0, 2, 1, -1], TPL=[-1, 5, 5, 5], TPL_SV=[3, 5, 5, 5], QPL=[2, 1, 0, -1])
         self.assertEqual(ss.closed(d, D1), {
@@ -50,7 +59,40 @@ class MergeTest(Base):
         self.assertIn("gone: TPL-SV", ss.code_problem(d))
 
 
-class DailyTest(Base):
+class YearEndTest(Base):
+    """Dev, 2026-11-14: every room type STOP SELL on the nights 24/12/2026 to 06/01/2027, rooms free or not; this
+    season only."""
+    TYPES = set(ss.MAPPED.values()) - {None}
+
+    def test_every_type_closed_24_12_to_06_01_with_rooms_free(self):
+        shut = ss.closed(sheet(), date(2026, 11, 14))
+        nights = {n for n, _ in shut}
+        self.assertEqual(min(nights), date(2026, 12, 24))
+        self.assertEqual(max(nights), date(2027, 1, 6))
+        self.assertEqual(len(nights), 14)
+        self.assertEqual(shut, {(n, r) for n in nights for r in self.TYPES})
+        self.assertNotIn("APARTMENT", " ".join(r for _, r in shut))
+
+    def test_mid_season_only_the_nights_left(self):
+        self.assertEqual(ss.always_closed(date(2027, 1, 4)), {date(2027, 1, 4), date(2027, 1, 5), date(2027, 1, 6)})
+        self.assertEqual(ss.always_closed(date(2026, 12, 24)), ss.always_closed(date(2026, 11, 14)))
+
+    def test_not_every_year(self):
+        self.assertEqual(ss.always_closed(date(2027, 1, 7)), set())
+        self.assertEqual(ss.always_closed(date(2027, 11, 14)), set())
+
+    def test_after_the_period_only_the_sheet_lines(self):
+        self.assertEqual(ss.closed(sheet(STD=[0, 5, 5, 5]), D1), {(D1, "STANDARD DOUBLE")})
+
+    def test_the_first_daily_list_with_the_season_goes_to_the_partners(self):
+        with mock.patch.object(emi, "_stale", lambda data: ""),                 mock.patch.object(emi, "_today_vn", lambda: date(2026, 11, 15)):
+            rows = emi.run_stop_sales(self.mail, self.st, None, sheet(), out=lambda line: None)
+        self.assertEqual(len(rows), 14 * len(self.TYPES))
+        self.assertEqual({r["status"] for r in rows}, {ss.STOP_SELL})
+        self.assertEqual(len([r for r in self.st.data["reviews"].values() if r["kind"] == "stop_sales"]), 1)
+
+
+class DailyTest(SheetOnly):
     def setUp(self):
         super().setUp()
         self.today = D1
@@ -77,11 +119,11 @@ class DailyTest(Base):
         d = self.drafts()[0]
         self.assertEqual(d["to"], [])
         self.assertEqual(d["bcc"], list(ss.RECIPIENTS))
-        self.assertEqual(d["attachments"], ["Stop-Sell-HAYA-2026-12-30.pdf"])
-        self.assertIn("as of 30 Dec 2026", d["text"])
+        self.assertEqual(d["attachments"], ["Stop-Sell-HAYA-2027-02-10.pdf"])
+        self.assertIn("as of 10 Feb 2027", d["text"])
         self.assertNotIn("NEW UPDATE", d["text"])
         text = self.pdf()
-        for word in ("NEW UPDATE", "HAYA Hotel Phu Quoc", "30 Dec 2026", "2026-12-30", "STANDARD DOUBLE", "STOP SELL"):
+        for word in ("NEW UPDATE", "HAYA Hotel Phu Quoc", "10 Feb 2027", "2027-02-10", "STANDARD DOUBLE", "STOP SELL"):
             self.assertIn(word, text)
 
     def test_nothing_closed_and_nothing_to_compare_no_draft(self):
@@ -91,18 +133,18 @@ class DailyTest(Base):
     def test_no_change_no_draft_but_the_pdf_is_made(self):
         d = sheet(STD=[0, 0, 5, 5])
         self.run_day(d)
-        self.run_day(d, day=NIGHTS[1])  # the 30/12 line falling away is not an update
+        self.run_day(d, day=NIGHTS[1])  # the 10/02 line falling away is not an update
         self.assertEqual(len(self.drafts()), 1)
         self.assertIn("no change", self.lines[-1])
-        self.assertIn("31 Dec 2026", self.pdf())
+        self.assertIn("11 Feb 2027", self.pdf())
 
     def test_a_new_line_is_marked_that_day_only(self):
         self.run_day(sheet(STD=[0, 5, 5, 5]))
         rows = self.run_day(sheet(STD=[0, 5, 0, 5]), day=NIGHTS[0] + timedelta(days=1))
         self.assertEqual([(r["night"], r["update"]) for r in rows],
-                         [(NIGHTS[2], "NEW - 31 Dec 2026")])
+                         [(NIGHTS[2], "NEW - 11 Feb 2027")])
         self.assertIn("1 new stop sell line(s)", self.drafts()[-1]["text"])
-        self.assertIn("NEW - 31 Dec 2026", self.pdf())
+        self.assertIn("NEW - 11 Feb 2027", self.pdf())
         rows = self.run_day(sheet(STD=[0, 5, 0, 5]), day=NIGHTS[2])
         self.assertEqual([r["update"] for r in rows], [""])
 
@@ -110,7 +152,7 @@ class DailyTest(Base):
         self.run_day(sheet(STD=[5, 0, 0, 5]))
         rows = self.run_day(sheet(STD=[5, 0, 5, 5]), day=NIGHTS[1])
         self.assertEqual([(r["night"], r["status"], r["update"]) for r in rows],
-                         [(NIGHTS[1], "STOP SELL", ""), (NIGHTS[2], "OPEN", "REOPENED - 31 Dec 2026")])
+                         [(NIGHTS[1], "STOP SELL", ""), (NIGHTS[2], "OPEN", "REOPENED - 11 Feb 2027")])
         self.assertIn("1 line(s) reopened", self.drafts()[-1]["text"])
         self.run_day(sheet(STD=[5, 0, 5, 5]), day=NIGHTS[2])
         self.assertEqual(self.st.data["stop_sales_report"]["rows"], [])
@@ -162,7 +204,7 @@ class DailyTest(Base):
             self.run_day(sheet(STD=[0, 5, 5, 5]), tg=tg)
         r = self.drafts()[0]
         self.assertTrue(r["draft_id"].startswith(review.PENDING))
-        self.assertEqual(r["attachments"], ["Stop-Sell-HAYA-2026-12-30.pdf"])
+        self.assertEqual(r["attachments"], ["Stop-Sell-HAYA-2027-02-10.pdf"])
         self.assertIn("Bcc:", tg.send.call_args[0][0])
 
     def test_nobody_writes_a_list_by_hand(self):
@@ -189,11 +231,11 @@ class GraphBccTest(Base):
         self.assertEqual(calls[0]["toRecipients"], [])
 
 
-class ParsedSheetTest(Base):
+class ParsedSheetTest(SheetOnly):
     def test_a_real_parse_gives_merged_lines(self):
-        rows = [["Room Type", "Number Of Rooms", "30/12 Wednesday", "31/12 Thursday"]]
+        rows = [["Room Type", "Number Of Rooms", "10/02 Wednesday", "11/02 Thursday"]]
         names = {c: f"{c} - X" for c in ss.MAPPED}
         rows += [[names[c], "5", "0" if c in ("STD-TWN", "SUP-TWN") else "2", "2"] for c in ss.MAPPED]
-        data = avail.parse("Future Availability — HAYA — 2026-12-30_2027-01-01", rows)
+        data = avail.parse("Future Availability — HAYA — 2027-02-10_2027-02-12", rows)
         self.assertEqual(ss.code_problem(data), "")
         self.assertEqual(ss.closed(data, D1), {(D1, "SUPERIOR TWIN")})

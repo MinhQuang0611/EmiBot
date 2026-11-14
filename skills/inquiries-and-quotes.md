@@ -204,6 +204,7 @@ A paid sea-view upgrade on a booking: `email-templates.md` 5b. Discount, free up
 ## Stop sales on the B2B and OTA sites (dev, 2026-11-05)
 Job 5 makes this once a day with `py -m tools.emi stop-sales`. I never write a stop-sales email by hand: `draft-new` and `draft-reply` refuse one.
 1. Room types are merged first: Standard Twin into Superior Twin, Twin Deluxe into Deluxe Seaview, Triple Partial Seaview into Triple. Apartments are left out. A merged type with **1 room or fewer** on a night is STOP SELL (`tools/stop_sales.py`).
+   **24/12/2026 to 06/01/2027: every room type is STOP SELL** (both nights included), whatever the sheet says (dev, 2026-11-14; `ALWAYS_CLOSED`). This season only, not every year.
 2. The PDF follows the agreed list (`docs/Stop-Sell-Room-Types-HAYA--AGENCY-through-Feb2027…pdf`) with a last column NEW UPDATE, filled on the day a line changes: `NEW - <date>`, or `REOPENED - <date>` on a line with status OPEN, shown that one day. It is saved every day in `emi-work/stop-sales/`.
 3. Only a list that differs from the last one becomes a draft: Bcc to the partners, PDF attached, Telegram notice. A person presses Send. An older list nobody sent is replaced. A night that has simply passed is not a change.
 4. `STOP SALES NOT CHECKED` (sheet unreadable, older than yesterday, or room codes changed) → no list, a Telegram line, and the comparison waits for the next good day. New room code → add it to `MAPPED`.
