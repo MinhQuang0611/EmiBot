@@ -112,6 +112,16 @@ class DayCheckTest(unittest.TestCase):
         rows = [row(2005, ref="SynXis 92777EF003400 (Agoda)")]
         self.assertEqual(self.marks(self.run_check(messages, rows)), {"i": "CHECK", "w": "MISSING"})
 
+    def test_machine_mail_closed_as_noise_is_fine(self):
+        messages = {"b": msg("MicrosoftExchange329e@haya-hotels.com", "Undeliverable: RE: Booking confirmed", "2026-11-14T03:47:00Z"),
+                    "o": msg("danniel@mgbedbank.example", "Out of Office RE: Booking Details AGTH0259", "2026-11-14T03:48:00Z"),
+                    "s": msg("noreply-email@booking.com", "Reservations with today's or tomorrow's arrival date for Haya",
+                             "2026-11-14T01:44:00Z"),
+                    "r": msg("res@third.vn", "New reservation request", "2026-11-14T08:00:00Z")}
+        for k in messages:
+            self.st.mark_processed(k, "NO REPLY: alert")
+        self.assertEqual(self.marks(self.run_check(messages, [])), {"r": "CHECK"})
+
     def test_the_telegram_line(self):
         ok = {"OK": 40, "CHECK": 0, "MISSING": 0, "RECENT": 2, "items": []}
         self.assertIn("tất cả đã xử lý", day_check.summary(ok, "14/11"))

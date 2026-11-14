@@ -25,6 +25,11 @@ RECENT = timedelta(minutes=20)
 BOOKING_SUBJECT = re.compile(r"book|reserv|đặt phòng|dat phong|xác nhận|xac nhan|confirm|voucher|rooming|cancel|huỷ|"
                              r"hủy|\bres\b|amend|modif|thay đổi|UNC|ủy nhiệm|uỷ nhiệm|payment|thanh toán|deposit|cọc",
                              re.I)
+# machine mail about a booking, never a booking itself: bounces, out-of-office, codes, Booking.com's arrival list
+AUTO_MAIL = re.compile(r"^\s*(?:undeliverable|delivery has failed|out of office|automatic reply|auto(?:matic)?[- ]?reply)|"
+                       r"verification code|mã xác minh|reservations with today's or tomorrow's arrival|"
+                       r"make booking with you", re.I)
+AUTO_SENDER = re.compile(r"autoreply|auto-reply|mailer-daemon|postmaster|microsoftexchange", re.I)
 CANCEL_SUBJECT = re.compile(r"cancel|huỷ|hủy|\bhuy\b", re.I)
 NOISE_OUTCOME = re.compile(r"^\s*NO REPLY:\s*(spam|OTP|alert)", re.I)
 # "row 2005", "rows 1937-1939", "NEW row 1912": the sheet rows an outcome names (row numbers, not refs)
@@ -38,7 +43,8 @@ OTA_NOTE_FROM = "2026-11-14T07:30:00Z"
 NO_ROW_REASON = re.compile(r"inquiry|quote|báo giá|duplicate|trùng|same booking|already|đã có|\bE-\d+|on request|"
                            r"forward|Palma|NO REPLY|ANSWERED BY STAFF|sheet-update|updated row|không cần row|no row "
                            r"needed|hỏi giá|special request|yêu cầu đặc biệt|pick-?up|đưa đón|upgrade|"
-                           r"extension|gia hạn|reminder|nhắc|invoice|hoá đơn|hóa đơn|VAT|not a booking",
+                           r"extension|gia hạn|reminder|nhắc|invoice|hoá đơn|hóa đơn|VAT|not a booking|noise|"
+                           r"marketing|no action|not needed|voucher as link|front office asked",
                            re.I)
 
 
@@ -102,6 +108,8 @@ def judge(m, st, rows, now):
             if not any(st.data["reviews"][n].get("source") == m["id"] for n in notes) \
                     and not set(re.findall(r"#(\d+)", outcome)) & notes:
                 check.append("OTA notice without its intake note (ota-note)")
+    elif done is not None and (AUTO_MAIL.search(subject) or AUTO_SENDER.search(sender)):
+        pass  # a bounce, an out-of-office, a code: closed as noise is right
     elif done is not None:
         if NOISE_OUTCOME.search(outcome) and BOOKING_SUBJECT.search(subject):
             check.append("closed as noise, but the subject looks like a booking")
