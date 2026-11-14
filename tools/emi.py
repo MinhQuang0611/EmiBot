@@ -485,6 +485,66 @@ def ota_audit(mail, st, rows, days=7, out=print):
     return counts
 
 
+OLD_RULE_FROM = "2026-11-13T00:00:00Z"  # the dev's 13/11 rule: OTA notices answered with a confirmation / to the guest
+
+
+def ota_old_drafts(mail, st, out=print):
+    """Drafts still open (or accepted, unsent) written under the 13/11 rule on an OTA or SynXis notice: a confirmation
+    or a reply to the guest's email. [(n, review, source subject)]."""
+    found = []
+    for n, r in sorted(st.data["reviews"].items(), key=lambda x: int(x[0])):
+        if (r.get("status") not in (REVIEW_OPEN, "approved") or r.get("kind") == "ota_note" or r.get("how") != "reply"
+                or (r.get("opened_at") or "") < OLD_RULE_FROM or not r.get("source")):
+            continue
+        if r.get("kind") not in ("confirmation", "cancellation", "reply", "request"):
+            continue
+        try:
+            msg = mail.get_message_text(r["source"])
+        except Exception as e:
+            out(f"#{n}: source email not readable ({str(e).splitlines()[0][:80]}), skipped")
+            continue
+        sender = ((msg.get("from") or {}).get("emailAddress") or {}).get("address", "")
+        if is_ota_robot_notice(sender, msg.get("subject", "")) or (r.get("ota_row") and r.get("kind") == "confirmation"):
+            found.append((n, r, msg.get("subject", "")))
+    return found
+
+
+def ota_drafts(mail, sheet, st, tg=None, fix=False, out=print, live=None):
+    """ota-drafts [--fix] (dev, 2026-11-14: "các draft cũ nếu cần thì sửa đi"): the 13/11-rule drafts on OTA notices.
+    --fix: an open one is denied (out of Drafts) and its notice gets its intake note (ota-note); an accepted one is
+    only listed, Karen accepted it herself. A note that can't be written (rows missing) is named, not forced."""
+    found = ota_old_drafts(mail, st, out=out)
+    out(f"drafts written to OTA notices under the 13/11 rule, still open or accepted: {len(found)}")
+    notes = {r.get("source"): n for n, r in st.data["reviews"].items()
+             if r.get("kind") == "ota_note" and r.get("status") != "denied"}
+    for n, r, subject in found:
+        line = f"#{n} {r.get('kind')} [{r.get('status')}] {r.get('ref') or '-'} | {subject[:70]}"
+        if not fix:
+            out(line)
+            continue
+        if r["status"] == "approved":
+            out(line + " → accepted by Karen: left as it is (deny it on Telegram if it should not go)")
+            continue
+        try:
+            review.deny(mail, st, tg, n, reason="OTA: intake note instead (Karen 14/11)", by="Emi", out=lambda *_: None)
+        except review.ReviewError as e:
+            out(line + f" → not denied: {e}")
+            continue
+        if r.get("awaiting_pdf"):
+            st.drop_awaiting(r.get("ref") or "", int(r.get("row") or 0))
+        if r["source"] in notes:
+            out(line + f" → denied; its notice already has note #{notes[r['source']]}")
+            continue
+        args = argparse.Namespace(message_id=r["source"], ref=r.get("ref") or "", replaces="")
+        lines = []
+        try:
+            d = ota_note(mail, sheet, st, args, tg=tg, out=lines.append, live=live)
+            notes[r["source"]] = st.review_by_draft(d["id"]) or "?"
+            out(line + f" → denied; {' '.join(lines)[:120]}")
+        except Refused as e:
+            out(line + f" → denied; NO NOTE: {str(e)[:160]}")
+
+
 def check_email_answered(st, message_id, outcome, load_message, out=print):
     """done's second check (dev, 2026-11-13): the email has its reply, or the outcome says why not.
     load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP."""
@@ -3052,6 +3112,8 @@ def parser():
     s.add_argument("--replaces", default="")
     s = sub.add_parser("day-check", help="every email of the day against Emi's record and the sheet (read only)")
     s.add_argument("--hours", type=int, default=25)
+    s = sub.add_parser("ota-drafts", help="13/11-rule drafts on OTA notices; --fix denies them and writes the notes")
+    s.add_argument("--fix", action="store_true")
     s = sub.add_parser("ota-audit", help="OTA notices of the last N days against the intake sheet (read only)")
     s.add_argument("--days", type=int, default=7)
     s = sub.add_parser("sent-dump", help="HAYA's sent mail of the last N days to a text file (read-only)")
@@ -3291,6 +3353,9 @@ def main(argv=None):
         elif c == "day-check":
             from . import day_check
             day_check.run(config.mail(), st, config.sheet().rows() + live_rows(config.live_sheet()), hours=args.hours)
+        elif c == "ota-drafts":
+            ota_drafts(config.mail(), config.sheet(), st, tg=config.telegram(), fix=args.fix, live=config.live_sheet())
+            st.save()
         elif c == "ota-audit":
             ota_audit(config.mail(), st, config.sheet().rows() + live_rows(config.live_sheet()), days=args.days)
         elif c == "draft-forward":

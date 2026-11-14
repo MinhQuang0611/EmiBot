@@ -189,5 +189,48 @@ class OtaAuditTest(Base):
         self.assertIn("never marked done by Emi", text)           # d: on the sheet, not done → CHECK
 
 
+class OldDraftsTest(Base):
+    """Dev 14/11: "các draft cũ nếu cần thì sửa đi" — the 13/11-rule drafts on OTA notices are denied and the notice
+    gets its intake note; one Karen accepted is left to her."""
+
+    def setUp(self):
+        super().setUp()
+        self.mail = Mail({"m1": (SYNXIS, SUBJECT, NOTICE_3350, "2026-11-13T09:00:00Z"),
+                          "m2": (SYNXIS, "SynXis Res Confirmed (92777EF003999 )", "", "2026-11-13T10:00:00Z"),
+                          "m3": (SYNXIS, "SynXis Res Confirmed (92777EF003351 )", "", "2026-11-13T11:00:00Z"),
+                          "ta": ("res@agency.vn", "Booking 123456", "", "2026-11-13T11:00:00Z")})
+        self.mail.deleted = []
+        self.mail.delete_draft = self.mail.deleted.append
+        self.mail.drafts.update({f"old{i}": {"id": f"old{i}", "to": ["x@y.z"], "text": "", "reply_all": True,
+                                             "source": s, "cc": None} for i, s in enumerate(("m1", "m2", "m3", "ta"))})
+        for i, (src, status, ref) in enumerate((("m1", "pending", "SynXis 92777EF003350 (Trip.com 1653718335673330)"),
+                                                ("m2", "pending", "SynXis 92777EF003999"),
+                                                ("m3", "approved", "SynXis 92777EF003351"),
+                                                ("ta", "pending", "TVR123456"))):
+            self.st.data["reviews"][str(870 + i)] = {
+                "draft_id": f"old{i}", "status": status, "how": "reply", "kind": "confirmation", "source": src,
+                "ref": ref, "row": 1937, "opened_at": "2026-11-13T09:10:00Z", "history": [], "text": "",
+                **({"ota_row": {"channel_type": "OTA"}} if src != "ta" else {})}
+        self.st.data["next_review"] = 900
+
+    def test_list_only(self):
+        found = emi.ota_old_drafts(self.mail, self.st, out=self.lines.append)
+        self.assertEqual([n for n, _, _ in found], ["870", "871", "872"])
+        emi.ota_drafts(self.mail, Sheet([row(1937)]), self.st, out=self.lines.append)
+        self.assertEqual(self.mail.deleted, [])
+
+    def test_fix(self):
+        emi.ota_drafts(self.mail, Sheet([row(1937)]), self.st, fix=True, out=self.lines.append)
+        text = "\n".join(self.lines)
+        reviews = self.st.data["reviews"]
+        self.assertEqual((reviews["870"]["status"], reviews["871"]["status"], reviews["872"]["status"],
+                          reviews["873"]["status"]), ("denied", "denied", "approved", "pending"))
+        self.assertEqual(self.mail.deleted, ["old0", "old1"])
+        notes = [r for r in reviews.values() if r.get("kind") == "ota_note"]
+        self.assertEqual([r["source"] for r in notes], ["m1"])            # m2 has no row: named, not forced
+        self.assertIn("NO NOTE: ROW NOT ON THE SHEET", text)
+        self.assertIn("accepted by Karen: left as it is", text)
+
+
 if __name__ == "__main__":
     unittest.main()
