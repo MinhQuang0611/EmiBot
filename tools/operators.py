@@ -42,6 +42,10 @@ OPERATORS = {
         "decline_subject": "Voucher {ref} – Declined (on request)",
         "invoice": {"number": "HAYA - {group}", "due_days_before": 10, "file": "Invoice_{ref}.pdf"},
         "steps": [
+            "Odeon's own notices (Extranet Reminder / Hatırlatma, PENDING list, amendment or cancellation notice) "
+            "are never a row's source and never asked for details: reply to Odeon on the notice's thread 'We have "
+            "received the information and will get back to you shortly' (email-templates.md 6b), no CHECK line; "
+            "the voucher comes from front office (mail-find <ref>; none -> ask front office for the PDF).",
             "Front office logs in to the Odeon extranet, downloads the voucher and sends it to sales@.",
             "Read the voucher: Odeon ref, guests, room type, dates, meal plan, guests, SPO code. Price with "
             "exactly the offer the SPO code applies (to-price --operator Odeon --spo <code>); SCO / SSO 5% only "

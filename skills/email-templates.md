@@ -575,6 +575,22 @@ sales@haya-hotels.com
 ```
 Both PDFs go with it: the build tool's confirmation and our proforma invoice (`tour-operators.md` Odeon). `draft-confirmation <voucher email id> <row> <body> --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation [ref]" --attach Invoice_[ref].pdf` — it refuses an Odeon row without the new-email options. The invoice is made by the command (`invoice-make`, dev 2026-11-09); when it can't be, the PDF still goes on and the first line is `[DO NOT SEND UNTIL INVOICE IS ATTACHED]` until `confirmation-attach <n>` makes it.
 
+### 6b. Odeon notice received (`draft-reply <id> <body> --kind reply --ref <ref>`, dev 2026-11-14)
+Every Odeon notice: "Extranet Hatırlatma - Extranet Reminder" (Extranet Mail Vietnam), a PENDING list or reminder, an amendment or cancellation notice. Reply on the notice's thread to its sender. The details come from front office's voucher, never from Odeon: no ask for amendment or booking details, no `[CHECK BEFORE SENDING]` line, no booking lines. This is the one acknowledgement AGENTS rule 9 allows; the confirmation (above) is still the real answer.
+```
+Dear Odeon Tours Vietnam Reservations Team,
+
+Thank you for your email regarding reservation [ref].
+
+We have received the information and will get back to you shortly.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+Several refs in one notice → `reservations [ref], [ref] and [ref]`. No ref in it → `Thank you for your email.`
+
 **Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
 
 **Decline on request** — only once Karen has said no (dev, 2026-11-10: every on-request booking is her call; `on-request`'s REJECT is only my suggestion to her). `--kind decline`. Reply on the operator's email (Anex: to reservation@anexvietnam.com); subject `Booking [no.] – Declined (on request)`:
