@@ -231,6 +231,18 @@ class OldDraftsTest(Base):
         self.assertIn("NO NOTE: ROW NOT ON THE SHEET", text)
         self.assertIn("accepted by Karen: left as it is", text)
 
+    def test_a_draft_a_person_sent_or_deleted_still_gets_its_note_once(self):
+        self.st.data["reviews"]["870"]["status"] = "gone"
+        del self.mail.drafts["old0"]
+        emi.ota_drafts(self.mail, Sheet([row(1937)]), self.st, fix=True, out=self.lines.append)
+        self.assertNotIn("old0", self.mail.deleted)
+        self.assertEqual(self.st.data["reviews"]["870"]["status"], "gone")
+        self.assertIn("gone from Drafts (sent or deleted by a person); draft #", "\n".join(self.lines))
+        self.assertEqual(len([r for r in self.st.data["reviews"].values() if r.get("kind") == "ota_note"]), 1)
+        self.lines.clear()
+        emi.ota_drafts(self.mail, Sheet([row(1937)]), self.st, fix=True, out=self.lines.append)
+        self.assertEqual(len([r for r in self.st.data["reviews"].values() if r.get("kind") == "ota_note"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

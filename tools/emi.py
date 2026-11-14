@@ -489,11 +489,11 @@ OLD_RULE_FROM = "2026-11-13T00:00:00Z"  # the dev's 13/11 rule: OTA notices answ
 
 
 def ota_old_drafts(mail, st, out=print):
-    """Drafts still open (or accepted, unsent) written under the 13/11 rule on an OTA or SynXis notice: a confirmation
-    or a reply to the guest's email. [(n, review, source subject)]."""
+    """Drafts written under the 13/11 rule on an OTA or SynXis notice (a confirmation or a reply to the guest's
+    email), still open, accepted, or gone from Drafts (a person sent or deleted it). [(n, review, source subject)]."""
     found = []
     for n, r in sorted(st.data["reviews"].items(), key=lambda x: int(x[0])):
-        if (r.get("status") not in (REVIEW_OPEN, "approved") or r.get("kind") == "ota_note" or r.get("how") != "reply"
+        if (r.get("status") not in (REVIEW_OPEN, "approved", "gone") or r.get("kind") == "ota_note" or r.get("how") != "reply"
                 or (r.get("opened_at") or "") < OLD_RULE_FROM or not r.get("source")):
             continue
         if r.get("kind") not in ("confirmation", "cancellation", "reply", "request"):
@@ -514,9 +514,10 @@ def ota_drafts(mail, sheet, st, tg=None, fix=False, out=print, live=None):
     --fix: an open one is denied (out of Drafts) and its notice gets its intake note (ota-note); an accepted one is
     only listed, Karen accepted it herself. A note that can't be written (rows missing) is named, not forced."""
     found = ota_old_drafts(mail, st, out=out)
-    out(f"drafts written to OTA notices under the 13/11 rule, still open or accepted: {len(found)}")
     notes = {r.get("source"): n for n, r in st.data["reviews"].items()
              if r.get("kind") == "ota_note" and r.get("status") != "denied"}
+    found = [f for f in found if not (f[1]["status"] == "gone" and f[1]["source"] in notes)]
+    out(f"drafts written to OTA notices under the 13/11 rule (open, accepted, or gone without a note yet): {len(found)}")
     for n, r, subject in found:
         line = f"#{n} {r.get('kind')} [{r.get('status')}] {r.get('ref') or '-'} | {subject[:70]}"
         if not fix:
@@ -525,24 +526,28 @@ def ota_drafts(mail, sheet, st, tg=None, fix=False, out=print, live=None):
         if r["status"] == "approved":
             out(line + " → accepted by Karen: left as it is (deny it on Telegram if it should not go)")
             continue
-        try:
-            review.deny(mail, st, tg, n, reason="OTA: intake note instead (Karen 14/11)", by="Emi", out=lambda *_: None)
-        except review.ReviewError as e:
-            out(line + f" → not denied: {e}")
-            continue
+        if r["status"] != "gone":  # gone: a person sent or deleted it; nothing to deny, the notice still gets its note
+            try:
+                review.deny(mail, st, tg, n, reason="OTA: intake note instead (Karen 14/11)", by="Emi",
+                            out=lambda *_: None)
+            except review.ReviewError as e:
+                if st.data["reviews"][n]["status"] != "gone":
+                    out(line + f" → not denied: {e}")
+                    continue
         if r.get("awaiting_pdf"):
             st.drop_awaiting(r.get("ref") or "", int(r.get("row") or 0))
+        done_word = "gone from Drafts (sent or deleted by a person)" if r["status"] == "gone" else "denied"
         if r["source"] in notes:
-            out(line + f" → denied; its notice already has note #{notes[r['source']]}")
+            out(line + f" → {done_word}; its notice already has note #{notes[r['source']]}")
             continue
         args = argparse.Namespace(message_id=r["source"], ref=r.get("ref") or "", replaces="")
         lines = []
         try:
             d = ota_note(mail, sheet, st, args, tg=tg, out=lines.append, live=live)
             notes[r["source"]] = st.review_by_draft(d["id"]) or "?"
-            out(line + f" → denied; {' '.join(lines)[:120]}")
+            out(line + f" → {done_word}; {' '.join(lines)[:120]}")
         except Refused as e:
-            out(line + f" → denied; NO NOTE: {str(e)[:160]}")
+            out(line + f" → {done_word}; NO NOTE: {str(e)[:160]}")
 
 
 def check_email_answered(st, message_id, outcome, load_message, out=print):
