@@ -470,7 +470,8 @@ def ota_audit(mail, st, rows, days=7, out=print):
             missing.append("cancelled, but no CANCEL row")
         elif action == "CHANGE" and not any(r.get("action") == "CHANGE" for r in hits):
             check.append("modification: no CHANGE row (fine only if the NEW row was updated before the build)")
-        if done is None:
+        recent = m["receivedDateTime"][:19] >= (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+        if done is None and recent:  # done-ness is only kept 7 days (State.mark_scanned)
             (missing if not hits else check).append("never marked done by Emi")
         mark = "MISSING" if missing else "CHECK" if check else "OK"
         counts[mark] += 1

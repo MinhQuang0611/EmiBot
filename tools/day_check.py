@@ -27,7 +27,13 @@ BOOKING_SUBJECT = re.compile(r"book|reserv|đặt phòng|dat phong|xác nhận|x
                              re.I)
 CANCEL_SUBJECT = re.compile(r"cancel|huỷ|hủy|\bhuy\b", re.I)
 NOISE_OUTCOME = re.compile(r"^\s*NO REPLY:\s*(spam|OTP|alert)", re.I)
-ROWS_CLAIMED = re.compile(r"\b(?:NEW|CHANGE|CANCEL)\b[^;]{0,40}\brows?\b|\brows?\s+\d{2,}", re.I)
+# "row 2005", "rows 1937-1939", "NEW row 1912": the sheet rows an outcome names (row numbers, not refs)
+ROW_NUMBERS = re.compile(r"\brows?\s+(\d{2,5})(?:\s*[-–]\s*(\d{2,5}))?", re.I)
+# "CHANGE row not written", "row refused", "could not be appended": the outcome says the row did NOT go in
+ROW_REFUSED = re.compile(r"rows?\b[^;.]{0,30}\b(?:not written|refused|could not|couldn't|not appended|"
+                         r"không ghi|chưa ghi)|(?:refused|could not|không ghi được)[^;.]{0,30}\brows?\b", re.I)
+# OTA notices answered by ota-note from this moment on (deployed 14/11 ~14:30 Vietnam time): older ones never had one
+OTA_NOTE_FROM = "2026-11-14T07:30:00Z"
 # an outcome that says why no row was written: an inquiry, a duplicate, a question to Karen, a forward…
 NO_ROW_REASON = re.compile(r"inquiry|quote|báo giá|duplicate|trùng|same booking|already|đã có|\bE-\d+|on request|"
                            r"forward|Palma|NO REPLY|ANSWERED BY STAFF|sheet-update|updated row|không cần row|no row "
@@ -41,12 +47,26 @@ def _vn_minute(iso):
     return vn(iso)
 
 
+def named_rows(outcome):
+    """The row numbers an outcome names as written ('row 2005', 'rows 1937-1939'); none when it says the row was
+    refused or not written."""
+    if ROW_REFUSED.search(outcome or ""):
+        return set()
+    out = set()
+    for a, b in ROW_NUMBERS.findall(outcome or ""):
+        lo, hi = int(a), int(b or a)
+        out |= set(range(lo, hi + 1)) if 0 <= hi - lo <= 20 else {lo}
+    return out
+
+
 def linked_rows(m, outcome, rows):
-    """The rows written from this email: its booking numbers (subject, outcome) or its arrival minute (received_at is
-    always the time `show` printed for the email, booking-intake.md)."""
+    """The rows written from this email: its booking numbers (subject, outcome), the rows its outcome names, or its
+    arrival minute (received_at is always the time `show` printed for the email, booking-intake.md)."""
     from .emi import booking_numbers, rows_for_numbers
     numbers = booking_numbers(m.get("subject", "")) | booking_numbers(outcome)
     hits = rows_for_numbers(rows, numbers) if numbers else []
+    named = named_rows(outcome)
+    hits += [r for r in rows if r.get("_row") in named and r not in hits]
     when = _vn_minute(m.get("receivedDateTime", ""))
     seen = {(r.get("_sheet", ""), r.get("_row")) for r in hits}
     hits += [r for r in rows if when and (r.get("received_at") or "").strip() == when
@@ -77,7 +97,7 @@ def judge(m, st, rows, now):
             missing.append("OTA cancellation with no CANCEL row")
         elif action == "CHANGE" and "CHANGE" not in actions:
             check.append("OTA modification with no CHANGE row (fine only if the NEW row was updated before the build)")
-        if done is not None and is_ota_robot_notice(sender, subject):
+        if done is not None and is_ota_robot_notice(sender, subject) and done.get("at", "") >= OTA_NOTE_FROM:
             notes = {n for n, r in st.data["reviews"].items() if r.get("kind") == "ota_note" and r.get("status") != "denied"}
             if not any(st.data["reviews"][n].get("source") == m["id"] for n in notes) \
                     and not set(re.findall(r"#(\d+)", outcome)) & notes:
@@ -85,8 +105,10 @@ def judge(m, st, rows, now):
     elif done is not None:
         if NOISE_OUTCOME.search(outcome) and BOOKING_SUBJECT.search(subject):
             check.append("closed as noise, but the subject looks like a booking")
-        elif ROWS_CLAIMED.search(outcome) and not hits:
-            missing.append("the outcome names rows, the sheet has none for this email")
+        elif named_rows(outcome) and not hits:
+            missing.append("the outcome names rows the sheet doesn't have")
+        elif ROW_REFUSED.search(outcome) and not hits:
+            check.append("its row was refused or not written: is the booking itself on the sheet?")
         elif CANCEL_SUBJECT.search(subject) and "CANCEL" not in actions and not re.search(r"\bE-\d+", outcome):
             check.append("a cancellation with no CANCEL row and no question to Karen")
         elif BOOKING_SUBJECT.search(subject) and not hits and not NO_ROW_REASON.search(outcome):

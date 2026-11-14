@@ -73,6 +73,7 @@ class DayCheckTest(unittest.TestCase):
     def test_an_ota_notice_needs_its_note(self):
         messages = {"n": msg(SYNXIS, "SynXis Res Confirmed (92777EF003350 )", "2026-11-14T05:00:00Z")}
         self.st.mark_processed("n", "NEW row 1937")
+        self.st.data["processed"]["n"]["at"] = "2026-11-14T08:00:00Z"  # after the rule went live
         result = self.run_check(messages, [row(1937)])
         self.assertEqual(self.marks(result), {"n": "CHECK"})
         self.st.data["reviews"]["950"] = {"draft_id": "d", "status": "open", "source": "n", "kind": "ota_note"}
@@ -84,6 +85,32 @@ class DayCheckTest(unittest.TestCase):
         self.st.mark_processed("tacx", "DAY CHECK: agency withdrew the cancellation in its next mail")
         self.st.mark_processed("cx", "DAY CHECK: fine")
         self.assertEqual(self.marks(self.run_check(messages, [row(1937)])), {"cx": "MISSING"})
+
+    def test_an_ota_notice_handled_before_the_rule_needs_no_note(self):
+        messages = {"n": msg(SYNXIS, "SynXis Res Confirmed (92777EF003350 )", "2026-11-14T05:00:00Z")}
+        self.st.mark_processed("n", "NEW row 1937")
+        self.st.data["processed"]["n"]["at"] = "2026-11-14T05:10:00Z"  # before ota-note existed
+        self.assertEqual(self.run_check(messages, [row(1937)])["OK"], 1)
+
+    def test_rows_named_in_the_outcome(self):
+        self.assertEqual(day_check.named_rows("booking already row 2005; asked Karen E-470"), {2005})
+        self.assertEqual(day_check.named_rows("NEW rows 1937-1939 Trip.com"), {1937, 1938, 1939})
+        for refused in ("CHANGE row not written because the original booking is absent",
+                        "CHANGE row refused: notes requires unknown meal plan",
+                        "CHANGE row could not be appended because original booking and rate details are absent"):
+            self.assertEqual(day_check.named_rows(refused), set(), refused)
+        # 13/11 Agoda 1077442446 'booking already row 2005': the row is there under its SynXis number
+        messages = {"a": msg("no-reply@agoda.com", "Agoda Booking ID 1077442446 - CONFIRMED", "2026-11-14T04:49:00Z"),
+                    "i": msg("bookings@imity.example", "Re: Request for Early Check-in and Payment Details",
+                             "2026-11-14T05:21:00Z"),
+                    "w": msg("res@dmc.example", "Re: Availability - PAYMENT REMINDER #30640", "2026-11-14T08:49:00Z")}
+        self.st.mark_processed("a", "booking already row 2005; asked Karen E-470")
+        self.st.mark_processed("i", "early check-in; CHANGE row not written because original booking absent; E-408")
+        self.st.mark_processed("w", "Payment slip logged row 2007; draft #867")
+        for k in ("a", "i", "w"):
+            self.st.data["processed"][k]["at"] = "2026-11-14T06:00:00Z"
+        rows = [row(2005, ref="SynXis 92777EF003400 (Agoda)")]
+        self.assertEqual(self.marks(self.run_check(messages, rows)), {"i": "CHECK", "w": "MISSING"})
 
     def test_the_telegram_line(self):
         ok = {"OK": 40, "CHECK": 0, "MISSING": 0, "RECENT": 2, "items": []}
