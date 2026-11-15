@@ -580,25 +580,29 @@ Every Odeon notice: "Extranet Hatırlatma - Extranet Reminder" (Extranet Mail Vi
 ```
 Dear Odeon Tours Vietnam Reservations Team,
 
-Thank you for your email regarding reservation [ref].
+Thank you very much for your email regarding reservation [ref].
 
-We have received the information and will get back to you shortly.
+We have received the information with thanks, and our reservations team will get back to you as soon as possible.
+
+Thank you for your kind cooperation.
 
 Best regards,
 Reservations Team
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
-Several refs in one notice → `reservations [ref], [ref] and [ref]`. No ref in it → `Thank you for your email.`
+Several refs in one notice → `reservations [ref], [ref] and [ref]`. No ref in it → `Thank you very much for your email.`
 
 ### 6c. On-request booking received (`draft-reply <id> <body> --kind reply --ref <ref>`, dev 2026-11-15)
 A tour operator's on-request booking while Karen decides (`tour-operators.md` step 5). On the operator's email; `draft-reply` addresses Anex's robot to reservation@anexvietnam.com and Pegas's to reservation.vtm@pegast.com. No booking lines, no promise either way, no `[CHECK BEFORE SENDING]` line. Karen's yes brings the confirmation, her no the decline (below). Odeon: 6b.
 ```
 Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,
 
-Thank you for your reservation request no. [ref].
+Thank you very much for your reservation request no. [ref] and for choosing HAYA Hotel Phu Quoc.
 
-We have received the information and will get back to you shortly.
+We have received your request, and our reservations team is now reviewing it. We will get back to you as soon as possible.
+
+Thank you for your patience, and we look forward to welcoming your guests.
 
 Best regards,
 Reservations Team
@@ -606,6 +610,8 @@ HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
 Several refs → `reservation requests no. [ref], [ref] and [ref]`.
+
+**Tone (dev, 2026-11-15: "nội dung nghe đang cứng quá, Emi là 1 nhân viên sale nên văn phong phải lễ phép chút"):** 6b and 6c are a sales desk's courtesy notes: thank them warmly, say the team is on it, close with thanks for their patience or cooperation. Still no booking lines, no yes or no, no promise of a date.
 
 **Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
 
