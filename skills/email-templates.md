@@ -576,7 +576,7 @@ sales@haya-hotels.com
 Both PDFs go with it: the build tool's confirmation and our proforma invoice (`tour-operators.md` Odeon). `draft-confirmation <voucher email id> <row> <body> --to vietnamreservations@odeontours.com --cc vietnamaccounts@odeontours.com --subject "Odeon Reservation confirmation [ref]" --attach Invoice_[ref].pdf` — it refuses an Odeon row without the new-email options. The invoice is made by the command (`invoice-make`, dev 2026-11-09); when it can't be, the PDF still goes on and the first line is `[DO NOT SEND UNTIL INVOICE IS ATTACHED]` until `confirmation-attach <n>` makes it.
 
 ### 6b. Odeon notice received (`draft-reply <id> <body> --kind reply --ref <ref>`, dev 2026-11-14)
-Every Odeon notice: "Extranet Hatırlatma - Extranet Reminder" (Extranet Mail Vietnam), a PENDING list or reminder, an amendment or cancellation notice. Reply on the notice's thread. The extranet's sender, hotelextranet.vietnam@odeontours.com, bounces (NDR 14/11), so `draft-reply` sends the reply to vietnamreservations@odeontours.com by itself; any other Odeon sender gets the reply. The details come from front office's voucher, never from Odeon: no ask for amendment or booking details, no `[CHECK BEFORE SENDING]` line, no booking lines. This is the one acknowledgement AGENTS rule 9 allows; the confirmation (above) is still the real answer.
+Every Odeon notice: "Extranet Hatırlatma - Extranet Reminder" (Extranet Mail Vietnam), a PENDING list or reminder, an amendment or cancellation notice. Reply on the notice's thread. The extranet's sender, hotelextranet.vietnam@odeontours.com, bounces (NDR 14/11), so `draft-reply` sends the reply to vietnamreservations@odeontours.com by itself; any other Odeon sender gets the reply. The details come from front office's voucher, never from Odeon: no ask for amendment or booking details, no `[CHECK BEFORE SENDING]` line, no booking lines. This and 6c are the two acknowledgements AGENTS rule 9 allows; the confirmation (above) is still the real answer.
 ```
 Dear Odeon Tours Vietnam Reservations Team,
 
@@ -590,6 +590,22 @@ HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
 Several refs in one notice → `reservations [ref], [ref] and [ref]`. No ref in it → `Thank you for your email.`
+
+### 6c. On-request booking received (`draft-reply <id> <body> --kind reply --ref <ref>`, dev 2026-11-15)
+A tour operator's on-request booking while Karen decides (`tour-operators.md` step 5). On the operator's email; `draft-reply` addresses Anex's robot to reservation@anexvietnam.com and Pegas's to reservation.vtm@pegast.com. No booking lines, no promise either way, no `[CHECK BEFORE SENDING]` line. Karen's yes brings the confirmation, her no the decline (below). Odeon: 6b.
+```
+Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,
+
+Thank you for your reservation request no. [ref].
+
+We have received the information and will get back to you shortly.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+Several refs → `reservation requests no. [ref], [ref] and [ref]`.
 
 **Other tour operators' confirmation** — a reply on the operator's email (Anex: to reservation@anexvietnam.com), the same lines as Odeon's with `Dear [Anex Reservation / Pegas / Selfie Travel / Crystal Bay] Team,`, the group code and the EZFOLIO PDF. No deposit or bank block: they pay under their contract. Crystal Bay: our invoice attached too (`--attach`).
 

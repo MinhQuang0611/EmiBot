@@ -111,7 +111,8 @@ class OnRequestGateTest(unittest.TestCase):
         text = "\n".join(lines)
         self.assertIn("suggest ACCEPT", text)
         self.assertIn("ask-karen", text)
-        self.assertIn("No row, no draft now", text)
+        self.assertIn("No row now", text)
+        self.assertIn("received note (email-templates.md 6c", text)
 
 
 class AnexRobotTest(unittest.TestCase):

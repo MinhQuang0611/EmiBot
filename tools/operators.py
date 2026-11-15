@@ -132,7 +132,7 @@ COMMON_STEPS = [
     "Allotment: NEW row, one row per room type.",
     "On request (release passed or allotment used up): Karen decides, every time (dev 10/11). on-request gives "
     "Emi's suggestion (no availability, or occupancy over 60% with check-in more than 30 days away -> REJECT; "
-    "else ACCEPT); ask-karen with it, no row, no draft. Her yes -> NEW rows (internal_notes 'On request, "
+    "else ACCEPT); ask-karen with it, no row; the operator gets the received note at once (email-templates.md 6c, dev 15/11). Her yes -> NEW rows (internal_notes 'On request, "
     "accepted by Karen E-…') + the confirmation --before-pdf; her no -> CANCEL row 'On request booking cannot be "
     "accommodated' + decline draft.",
     "The build tool builds it and puts the PDF link in pdf_link (column AQ). Held -> Long approves it. Check the "

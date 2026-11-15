@@ -176,10 +176,18 @@ class DoneNeedsAReplyTest(unittest.TestCase):
         with self.assertRaises(emi.Refused):
             self.check("NO REPLY: the guest didn't ask anything", sender="guest@gmail.com", subject="Hello")
 
-    def test_on_request_may_wait_on_karen(self):
+    def test_on_request_waits_on_karen_with_its_received_note(self):  # dev 15/11, Anex 113002157
         self.st.ask("Pegas 11131133", "QPL on request: nhận không?", "m2")
-        self.check("Pegas 11131133 on request, waits on Karen E-001", sender="pegasys-notifications@pegast.su",
-                   subject="New booking 11131133", mid="m2")
+        kw = dict(sender="pegasys-notifications@pegast.su", subject="New booking 11131133", mid="m2")
+        with self.assertRaises(emi.Refused) as e:
+            self.check("Pegas 11131133 on request, waits on Karen E-001", **kw)
+        self.assertIn("ON REQUEST WITHOUT ITS RECEIVED NOTE", str(e.exception))
+        self.st.data["reviews"]["1110"] = {"draft_id": "d", "status": "pending", "source": "m2", "kind": "reply"}
+        self.check("Pegas 11131133 on request, waits on Karen E-001, received note #1110", **kw)
+
+    def test_other_questions_may_still_wait_on_karen(self):
+        self.st.ask("TIQI 23/11", "phí huỷ bao nhiêu?", "m3")
+        self.check("cancel fee unclear, waits on Karen E-001", sender="agency@x.vn", subject="Cancel", mid="m3")
 
     def test_a_guest_writing_through_booking_com_is_not_an_ota_notice(self):
         self.assertFalse(emi.is_ota_notice("123-abc@guest.booking.com", "Booking 5859857089: a message"))

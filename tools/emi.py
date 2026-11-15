@@ -646,9 +646,16 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
         return
     if any(n in reviews for n in re.findall(r"#(\d+)", outcome)):
         return  # answered by a draft written on another email of the same booking (Agoda + SynXis pair)
-    waiting = [q for q, v in st.open_questions().items() if v.get("message_id") == message_id]
+    waiting = [v for v in st.open_questions().values() if v.get("message_id") == message_id]
+    # dev, 2026-11-15, Anex 113002157 (on request, E-538, no reply at all): "với case on req thì phải draft lại đã
+    # nhận dc thông tin". Karen still decides; the operator hears at once that we have the request.
+    if waiting and any(operators._ON_REQUEST.search(f"{v.get('ask', '')} {outcome}") for v in waiting):
+        raise Refused("ON REQUEST WITHOUT ITS RECEIVED NOTE: an on-request booking waits on Karen for yes or no, "
+                      "but the operator gets 'we have received your request and will get back to you shortly' "
+                      "now (dev, 15/11; email-templates.md 6c): draft-reply <id> <body> --kind reply --ref <ref>, "
+                      "then done <id> \"on request, waiting on Karen E-…, received note #n\". Not marked.")
     if waiting and not ota:
-        return  # on request: Karen decides first (tour-operators.md); her answer brings the draft
+        return  # Karen decides first; her answer brings the draft
     raise Refused("NO REPLY DRAFTED: every email gets its reply, a no-reply sender too (dev, 2026-11-13). Draft it "
                   "first (draft-reply / draft-confirmation; an OTA or SynXis notice: ota-note; another no-reply "
                   "notice is answered to the email printed in the booking, draft-reply finds it). Answered on another email of the same booking → name that "
@@ -2823,9 +2830,10 @@ def run_on_request(args, data, out=print):
     hint = {"REJECT": "Emi đề xuất TỪ CHỐI", "ACCEPT": "Emi đề xuất NHẬN"}.get(verdict, "Emi không đề xuất được")
     out(f"\nON REQUEST: suggest {verdict} — {'; '.join(why)}")
     # dev, 2026-11-10, Pegas 11131133: Karen decides every on-request booking; the rule is only the suggestion.
-    out(f"Next: Karen decides (dev 10/11). No row, no draft now. ask-karen <message_id> \"<operator> <ref> on "
-        f"request, <dates, rooms, pax>: nhận không? {hint}: {'; '.join(why)}\" --ref <ref>, then done <message_id> "
-        f"\"on request, waiting on Karen E-…\".\n"
+    out(f"Next: Karen decides (dev 10/11). No row now. ask-karen <message_id> \"<operator> <ref> on "
+        f"request, <dates, rooms, pax>: nhận không? {hint}: {'; '.join(why)}\" --ref <ref>; the received note "
+        f"(email-templates.md 6c, dev 15/11): draft-reply <message_id> <body> --kind reply --ref <ref>; then done "
+        f"<message_id> \"on request, waiting on Karen E-…, received note #n\".\n"
         f"  Her yes -> NEW rows as for an allotment booking (tour-operators.md step 4), internal_notes \"On request, "
         f"accepted by Karen E-…\", and the confirmation --before-pdf.\n"
         f"  Her no -> CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\"), then the decline "
