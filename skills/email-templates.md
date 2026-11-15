@@ -191,19 +191,26 @@ The agency sent a UNC with the booking or before the confirmation went out, and 
 ### 1d. OTA notice: the intake note (`ota-note`, Karen 2026-11-14)
 Every OTA or SynXis booking notice (new, modification, cancellation) is answered by a note on its own thread, to haya@haya-hotels.com (Karen, 2026-11-15: a reply to the no-reply address bounces), once its rows are on the sheet, so Karen sees in the thread that it was entered. `ota-note <id> --ref <booking_ref>` writes it; nothing to write by hand:
 
+A courteous email to front office, not a data dump (dev, 2026-11-15, on TONY TRAN's cancellation note: "sao lại reply ntn, sửa lại đi"): greeting, one sentence saying what happened and through which channel, the booking in plain words (room names, not codes; nights counted), the intake rows in one line, what is still missing in words, "Trân trọng," and "Bộ phận Đặt phòng".
+
 ```
-Đã nhận và đã ghi vào intake sheet.
+Kính gửi Bộ phận Lễ tân,
 
-Booking: SynXis 92777EF003350 (Trip.com 1653718335673330)
-Khách: JAMIL HUSSAIN
-Ngày ở: 13/11/2026 – 15/11/2026
-Loại: booking mới
-Dòng intake: 1937 (NEW 1 STD), 1938 (NEW 1 STD)
-Còn thiếu (cột AJ): country
+Bộ phận Đặt phòng xin thông báo có booking mới qua Trip.com:
 
-Reservations Team
+Mã booking: SynXis 92777EF003350 (Trip.com 1653718335673330)
+Tên khách: JAMIL HUSSAIN
+Ngày ở: 13/11/2026 – 15/11/2026 (2 đêm)
+Phòng: 02 phòng Standard Double
+
+Thông tin đã được ghi vào intake sheet (dòng 1937, 1938).
+Thông tin còn thiếu: quốc tịch.
+
+Trân trọng,
+Bộ phận Đặt phòng
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 ```
+A change: "booking dưới đây có thay đổi qua …"; a cancellation: "booking dưới đây đã được huỷ qua …".
 
 ### 1c. OTA change confirmation (`draft-confirmation`, only when a person at the OTA asked)
 **Since 14/11 (Karen) an OTA notice gets no confirmation: section 1d.** This form stays for an OTA change a person at the agency asked for by email (`confirmations-due` still owes that one). Was, 13–14/11 (dev): every OTA notice got the confirmation with the EZFOLIO PDF, to the email printed in the booking. The notice's language decides: SynXis and the OTAs write English, so English unless the guest wrote in another language. A change: the same form, "Please find the revised booking confirmation below", `Room: [new] (instead of [old])`, "It replaces the earlier confirmation." A cancellation: section 3.

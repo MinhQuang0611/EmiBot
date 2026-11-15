@@ -75,8 +75,11 @@ class OtaNoteTest(Base):
         draft = mail.drafts[d["id"]]
         self.assertEqual(draft["to"], ["haya@haya-hotels.com"])
         self.assertFalse(draft["reply_all"])
-        for bit in ("Đã nhận và đã ghi vào intake sheet", "SynXis 92777EF003350", "JAMIL HUSSAIN",
-                    "13/11/2026 – 15/11/2026", "1937 (NEW 1 STD)", "1939", "Còn thiếu (cột AJ): country"):
+        # dev 15/11, "sao lại reply ntn, sửa lại đi": a courteous note to front office, room names in words
+        for bit in ("Kính gửi Bộ phận Lễ tân", "xin thông báo có booking mới qua Trip.com", "SynXis 92777EF003350",
+                    "Tên khách: JAMIL HUSSAIN", "13/11/2026 – 15/11/2026 (2 đêm)", "03 phòng Standard Double",
+                    "intake sheet (dòng 1937, 1938, 1939)", "Thông tin còn thiếu: quốc tịch.", "Trân trọng,",
+                    "Bộ phận Đặt phòng"):
             self.assertIn(bit, draft["text"])
         self.assertNotIn("lodgingsupport@trip.com", str(draft))
         n, r = next(iter(self.st.data["reviews"].items()))
@@ -96,16 +99,16 @@ class OtaNoteTest(Base):
         self.assertIn("NO CANCEL ROW", str(e.exception))
         d = self.note(mail, [row(1937), row(2001, "CANCEL", received_at="12/11/2026 16:38")])
         text = mail.drafts[d["id"]]["text"]
-        self.assertIn("Loại: huỷ", text)
-        self.assertIn("2001 (CANCEL", text)
+        self.assertIn("đã được huỷ qua Trip.com", text)
+        self.assertIn("(dòng 2001)", text)
         self.assertNotIn("1937", text)
 
     def test_a_modification_lists_the_latest_rows(self):
         mail = Mail({"m1": (SYNXIS, MOD_SUBJECT, NOTICE_3350, "2026-11-12T09:38:00Z")})
         d = self.note(mail, [row(1937), row(2002, "CHANGE", received_at="12/11/2026 16:38", departure="16/11/2026")])
         text = mail.drafts[d["id"]]["text"]
-        self.assertIn("Loại: thay đổi", text)
-        self.assertIn("2002 (CHANGE", text)
+        self.assertIn("có thay đổi qua Trip.com", text)
+        self.assertIn("(dòng 2002)", text)
         self.assertIn("16/11/2026", text)
 
     def test_one_note_per_notice(self):

@@ -356,22 +356,50 @@ def _dedupe(rows):
     return out
 
 
+# The note's room names, as HAYA's own emails write them (email-templates.md); an unknown code is shown as it is.
+ROOM_NAMES_VI = {"STD": "Standard Double", "STD-TWN": "Standard Twin", "SUP-DBL": "Superior Double",
+                 "SUP-TWN": "Superior Twin", "DLX-SV": "Deluxe Double Seaview", "TW-DLX": "Deluxe Twin Seaview",
+                 "SUITE-SV": "Suite Seaview", "TPL": "Triple", "TPL-SV": "Triple Seaview", "QPL": "Quadruple",
+                 "APT-02": "Apartment 2 phòng ngủ", "APT-04": "Apartment 4 phòng ngủ"}
+GAPS_VI = {"country": "quốc tịch", "quốc tịch": "quốc tịch", "nationality": "quốc tịch", "name": "tên khách",
+           "số whatsapp": "số WhatsApp", "chuyến bay + giờ đáp": "chuyến bay và giờ đáp", "sl người": "số người",
+           "sl vali": "số vali"}
+OPENING_VI = {"NEW": "Bộ phận Đặt phòng xin thông báo có booking mới qua {ch}:",
+              "CHANGE": "Bộ phận Đặt phòng xin thông báo booking dưới đây có thay đổi qua {ch}:",
+              "CANCEL": "Bộ phận Đặt phòng xin thông báo booking dưới đây đã được huỷ qua {ch}:"}
+
+
 def ota_note_text(action, rows):
-    """The note: the booking, the guest, the stay and the intake rows, in Vietnamese (it is for the team, not the
-    robot). What is missing (column AJ's 'THIẾU:' line) is named, so nobody has to open the sheet to see it."""
+    """The note, in Vietnamese, to front office (haya@, Karen 15/11): a short courteous email, not a machine dump
+    (dev, 15/11, on TONY TRAN's cancellation note: "sao lại reply ntn, sửa lại đi"). Room names in words, the stay
+    with its nights, the intake rows in one line, what is still missing in words."""
     head = rows[0]
-    rooms = ", ".join(f"{r['_row']} ({r.get('action', '')} {(r.get('rooms') or '').strip()} "
-                      f"{(r.get('room_code') or '').strip()})".replace("  ", " ").replace(" )", ")") for r in rows)
-    lines = ["Đã nhận và đã ghi vào intake sheet.", "",
-             f"Booking: {head.get('booking_ref', '').strip()}",
-             f"Khách: {(head.get('guest_names') or '').strip() or '(chưa có tên)'}",
-             f"Ngày ở: {head.get('arrival', '').strip()} – {head.get('departure', '').strip()}",
-             f"Loại: {ACTION_VI.get(action, action)}",
-             f"Dòng intake: {rooms}"]
-    gaps = sorted({g for r in rows for g in schema.missing_listed(r.get("transfer") or "")})
+    channel = (head.get("company") or "").strip() or "kênh OTA"
+    arrival, departure = head.get("arrival", "").strip(), head.get("departure", "").strip()
+    try:
+        nights = (datetime.strptime(departure, "%d/%m/%Y") - datetime.strptime(arrival, "%d/%m/%Y")).days
+    except ValueError:
+        nights = 0
+    rooms = {}
+    for r in rows:
+        code = (r.get("room_code") or "").strip()
+        try:
+            n = int(float((r.get("rooms") or "1").strip() or 1))
+        except ValueError:
+            n = 1
+        rooms[code] = rooms.get(code, 0) + n
+    room_text = ", ".join(f"{n:02d} phòng {ROOM_NAMES_VI.get(c, c or 'chưa rõ hạng')}" for c, n in rooms.items())
+    lines = ["Kính gửi Bộ phận Lễ tân,", "",
+             OPENING_VI.get(action, OPENING_VI["NEW"]).format(ch=channel), "",
+             f"Mã booking: {head.get('booking_ref', '').strip()}",
+             f"Tên khách: {(head.get('guest_names') or '').strip() or 'chưa có tên'}",
+             f"Ngày ở: {arrival} – {departure}" + (f" ({nights} đêm)" if nights > 0 else ""),
+             f"Phòng: {room_text}", "",
+             f"Thông tin đã được ghi vào intake sheet (dòng {', '.join(str(r['_row']) for r in rows)})."]
+    gaps = list(dict.fromkeys(GAPS_VI.get(g, g) for r in rows for g in schema.missing_listed(r.get("transfer") or "")))
     if gaps:
-        lines.append(f"Còn thiếu (cột AJ): {'; '.join(gaps)}")
-    lines += ["", "Reservations Team", "HAYA Hotel Phu Quoc, Trademark Collection by Wyndham"]
+        lines.append(f"Thông tin còn thiếu: {', '.join(gaps)}.")
+    lines += ["", "Trân trọng,", "Bộ phận Đặt phòng", "HAYA Hotel Phu Quoc, Trademark Collection by Wyndham"]
     return "\n".join(lines)
 
 
