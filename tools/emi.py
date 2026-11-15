@@ -485,6 +485,65 @@ def ota_audit(mail, st, rows, days=7, out=print):
     return counts
 
 
+def reply_audit(mail, st, since, out=print):
+    """reply-audit [--since DD/MM/YYYY], read only (dev, 15/11: "CÁC EMAIL 13/11 - CHO EMI CHẠY REPLY HẾT NHÉ, thấy sót
+    nhiều lắm"). Every inbox email since `since` (UTC ISO) put against what answers it:
+      SENT      a message in Sent Items on its thread, or naming its booking number, sent after it arrived
+      DRAFTED   Emi's draft for it still waits on a person (Telegram review or Outlook Drafts)
+      DELETED   Emi's draft left Drafts and nothing went out: a person deleted it (look, don't redo blindly)
+      NO REPLY  nothing at all: the work list
+      noise     spam / OTP / alerts / bounces / Palma / internal closed as such, not listed
+    An OTA or SynXis robot notice is answered only by its intake note (ota-note, Karen 14/11)."""
+    from .day_check import AUTO_MAIL, AUTO_SENDER
+    inbox = [m for m in mail.list_inbox_since(since) if _sender(m) not in PHISHING_SENDERS]
+    sent = mail.list_sent_since(since)
+    by_conv, by_number = {}, {}
+    for s in sent:
+        when = s.get("sentDateTime") or s.get("receivedDateTime") or ""
+        by_conv.setdefault(s.get("conversationId"), []).append(when)
+        for number in booking_numbers(s.get("subject", "")):  # a new email on the same booking (Odeon's confirmation)
+            by_number.setdefault(number, []).append(when)
+    reviews = st.data["reviews"]
+    counts = {"SENT": 0, "DRAFTED": 0, "DELETED": 0, "NO REPLY": 0, "noise": 0}
+    work = []
+    out(f"emails in the inbox since {vn(since)} Vietnam time: {len(inbox)}; sent items: {len(sent)}")
+    for m in inbox:
+        sender, subject, got = _sender(m), m.get("subject", ""), m["receivedDateTime"][:19]
+        done = st.data["processed"].get(m["id"])
+        outcome = (done or {}).get("outcome", "")
+        if NO_REPLY_OK.search(outcome) or AUTO_MAIL.search(subject) or AUTO_SENDER.search(sender):
+            counts["noise"] += 1
+            continue
+        robot = is_ota_robot_notice(sender, subject)
+        mine = [n for n, r in reviews.items() if r.get("status") != "denied"
+                and (r.get("source") == m["id"] or f"#{n}" in re.findall(r"#\d+", outcome))
+                and (not robot or r.get("kind") == "ota_note")]
+        times = by_conv.get(m.get("conversationId"), []) + [t for n in booking_numbers(subject)
+                                                             for t in by_number.get(n, [])]
+        went = sorted(t for t in times if t[:19] >= got)
+        if robot:
+            went = []  # only the intake note answers a robot notice; an old confirmation sent to the guest doesn't
+        open_ = [n for n in mine if reviews[n].get("status") != "gone"]
+        if went or ANSWERED_BY_STAFF.search(outcome):
+            mark, why = "SENT", f"sent {vn(went[0])}" if went else outcome[:60]
+        elif open_:
+            mark, why = "DRAFTED", ", ".join(f"#{n} {reviews[n].get('status')}" for n in open_) + ": waits on a person"
+        elif mine:
+            mark, why = "DELETED", ", ".join(f"#{n}" for n in mine) + " left Drafts, nothing on its thread in Sent Items"
+        else:
+            mark = "NO REPLY"
+            why = ("OTA notice without its intake note (ota-note)" if robot else "no draft, nothing sent") + \
+                  ("" if done else "; never marked done")
+        counts[mark] += 1
+        if mark in ("NO REPLY", "DELETED", "DRAFTED"):
+            work.append({"id": m["id"], "mark": mark, "subject": subject})
+            out(f"{mark} {vn(m['receivedDateTime'])} {sender} | {subject[:90]}\n    id: {m['id']}\n    → {why}"
+                + (f"\n    done: {outcome[:140]}" if done else ""))
+    out(f"\nSENT {counts['SENT']}, DRAFTED {counts['DRAFTED']}, DELETED {counts['DELETED']}, "
+        f"NO REPLY {counts['NO REPLY']}, noise {counts['noise']}")
+    return counts, work
+
+
 OLD_RULE_FROM = "2026-11-13T00:00:00Z"  # the dev's 13/11 rule: OTA notices answered with a confirmation / to the guest
 
 
@@ -3121,6 +3180,8 @@ def parser():
     s.add_argument("--fix", action="store_true")
     s = sub.add_parser("ota-audit", help="OTA notices of the last N days against the intake sheet (read only)")
     s.add_argument("--days", type=int, default=7)
+    s = sub.add_parser("reply-audit", help="every inbox email since a day: sent, drafted, deleted or NO REPLY (read only)")
+    s.add_argument("--since", default="13/11/2026", help="DD/MM/YYYY, Vietnam time, from 00:00")
     s = sub.add_parser("sent-dump", help="HAYA's sent mail of the last N days to a text file (read-only)")
     s.add_argument("--days", type=int, default=14)
     s.add_argument("--out", default=os.path.join(WORK_DIR, "sent-dump.txt"))
@@ -3361,6 +3422,9 @@ def main(argv=None):
         elif c == "ota-drafts":
             ota_drafts(config.mail(), config.sheet(), st, tg=config.telegram(), fix=args.fix, live=config.live_sheet())
             st.save()
+        elif c == "reply-audit":
+            day = datetime.strptime(args.since, "%d/%m/%Y").replace(tzinfo=VN).astimezone(timezone.utc)
+            reply_audit(config.mail(), st, day.strftime("%Y-%m-%dT%H:%M:%SZ"))
         elif c == "ota-audit":
             ota_audit(config.mail(), st, config.sheet().rows() + live_rows(config.live_sheet()), days=args.days)
         elif c == "draft-forward":
