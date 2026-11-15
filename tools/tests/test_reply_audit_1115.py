@@ -62,6 +62,18 @@ class ReplyAuditTest(unittest.TestCase):
         self.assertNotIn("Undeliverable", text)
         self.assertNotIn("Sale", text)
 
+    def test_gone_intake_note_and_a_number_written_another_way_count_as_answered(self):
+        # 15/11 server run: Agoda 2062823849's note #1029 went out 18:20 and Pegas 11138234 was answered by a new
+        # email, both listed DELETED
+        mail = Mail([("a", "no-reply@agoda.com", "Agoda Booking ID 2062823849 - CANCELLED", "2026-11-14T11:01:00Z", "c-a"),
+                     ("p", "pegasys-notifications@pegast.su", "New reservation from Pegas Touristik (#11138234, Haya)",
+                      "2026-11-14T08:20:00Z", "c-p")],
+                    [("Pegas 11138234 confirmation", "2026-11-15T08:11:00Z", "other")])
+        self.review(1029, "a", "gone", kind="ota_note")
+        self.review(1015, "p", "gone", kind="confirmation")
+        counts, work = emi.reply_audit(mail, self.st, "2026-11-12T17:00:00Z", out=self.lines.append)
+        self.assertEqual((counts["SENT"], work), (2, []))
+
     def test_subject_without_a_number_never_matches_another_thread(self):
         mail = Mail([("a", "guest@gmail.com", "Booking request", "2026-11-13T02:00:00Z", "c-a")],
                     [("RE: Booking request", "2026-11-13T03:00:00Z", "someone-else")])

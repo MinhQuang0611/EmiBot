@@ -485,6 +485,11 @@ def ota_audit(mail, st, rows, days=7, out=print):
     return counts
 
 
+def _numbers(subject):
+    """booking_numbers, bare: 'Pegas Touristik (#11138234, …)' and 'Pegas 11138234' are the same booking."""
+    return {re.sub(r"[^0-9a-z]", "", n.lower()) for n in booking_numbers(subject or "")} - {""}
+
+
 def reply_audit(mail, st, since, out=print):
     """reply-audit [--since DD/MM/YYYY], read only (dev, 15/11: "CÁC EMAIL 13/11 - CHO EMI CHẠY REPLY HẾT NHÉ, thấy sót
     nhiều lắm"). Every inbox email since `since` (UTC ISO) put against what answers it:
@@ -501,7 +506,7 @@ def reply_audit(mail, st, since, out=print):
     for s in sent:
         when = s.get("sentDateTime") or s.get("receivedDateTime") or ""
         by_conv.setdefault(s.get("conversationId"), []).append(when)
-        for number in booking_numbers(s.get("subject", "")):  # a new email on the same booking (Odeon's confirmation)
+        for number in _numbers(s.get("subject", "")):  # a new email on the same booking (Odeon's confirmation)
             by_number.setdefault(number, []).append(when)
     reviews = st.data["reviews"]
     counts = {"SENT": 0, "DRAFTED": 0, "DELETED": 0, "NO REPLY": 0, "noise": 0}
@@ -518,14 +523,16 @@ def reply_audit(mail, st, since, out=print):
         mine = [n for n, r in reviews.items() if r.get("status") != "denied"
                 and (r.get("source") == m["id"] or f"#{n}" in re.findall(r"#\d+", outcome))
                 and (not robot or r.get("kind") == "ota_note")]
-        times = by_conv.get(m.get("conversationId"), []) + [t for n in booking_numbers(subject)
+        times = by_conv.get(m.get("conversationId"), []) + [t for n in _numbers(subject)
                                                              for t in by_number.get(n, [])]
         went = sorted(t for t in times if t[:19] >= got)
-        if robot:
+        if robot and not mine:
             went = []  # only the intake note answers a robot notice; an old confirmation sent to the guest doesn't
         open_ = [n for n in mine if reviews[n].get("status") != "gone"]
+        if robot and mine and not open_:
+            went = went or ["note"]  # the note is a signal for the team, nobody has to send it (Karen, 14/11)
         if went or ANSWERED_BY_STAFF.search(outcome):
-            mark, why = "SENT", f"sent {vn(went[0])}" if went else outcome[:60]
+            mark, why = "SENT", outcome[:60] if not went else "intake note" if went[0] == "note" else f"sent {vn(went[0])}"
         elif open_:
             mark, why = "DRAFTED", ", ".join(f"#{n} {reviews[n].get('status')}" for n in open_) + ": waits on a person"
         elif mine:
