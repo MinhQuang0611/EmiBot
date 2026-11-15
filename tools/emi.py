@@ -384,8 +384,10 @@ def ota_note(mail, sheet, st, args, tg=None, out=print, live=None):
         raise Refused(f"{sender} '{subject}' is not an OTA or SynXis booking notice: answer it with draft-reply")
     had = [n for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
            and r.get("kind") == "ota_note" and r.get("status") in (REVIEW_OPEN, "approved")]
-    if had:
-        raise Refused(f"this notice already has its note #{had[0]}: no second one")
+    replaces = {str(x) for x in _replaces(args)}
+    if [n for n in had if n not in replaces]:
+        raise Refused(f"this notice already has its note #{had[0]}: no second one (a note still addressed to the "
+                      f"no-reply sender is moved to {FRONT_OFFICE} with --replaces {had[0]})")
     action = notice_action(subject)
     numbers = booking_numbers(args.ref) | booking_numbers(subject)
     if not numbers:
@@ -406,9 +408,17 @@ def ota_note(mail, sheet, st, args, tg=None, out=print, live=None):
     text = ota_note_text(action, state)
     args.body, args.kind, args.row = None, "ota_note", str(state[0]["_row"])
     args.ref = args.ref or state[0].get("booking_ref", "")
-    args.to, args.cc, args.internal, args.sender_only = sender, "", False, True
-    args.replaces = getattr(args, "replaces", "")
-    return draft_reply(mail, st, args, tg=tg, out=out, text=text)
+    # Karen, 2026-11-15: "Các email reply đã ghi nhận + bổ sung vào intake sheet, em cho gửi đến haya@haya-hotels.com
+    # để tránh bị error": a reply to NOREPLYWyndhamReservations@synxis.com or Agoda's no-reply bounces. The note stays
+    # on the notice's thread, to front office alone.
+    args.to, args.cc, args.internal, args.sender_only = FRONT_OFFICE, "", True, True
+    d = draft_reply(mail, st, args, tg=tg, out=out, text=text)
+    new = max((int(n) for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
+               and r.get("kind") == "ota_note" and r.get("status") in (REVIEW_OPEN, "approved")
+               and n not in had), default=None)
+    for old in had:
+        review.replaced(mail, st, tg, old, new, out=out)
+    return d
 
 
 SYNXIS_LAST_NAME = re.compile(r"Last\s*Name\s*:[ \t]*([^\r\n]+)", re.I)

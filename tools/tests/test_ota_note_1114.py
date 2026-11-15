@@ -68,12 +68,12 @@ class Base(unittest.TestCase):
 
 
 class OtaNoteTest(Base):
-    def test_the_note_goes_to_the_synxis_sender_only_and_names_the_rows(self):
+    def test_the_note_goes_to_front_office_only_and_names_the_rows(self):  # Karen 15/11: no-reply bounces
         mail = Mail({"m1": (SYNXIS, SUBJECT, NOTICE_3350, "2026-11-10T09:38:00Z")})
         rows = [row(1937, transfer="THIẾU: Country"), row(1938), row(1939)]
         d = self.note(mail, rows)
         draft = mail.drafts[d["id"]]
-        self.assertEqual(draft["to"], [SYNXIS])
+        self.assertEqual(draft["to"], ["haya@haya-hotels.com"])
         self.assertFalse(draft["reply_all"])
         for bit in ("Đã nhận và đã ghi vào intake sheet", "SynXis 92777EF003350", "JAMIL HUSSAIN",
                     "13/11/2026 – 15/11/2026", "1937 (NEW 1 STD)", "1939", "Còn thiếu (cột AJ): country"):
@@ -113,6 +113,20 @@ class OtaNoteTest(Base):
         self.note(mail, [row(1937)])
         with self.assertRaises(emi.Refused):
             self.note(mail, [row(1937)])
+
+    def test_an_old_note_to_the_no_reply_sender_is_replaced(self):  # Karen 15/11
+        mail = Mail({"m1": (SYNXIS, SUBJECT, NOTICE_3350, "2026-11-10T09:38:00Z")})
+        mail.deleted = []
+        mail.delete_draft = mail.deleted.append
+        self.st.data["reviews"]["1105"] = {"draft_id": "old", "status": "pending", "source": "m1", "kind": "ota_note",
+                                           "how": "reply", "to": [SYNXIS], "history": []}
+        with self.assertRaises(emi.Refused) as e:
+            self.note(mail, [row(1937)])
+        self.assertIn("--replaces 1105", str(e.exception))
+        args = SimpleNamespace(message_id="m1", ref="SynXis 92777EF003350", replaces="1105")
+        d = emi.ota_note(mail, Sheet([row(1937)]), self.st, args, out=self.lines.append)
+        self.assertEqual(mail.drafts[d["id"]]["to"], ["haya@haya-hotels.com"])
+        self.assertEqual(self.st.data["reviews"]["1105"]["status"], "replaced")
 
     def test_not_for_an_agency_email(self):
         mail = Mail({"m1": ("res@agency.vn", "New booking 123456", "", "2026-11-10T09:38:00Z")})
