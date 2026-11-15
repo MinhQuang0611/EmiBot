@@ -2960,7 +2960,30 @@ def run_confirmations_due(mail, sheet, st, out=print):
                 f"{n} makes it (invoice-make) and puts it on; or --attach emi-work/out/Invoice_{ref}.pdf made by a "
                 f"person. Report: chờ invoice {r.get('ref')}")
     report_holds(st, out=out)
+    report_orphans(mail, st, out=out)
     return items
+
+
+def report_orphans(mail, st, out=print, now=None):
+    """Emi's drafts in Outlook that no open review tracks (Karen 15/11, Happy Vivu HV 327MPQ1151126: the confirmation
+    written before the PDF stayed in Drafts with DO NOT SEND after the full confirmation #975 had gone out on 14/11;
+    nothing tracked it, so it was never attached, denied or reported). Listed, never deleted by Emi."""
+    try:
+        drafts = mail.list_drafts(only_emi=True)
+    except Exception as e:
+        out(f"GAP: Drafts not readable for the orphan check ({str(e).splitlines()[0][:120]})")
+        return []
+    tracked = {r.get("draft_id") for r in st.data["reviews"].values() if r.get("status") in (REVIEW_OPEN, "approved")}
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=1)
+    orphans = [d for d in drafts if d["id"] not in tracked
+               and datetime.fromisoformat(d.get("createdDateTime", "").replace("Z", "+00:00") or cutoff.isoformat())
+               < cutoff]
+    for d in orphans:
+        made = datetime.fromisoformat(d["createdDateTime"].replace("Z", "+00:00")).astimezone(VN)
+        out(f"ORPHAN DRAFT '{d.get('subject', '')}' made {made:%d/%m %H:%M}: an Emi draft no review tracks (replaced, "
+            f"or its booking was answered by another draft). Report line: \"xoá draft này trong Outlook, đừng gửi\" "
+            f"after mail-find shows the booking already has its reply; else say what it still lacks")
+    return orphans
 
 
 def report_holds(st, out=print):

@@ -136,6 +136,9 @@ def _list(recipients):
     return [r["emailAddress"]["address"] for r in recipients or [] if r.get("emailAddress", {}).get("address")]
 
 
+REMINDER_SUBJECT = re.compile(r"payment\s+reminder|nhắc\s+thanh\s+toán", re.I)
+
+
 def find_confirmation(mail, code, mailbox, parts=()):
     """{id, sent_at, to, cc, slips} for the first mail sales@ sent with this group code, or None. slips = what the
     agency has sent since with an attachment, which may be a payment the sheet doesn't show yet. The code may be only
@@ -143,7 +146,10 @@ def find_confirmation(mail, code, mailbox, parts=()):
     have an attachment and name the booking (parts = its reference numbers)."""
     hits = [m for m in mail.search(code, top=SEARCH_TOP)]
     when = lambda m: m.get("sentDateTime") or m.get("receivedDateTime") or ""
-    ours = sorted((m for m in hits if _addr(m) == mailbox.lower()), key=lambda m: (not m.get("hasAttachments"), when(m)))
+    # Greentours 0349-IN 1211 (15/11): its confirmation was never sent (held for the PDF's cancellation terms), but a
+    # payment reminder carrying #31074 went on 14/11 and then counted as the confirmation, so a second one followed.
+    ours = sorted((m for m in hits if _addr(m) == mailbox.lower() and not REMINDER_SUBJECT.search(m.get("subject", ""))),
+                  key=lambda m: (not m.get("hasAttachments"), when(m)))
     for m in ours:
         full = mail.get_message_bodies(m["id"])
         words = f"{m.get('subject', '')} {_text(full)}".lower()
@@ -254,6 +260,9 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now):
         elif paid < half:
             which = "deposit"
         else:
+            continue
+        if ref in st.data["confirmation_holds"] or any(r == ref for r, _ in st.awaiting_pdf()):
+            out["no_confirmation"].append(item)  # its confirmation is held or still waits for the PDF: not sent
             continue
         sent = find_confirmation(mail, code, mailbox, mine)
         if sent is None:

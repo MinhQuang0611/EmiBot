@@ -55,6 +55,40 @@ def due(rows, mail, st=None, now=None):
                         now or datetime(2026, 11, 3, 20, 0, tzinfo=VN))
 
 
+class NotYetConfirmedTest(unittest.TestCase):
+    """Greentours 0349-IN 1211, 15/11: confirmation held (PDF's cancellation terms), yet two payment reminders went."""
+
+    def test_a_payment_reminder_is_not_the_confirmation(self):
+        mail = FakeMail()
+        mail.search = lambda text, top=10: [{"id": "rem", "from": {"emailAddress": {"address": MAILBOX}},
+                                             "subject": "RE: 0349-IN 1211 – payment reminder #30742",
+                                             "sentDateTime": "2026-11-02T03:00:00Z", "hasAttachments": False}]
+        self.assertIsNone(payments.find_confirmation(mail, "30742", MAILBOX))
+
+    def test_held_or_waiting_for_the_pdf_is_not_chased(self):
+        for setup in (lambda st: st.data["confirmation_holds"].update({"31-130127": {"reason": "terms"}}),
+                      lambda st: st.record_draft("d", "31-130127", 5, "confirmation", awaiting_pdf=True)):
+            st = State(os.devnull + "-none")
+            setup(st)
+            r = due([row(5)], FakeMail(), st=st, now=datetime(2026, 11, 4, 3, 0, tzinfo=VN))
+            self.assertEqual((r["remind"], len(r["no_confirmation"])), ([], 1))
+
+
+class OrphanDraftTest(unittest.TestCase):  # Karen 15/11, Happy Vivu's DO NOT SEND draft left behind
+    def test_untracked_emi_drafts_are_listed(self):
+        st = State(os.devnull + "-none")
+        st.data["reviews"]["975"] = {"draft_id": "sent-one", "status": "gone"}
+        st.data["reviews"]["976"] = {"draft_id": "live", "status": "pending"}
+        mail = SimpleNamespace(list_drafts=lambda only_emi=False: [
+            {"id": "orphan", "subject": "RE: HV 327MPQ1151126", "createdDateTime": "2026-11-14T04:16:20Z"},
+            {"id": "live", "subject": "RE: other", "createdDateTime": "2026-11-14T04:16:20Z"},
+            {"id": "fresh", "subject": "RE: new", "createdDateTime": "2026-11-15T15:30:00Z"}])
+        lines = []
+        found = emi.report_orphans(mail, st, out=lines.append, now=datetime(2026, 11, 15, 16, 0, tzinfo=timezone.utc))
+        self.assertEqual([d["id"] for d in found], ["orphan"])
+        self.assertIn("ORPHAN DRAFT 'RE: HV 327MPQ1151126' made 14/11 11:16", lines[0])
+
+
 class DepositTest(unittest.TestCase):
     def test_waits_until_hour_40(self):
         # sent 02/11 10:00 Vietnam time; 40 hours = 04/11 02:00; hour 34 at 20:00 on 03/11 is not there yet
