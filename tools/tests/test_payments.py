@@ -292,6 +292,29 @@ class HoldTest(unittest.TestCase):
         with mock.patch.object(emi, "_row", return_value=self.rows[0]):
             emi.run_confirmation_hold(self.sheet, self.st, SimpleNamespace(**{**args, **kw}), out=lambda *_: None)
 
+    def test_a_hold_is_listed_every_run_with_its_question(self):  # Karen 15/11, Greentours 0349-IN 1211
+        self.hold()
+        lines = []
+        emi.report_holds(self.st, out=lines.append)
+        self.assertIn("NOT ASKED: ask-karen", lines[0])
+        qid = self.st.ask("31-130127", "PDF total differs")
+        lines.clear(); emi.report_holds(self.st, out=lines.append)
+        self.assertIn(f"waiting on Karen {qid}", lines[0])
+        self.st.data["questions"][qid]["answer"] = "PDF đúng"
+        lines.clear(); emi.report_holds(self.st, out=lines.append)
+        self.assertIn("Karen answered", lines[0])
+        self.assertIn("--clear", lines[0])
+
+    def test_job_2_wakes_for_a_hold_nobody_asked_about(self):
+        from tools import precheck
+        self.assertFalse(precheck.holds_need_a_look(self.st))
+        self.hold()
+        self.assertTrue(precheck.holds_need_a_look(self.st))
+        qid = self.st.ask("31-130127", "PDF total differs")
+        self.assertFalse(precheck.holds_need_a_look(self.st))
+        self.st.data["questions"][qid]["answer"] = "PDF đúng"
+        self.assertTrue(precheck.holds_need_a_look(self.st))
+
     def test_held_until_a_new_pdf(self):
         self.assertEqual(len(self.due()), 1)
         self.hold()

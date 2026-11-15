@@ -37,8 +37,16 @@ class QuestionTest(unittest.TestCase):
                            {"ok": True, "result": {"message_id": len(self.sent)}})
         self.lines = []
 
-    def ask(self, q="Is the pool indoor or outdoor, and how many pools?", mid="m1"):
-        return emi.ask_karen(self.st, self.tg, mid, q, ref="R1", out=self.lines.append)
+    def ask(self, q="Is the pool indoor or outdoor, and how many pools?", mid="m1", also=False):
+        return emi.ask_karen(self.st, self.tg, mid, q, ref="R1", out=self.lines.append, also=also)
+
+    def test_the_same_fact_reworded_is_not_asked_again(self):  # Happy Vivu, E-513 … E-530 on 14/11
+        self.assertEqual(self.ask("PDF gives no payment time; confirm the deadline?"), "E-001")
+        self.assertEqual(self.ask("COD has no exact time. Please confirm the payment deadline.", mid="m1"), "E-001")
+        self.assertEqual(self.ask("Happy Vivu arrives tomorrow: payment deadline?", mid="m2"), "E-001")  # same ref
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("not asked again", self.lines[-1])
+        self.assertEqual(self.ask("Is the pool heated?", also=True), "E-002")
 
     def test_ask_records_and_posts_once(self):
         self.assertEqual(self.ask(), "E-001")
@@ -54,7 +62,7 @@ class QuestionTest(unittest.TestCase):
 
     def test_answer_releases_the_email_when_all_answered(self):
         self.ask()
-        self.ask("Is the pool heated?")
+        self.ask("Is the pool heated?", also=True)
         emi.karen_answer(self.st, "e-001", "1 outdoor pool on the 2nd floor", out=self.lines.append)
         self.assertIn("the same email still waits on E-002: keep the CHECK line", self.lines)
         emi.karen_answer(self.st, "E-002", "No", out=self.lines.append)

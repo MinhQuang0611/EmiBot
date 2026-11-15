@@ -34,7 +34,15 @@ def confirmations_have_work(mail, sheet, state):
     # Cancellations done in EZFOLIO carry no PDF; the build tool's signal for them isn't defined yet.
     from .emi import _parts, booking_state, _today_vn
     return bool(payments.needs_confirmation(sheet.rows(), booking_state, _parts, mail, state, config.MAILBOX,
-                                            _today_vn()))
+                                            _today_vn())) or holds_need_a_look(state)
+
+
+def holds_need_a_look(state):
+    """A held confirmation with no open question to Karen: never asked, or answered and not acted on (Karen 15/11,
+    Greentours 0349-IN 1211 held three days unseen). One waiting on Karen's answer doesn't wake job 2."""
+    questions = state.data["questions"].values()
+    return any(not any(q.get("booking_ref") == ref and q.get("answer") is None for q in questions)
+               for ref in state.data["confirmation_holds"])
 
 
 def alert_build_stuck(mail, sheet):

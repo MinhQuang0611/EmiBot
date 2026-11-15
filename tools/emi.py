@@ -2959,7 +2959,28 @@ def run_confirmations_due(mail, sheet, st, out=print):
             out(f"INVOICE #{n} {r.get('ref')}: EZFOLIO PDF on, waiting for our proforma invoice. confirmation-attach "
                 f"{n} makes it (invoice-make) and puts it on; or --attach emi-work/out/Invoice_{ref}.pdf made by a "
                 f"person. Report: chờ invoice {r.get('ref')}")
+    report_holds(st, out=out)
     return items
+
+
+def report_holds(st, out=print):
+    """Every held confirmation, every run (Karen 15/11, Greentours 0349-IN 1211: held on 12/11 for its cancellation
+    terms, reported once, then nobody saw it for three days while the draft sat with DO NOT SEND)."""
+    questions = st.data["questions"]
+    for ref, h in st.data["confirmation_holds"].items():
+        asked = [(q, v) for q, v in questions.items() if v.get("booking_ref") == ref]
+        open_ = [q for q, v in asked if v.get("answer") is None]
+        answered = [(q, v) for q, v in asked if v.get("answer") is not None]
+        if open_:
+            state = f"waiting on Karen {', '.join(open_)}"
+        elif answered:
+            q, v = answered[-1]
+            state = (f"Karen answered {q}: {v['answer']}. Act on it: confirmation-hold {ref} 0 --clear, then the "
+                     f"confirmation (ATTACH or draft-confirmation)")
+        else:
+            state = (f"NOT ASKED: ask-karen <the booking email id> \"{ref}: {h.get('reason', '')}\" --ref \"{ref}\" "
+                     f"now")
+        out(f"HELD {ref}: {h.get('reason', '')} | {state}")
 
 
 def run_confirmation_hold(sheet, st, args, out=print):
@@ -3108,7 +3129,7 @@ NATIONALITY_NOT_A_QUESTION = (
     "transfer (column AJ), nothing in missing_info, no guess from the name (booking-intake.md, Nationality). Write the "
     "row now with sheet-append. Not asked.")
 
-def ask_karen(st, tg, message_id, question, ref="", out=print):
+def ask_karen(st, tg, message_id, question, ref="", out=print, also=False):
     question = " ".join(question.split())
     if not question:
         raise Refused("the question is empty")
@@ -3120,6 +3141,15 @@ def ask_karen(st, tg, message_id, question, ref="", out=print):
         if q.get("message_id") == message_id and q["ask"] == question:
             out(f"{qid} already asked for this email, still open: {question}")
             return qid
+    # 14/11, Happy Vivu HV 327MPQ1151126: the payment-deadline question went to Karen six times in three hours
+    # (E-513 … E-530), each run wording it anew. One open question per email or booking unless it is another fact.
+    same = [(k, q) for k, q in st.open_questions().items()
+            if (message_id and q.get("message_id") == message_id) or (ref and q.get("booking_ref") == ref)]
+    if same and not also:
+        qid, q = same[0]
+        out(f"{qid} is already open for this {'email' if q.get('message_id') == message_id else 'booking'}, not "
+            f"asked again: {q['ask']}. Wait for her answer (questions). Only a different fact → ask-karen … --also")
+        return qid
     qid = st.ask(ref, question, message_id)
     text = (f"❓ <b>{qid} — câu hỏi cho Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
             + f"\n{review.esc(question)}\n\nTrả lời: <code>{qid} &lt;câu trả lời&gt;</code>. "
@@ -3354,6 +3384,7 @@ def parser():
     s.add_argument("--check", action="store_true", help="print the cells it would write; nothing written")
     s = sub.add_parser("ask-karen", help="a fact for the reply is uncertain: ask Karen; the draft has a CHECK line")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
+    s.add_argument("--also", action="store_true", help="a different fact on an email or booking already waiting on Karen")
     s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
     s.add_argument("qid"); s.add_argument("answer", nargs="+")
     s = sub.add_parser("questions", help="questions to Karen still open")
@@ -3542,7 +3573,7 @@ def main(argv=None):
             if not sim.check(config.sheet(), args.scenario, WORK_DIR):
                 return 2
         elif c == "ask-karen":
-            ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref)
+            ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref, also=args.also)
             st.save()
         elif c == "karen-answer":
             karen_answer(st, args.qid, " ".join(args.answer))
