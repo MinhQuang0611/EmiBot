@@ -112,6 +112,25 @@ class BeforePdfTest(unittest.TestCase):
             self.draft()
         self.assertFalse([c for c in self.http.calls if "createReply" in c[1]])
 
+    def test_the_record_survives_a_command_that_stops_after_the_draft(self):  # Happy Vivu, 14/11 11:16
+        self.st.live = True
+        with mock.patch.object(review, "opened", side_effect=RuntimeError("run killed")):
+            with self.assertRaises(RuntimeError):
+                self.draft()
+        again = State(self.st.path)
+        self.assertEqual(again.awaiting_pdf(), {("Pegas 11124455", 1586): "d1"})
+
+    def test_an_untracked_emi_draft_on_the_thread_is_replaced(self):  # Happy Vivu: 11:16 orphan + #975 at 14:44
+        deleted = []
+        strays = [{"id": "orphan", "conversationId": "c1", "subject": "RE: New reservation",
+                   "createdDateTime": "2026-11-14T04:16:20Z"},
+                  {"id": "elsewhere", "conversationId": "c2", "subject": "RE: other"}]
+        with mock.patch.object(self.mail, "get_message_text", return_value={"conversationId": "c1"}), \
+                mock.patch.object(self.mail, "list_drafts", return_value=strays), \
+                mock.patch.object(self.mail, "delete_draft", side_effect=deleted.append):
+            self.draft()
+        self.assertEqual(deleted, ["orphan"])
+
     def test_built_row_refuses_before_pdf(self):
         with self.assertRaises(emi.Refused):
             self.draft(FakeSheet({**PEGAS, **BUILT}))

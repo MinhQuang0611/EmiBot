@@ -121,6 +121,7 @@ class State:
             self.data["confirmations"][f"{booking_ref}|{row}"] = {"draft_id": draft_id, "sent_at": None}
             if awaiting_pdf:  # drafted before the build tool's PDF (dev, 2026-11-07): confirmation-attach finishes it
                 self.data["confirmations"][f"{booking_ref}|{row}"]["awaiting_pdf"] = True
+            self.checkpoint()
         elif kind in ("deposit_reminder", "balance_reminder"):
             self.data["reminders"][f"{booking_ref}|{kind.split('_')[0]}"] = {"draft_id": draft_id,
                                                                             "drafted_at": now_iso()}
@@ -131,7 +132,15 @@ class State:
         self.data["next_review"] += 1
         self.data["reviews"][n] = {"draft_id": draft_id, "status": REVIEW_OPEN, "version": 1,
                                    "opened_at": now_iso(), "history": [], **fields}
+        self.checkpoint()
         return n
+
+    def checkpoint(self):
+        """Save now, mid-command, when a draft has just been made in Outlook (dev 15/11, Happy Vivu: the confirmation
+        drafted at 11:16 on 14/11 sits in Outlook with no record at all, so job 2 drafted a second one at 14:44; the
+        command stopped between making the draft and saving at its end). Only the CLI's own state (live) is saved."""
+        if getattr(self, "live", False):
+            self.save()
 
     def review(self, n):
         n = str(n).lstrip("#")

@@ -2640,13 +2640,18 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
             f"Accept: {review.PENDING}{n}" + later(n))
         close_replaced(mail, st, tg, older, n, out=out)
         return {"id": review.PENDING + n}
+    strays = [] if how == "new" else untracked_on_thread(mail, st, args.message_id)
     if how == "new":
         d = mail.create_new_draft(to, subject, body, cc=cc)
     else:
         d = mail.reply_draft_with_text(args.message_id, body, reply_all=args.all, to=to, cc=cc)
+    st.record_draft(d["id"], ref, int(args.row), "confirmation", awaiting_pdf=before)  # before anything can fail
     for fname, fdata, ctype in files:
         mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
-    st.record_draft(d["id"], ref, int(args.row), "confirmation", awaiting_pdf=before)
+    for x in strays:
+        mail.delete_draft(x["id"])
+        out(f"an earlier Emi draft on this thread with no record ('{x.get('subject', '')}', made "
+            f"{x.get('createdDateTime', '')}) moved to Deleted Items: this confirmation replaces it")
     n = review.opened(mail, st, tg, d["id"], how=how, source=args.message_id, kind="confirmation", ref=ref,
                       row=int(args.row), text=body, reply_all=args.all, to=to, cc=cc, override=bool(to),
                       attachments=[f[0] for f in files], notice=False)
@@ -2656,6 +2661,18 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         + later(n))
     close_replaced(mail, st, tg, older, n, out=out)
     return d
+
+
+def untracked_on_thread(mail, st, message_id):
+    """Emi's drafts on the email's thread that no open review tracks (Happy Vivu, 14/11: the 11:16 confirmation had
+    no record, so a second one was drafted at 14:44 and both sat in Drafts). The new confirmation replaces them."""
+    try:
+        conv = (mail.get_message_text(message_id) or {}).get("conversationId")
+        drafts = mail.list_drafts(only_emi=True) if conv else []
+    except Exception:
+        return []
+    tracked = {r.get("draft_id") for r in st.data["reviews"].values() if r.get("status") in (REVIEW_OPEN, "approved")}
+    return [d for d in drafts if d.get("conversationId") == conv and d["id"] not in tracked]
 
 
 def _booking_row(sheet, r):
@@ -3473,6 +3490,7 @@ def main(argv=None):
         if args.cmd not in READ_ONLY:
             hold_lock(config.state_path())
         st = config.state()
+        st.live = args.cmd not in READ_ONLY  # checkpoint() saves mid-command, under the lock held above
         c = args.cmd
         if c == "inbox-new":
             inbox_new(config.mail(), st)
