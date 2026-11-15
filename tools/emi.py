@@ -396,7 +396,9 @@ def ota_note_text(action, rows):
              f"Ngày ở: {arrival} – {departure}" + (f" ({nights} đêm)" if nights > 0 else ""),
              f"Phòng: {room_text}", "",
              f"Thông tin đã được ghi vào intake sheet (dòng {', '.join(str(r['_row']) for r in rows)})."]
-    gaps = list(dict.fromkeys(GAPS_VI.get(g, g) for r in rows for g in schema.missing_listed(r.get("transfer") or "")))
+    # 15/11, TIEN THUY LUC: 'THIẾU: Country.' came out as "country.." — the item's own full stop is dropped
+    gaps = list(dict.fromkeys(GAPS_VI.get(g.strip(" ."), g.strip(" ."))
+                              for r in rows for g in schema.missing_listed(r.get("transfer") or "") if g.strip(" .")))
     if gaps:
         lines.append(f"Thông tin còn thiếu: {', '.join(gaps)}.")
     lines += ["", "Trân trọng,", "Bộ phận Đặt phòng", "HAYA Hotel Phu Quoc, Trademark Collection by Wyndham"]

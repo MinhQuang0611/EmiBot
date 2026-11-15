@@ -85,6 +85,11 @@ class OtaNoteTest(Base):
         n, r = next(iter(self.st.data["reviews"].items()))
         self.assertEqual((r["kind"], r["source"], r["row"]), ("ota_note", "m1", 1937))
 
+    def test_a_gap_with_its_own_full_stop(self):  # 15/11, SynXis 92777EF003481: "country.."
+        text = emi.ota_note_text("NEW", [row(2203, transfer="THIẾU: Country.")])
+        self.assertIn("Thông tin còn thiếu: quốc tịch.
+", text)
+
     def test_no_row_no_note(self):
         mail = Mail({"m1": (SYNXIS, SUBJECT, NOTICE_3350, "2026-11-10T09:38:00Z")})
         with self.assertRaises(emi.Refused) as e:
