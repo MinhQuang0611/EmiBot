@@ -1320,6 +1320,14 @@ def keep_known_rate(records, rows, group_cols):
                  and r.get("room_code") == rec.get("room_code") and operators._amount(r.get("rate_per_night_vnd"))
                  and r.get("action") != "CANCEL"
                  and not PROVISIONAL.search(" ".join(str(r.get(k) or "") for k in ("notes", "missing_info", "rate_source")))]
+        built = [r for r in rows if (mine & _parts(r.get("booking_ref")) or code & codes(r) or mine & codes(r))
+                 and (r.get("pdf_link") or "").strip()]
+        if not known and built:
+            # dev 16/11, Ohmyhotel S26082711285H01: a built booking with no price on the sheet has the PDF's
+            raise Refused(f"TAKE THE PDF'S PRICE: {rec.get('booking_ref')} is built in EZFOLIO ({_where(built[-1])} has "
+                          f"its pdf_link) but no row has its price. The price is the EZFOLIO PDF's, not the TA card: "
+                          f"pdf-fetch {built[-1]['_row']}, then total = the PDF total, rate = total ÷ nights ÷ rooms, "
+                          f"notes item 6 'Price from the EZFOLIO PDF, group <code>' (booking-intake.md, Rates)")
         if known and operators._amount(known[-1].get("rate_per_night_vnd")) != operators._amount(rec.get("rate_per_night_vnd")):
             src = known[-1]
             raise Refused(f"CHANGE {rec.get('room_code') or ''}: the booking already has its price, "
@@ -2378,9 +2386,27 @@ def pdf_fetch(sheet, row, work_dir=None, out=print):
         f.write(data)
     out(f"saved: {os.path.abspath(path)} ({mime}, {len(data)} bytes)")
     out("row: " + json.dumps({k: r.get(k, "") for k in ROW_SUMMARY if r.get(k)}, ensure_ascii=False))
+    text = attachments.extract_text(path, data)
     out("file text (check every date, room, rate and total against the row):")
-    out(attachments.clip(attachments.extract_text(path, data)))
+    out(attachments.clip(text))
+    amounts = pdf_amounts(text)
+    if amounts:  # dev 16/11: a booking with no price on the sheet takes the PDF's (booking-intake.md, Rates)
+        out("AMOUNTS IN THE PDF: " + ", ".join(f"{a:,}" for a in amounts))
     return path, name, mime, data
+
+
+AMOUNT = re.compile(r"(?<![\d.,])([1-9]\d{0,2}(?:[.,]\d{3})+|[1-9]\d{5,9})(?:[.,]\d{1,2})?(?![\d.,]*\d)")
+
+
+def pdf_amounts(text):
+    """Money-sized numbers in the PDF (100,000 VND and up), largest first, each once: the total is usually the first.
+    '7,437,500', '7.437.500', '7,437,500.00' and '7437500' are the same amount."""
+    found = set()
+    for m in AMOUNT.finditer(text or ""):
+        n = int(re.sub(r"\D", "", m.group(1)))
+        if 100_000 <= n <= 10_000_000_000:
+            found.add(n)
+    return sorted(found, reverse=True)
 
 
 # What every confirmation must carry (skills/email-templates.md "Rules that apply to every email").

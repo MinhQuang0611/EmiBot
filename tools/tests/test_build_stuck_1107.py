@@ -196,6 +196,26 @@ class KnownRateTest(unittest.TestCase):
             emi.keep_known_rate([rec], rows, GROUP_COLS)
 
 
+class PdfPriceTest(unittest.TestCase):
+    """Dev 16/11, Ohmyhotel S26082711285H01 (group 27981): built, no price on the sheet, held ten days on E-313."""
+    BUILT_NO_PRICE = {"_row": 1427, "action": "EXISTING BOOKING", "booking_ref": "S26082711285H01",
+                      "Group code": "27981", "room_code": "SUP-DBL", "pdf_link": "https://drive/27981.pdf"}
+
+    def test_a_provisional_ta_card_rate_on_a_built_booking_is_refused(self):
+        rec = {"action": "CHANGE", "booking_ref": "S26082711285H01", "ezfolio_group_code": "27981",
+               "room_code": "SUP-DBL", "rate_per_night_vnd": "1900000",
+               "notes": "6. TA card rate, provisional, no price from Oh My Hotel"}
+        with self.assertRaises(emi.Refused) as e:
+            emi.keep_known_rate([rec], [self.BUILT_NO_PRICE], GROUP_COLS)
+        self.assertIn("TAKE THE PDF'S PRICE", str(e.exception))
+        self.assertIn("pdf-fetch 1427", str(e.exception))
+
+    def test_the_amounts_in_the_pdf(self):
+        text = ("Room 1,487,500 x 5 nights  Total: 7,437,500.00 VND  Deposit 7.437.500  Conf 24654  "
+                "26/11/2026  Tel 0909123456  1487500")
+        self.assertEqual(emi.pdf_amounts(text), [7437500, 1487500])
+
+
 class OwnRefTest(unittest.TestCase):
     """Emi wrote the group code as booking_ref on CHANGE / CANCEL rows (1594, 1595, 1611, 1614, 1615, 1617-1619,
     1641); the build tool matches by booking_ref and stopped."""
