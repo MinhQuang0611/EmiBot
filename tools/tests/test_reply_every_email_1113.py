@@ -248,7 +248,10 @@ class OtaConfirmationTextTest(unittest.TestCase):
 
     def test_an_agency_keeps_its_own_check(self):
         with self.assertRaises(emi.Refused):
-            emi.confirmation_check({**ROW_1937, "channel_type": "TA"})(GOOD)
+            emi.confirmation_check({**ROW_1937, "channel_type": "TA", "company": "CTY VICTORIA"})(GOOD)
+
+    def test_an_online_site_the_backfill_wrote_as_ta_gets_the_ota_check(self):  # dev 16/11, S26082711285H01
+        emi.confirmation_check({**ROW_1937, "channel_type": "TA", "company": "Oh My Hotel"})(GOOD)
 
 
 def ota(n, received, **kw):

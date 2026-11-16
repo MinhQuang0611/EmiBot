@@ -2510,7 +2510,10 @@ def check_ota_confirmation(body, row):
 
 
 def is_ota_row(row):
-    return (row.get("channel_type") or "").strip() == "OTA"
+    """channel_type OTA, or an online site whatever channel_type says: the 05/11 backfill wrote Ohmyhotel, MG, Mytour
+    and Dida as "TA" (dev 16/11, Ohmyhotel S26082711285H01: its name-change confirmation was refused for lacking
+    the TA bank block and deposit, which an OTA confirmation never has)."""
+    return (row.get("channel_type") or "").strip() == "OTA" or payments.ota_company(row.get("company"))
 
 
 def confirmation_check(row):
