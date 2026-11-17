@@ -20,12 +20,15 @@ class FakeHttp:
         self.calls = []
         self.fail_thread = fail_thread
         self.next_topic = 100
+        self.forum = True
 
     def __call__(self, method, url, headers=None, body=None, **kw):
         name = url.rsplit("/", 1)[-1]
         self.calls.append((name, dict(body or {})))
         if self.fail_thread and name == "sendMessage" and "message_thread_id" in (body or {}):
             raise httpjson.HttpError(400, url, '{"ok":false,"description":"Bad Request: message thread not found"}')
+        if name == "getChat":
+            return {"ok": True, "result": {"id": 42, "title": "HAYA Emi", "type": "supergroup", "is_forum": self.forum}}
         if name == "createForumTopic":
             self.next_topic += 1
             return {"ok": True, "result": {"message_thread_id": self.next_topic, "name": body["name"]}}
@@ -121,9 +124,18 @@ class TopicsTest(unittest.TestCase):
         saved = []
         emi.tg_topics(tg, assign="email=7,question=9", out=self.lines.append, save_env=saved.append)
         self.assertEqual(saved, ["email=7,question=9"])
-        self.assertEqual(self.http.calls, [])
+        self.assertEqual([n for n, _ in self.http.calls], ["getChat"])
         with self.assertRaises(emi.Refused):
             emi.tg_topics(tg, assign="inbox=7", out=self.lines.append, save_env=saved.append)
+
+    def test_topics_off_is_said_before_anything_is_made(self):
+        self.http.forum = False
+        with self.assertRaises(emi.Refused) as e:
+            emi.tg_topics(Telegram("42", "TOKEN", http=self.http), create=True, out=self.lines.append,
+                          save_env=lambda line: None)
+        self.assertIn("Topics off", str(e.exception))
+        self.assertEqual(self.http.of("createForumTopic"), [])
+        self.assertIn("HAYA Emi", self.lines[0])
 
     def test_a_group_without_topics_gets_the_reason(self):
         def refuse(method, url, body=None, **kw):

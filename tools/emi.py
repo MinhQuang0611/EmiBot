@@ -3283,6 +3283,16 @@ def tg_topics(tg, create=False, assign="", out=print, save_env=None):
             raise Refused(f"--set {part.strip()}: use <kind>=<number>, kind one of {', '.join(telegram.TOPICS)}")
         tg.topics[k] = int(v)
         changed = True
+    try:
+        chat = tg.chat_info() or {}
+        out(f"group: {chat.get('title', '?')} (id {tg.chat_id}, {chat.get('type', '?')}, "
+            f"Topics {'on' if chat.get('is_forum') else 'OFF'})")
+    except httpjson.HttpError as e:
+        chat = {}
+        out(f"group: id {tg.chat_id} not readable: {e.body[:200]}")
+    if create and chat and not chat.get("is_forum") and any(k not in tg.topics for k in telegram.TOPICS):
+        raise Refused(f"'{chat.get('title', tg.chat_id)}' (id {tg.chat_id}) has Topics off for Telegram: turn on "
+                      f"Topics in this group's settings, then run tg-topics --create again")
     for kind, (name, about) in telegram.TOPICS.items():
         if kind in tg.topics or not create:
             continue

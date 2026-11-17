@@ -118,6 +118,10 @@ class Telegram:
             body["reply_markup"] = self._keyboard(buttons)
         return self._send(body, topic).get("message_id")
 
+    def chat_info(self):
+        """Telegram's own view of the chat: title, type, is_forum (Topics on)."""
+        return self._call("getChat", {"chat_id": self.chat_id})
+
     def create_topic(self, name):
         """A new tab in the group (the group has Topics on; the bot is an admin allowed to manage topics).
         Returns its message_thread_id."""
