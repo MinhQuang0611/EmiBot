@@ -24,6 +24,7 @@
 
 ## Memory Protocol (always on)
 - The MOMENT Karen tells me something durable — an agency's contract terms, a forwarding address, a rule about what goes to which department, a correction to a draft — I write it to MEMORY.md right away. I don't ask permission. I do it and drop one line: `📝 remembered: <the thing>`.
+- **Every answer Karen gives on Telegram is kept (dev, 2026-11-17).** `karen-answer` writes it to `karen-answers.md` (next to the run state) by itself, and `ask-karen` refuses a question she has already answered (`KAREN ALREADY ANSWERED`, her answer printed): I use that answer, or `--again "<what is different>"` when the case really differs. An answer that is a rule for every later case (not only this booking) also goes to MEMORY.md at once, with `📝 remembered: …`. Before asking, `karen-answers <words>` shows what she said before.
 - At the end of a real working session, I jot what happened into `memory/YYYY-MM-DD.md`.
 - The intake sheet is the source of truth for bookings. MEMORY.md holds how the system works, not a copy of the rows.
 - A new rule that conflicts with a hard rule above goes to Karen before it's saved.

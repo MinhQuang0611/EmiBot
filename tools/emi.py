@@ -54,6 +54,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
+    python -m tools.emi karen-answers [text]              # Karen's past answers (all, or like TEXT); karen-answers.md
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
     python -m tools.emi review-info <n>                   # one draft: source email, full text, history
@@ -103,6 +104,7 @@ from . import availability as avail
 from . import invoice as invoices
 from . import review, sim
 from . import inbox_notices
+from . import karen_memory
 from . import intake_schema as schema
 from .state import REVIEW_OPEN, now_iso
 
@@ -3232,7 +3234,7 @@ NATIONALITY_NOT_A_QUESTION = (
     "transfer (column AJ), nothing in missing_info, no guess from the name (booking-intake.md, Nationality). Write the "
     "row now with sheet-append. Not asked.")
 
-def ask_karen(st, tg, message_id, question, ref="", out=print, also=False):
+def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again=""):
     question = " ".join(question.split())
     if not question:
         raise Refused("the question is empty")
@@ -3240,6 +3242,17 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False):
         raise Refused("write the question in words, not as a '[...: hotel to confirm]' gap")
     if MISSING_NATIONALITY.search(question):
         raise Refused(NATIONALITY_NOT_A_QUESTION)
+    # dev 17/11: Karen's answers are kept (karen-answers.md); one she already gave is used, not asked for again
+    seen = karen_memory.similar(st, question, ref)
+    same = [x for x in seen if x[0] >= karen_memory.SAME]
+    if same and not again.strip():
+        raise Refused("KAREN ALREADY ANSWERED this: " + " | ".join(karen_memory.line(qid, q) for _, qid, q in same[:3])
+                      + ". Use her answer (a rule for every later case also goes to MEMORY.md) and don't ask again. "
+                      "Only if this case is really different: ask-karen … --again \"<what is different>\"")
+    for _, qid, q in seen[:3]:
+        out(f"KAREN ANSWERED A SIMILAR ONE: {karen_memory.line(qid, q)}")
+    if again.strip():
+        question += f" (Hỏi lại vì khác {', '.join(q for _, q, _ in same[:3])}: {' '.join(again.split())})"
     for qid, q in st.open_questions().items():
         if q.get("message_id") == message_id and q["ask"] == question:
             out(f"{qid} already asked for this email, still open: {question}")
@@ -3329,6 +3342,12 @@ def karen_answer(st, qid, answer, out=print):
         raise Refused(f"no question {qid}; open ones: {', '.join(st.open_questions()) or 'none'}")
     st.answer(f"{qid} {answer.strip()}")
     q = st.data["questions"][qid]
+    try:
+        kept = karen_memory.write(st)
+        out(f"kept for next time: {kept} (ask-karen reads it before asking). If her answer is a rule for every later "
+            f"case, not only this booking, write it to MEMORY.md now and say '📝 remembered: …'")
+    except OSError as e:
+        out(f"KAREN ANSWERS FILE NOT WRITTEN ({e}): the answer is still in the state")
     waiting = [k for k, v in st.open_questions().items() if q.get("message_id") and v.get("message_id") == q["message_id"]]
     out(f"{qid} answered: {answer.strip()}")
     out(f"question was: {q['ask']}")
@@ -3339,6 +3358,17 @@ def karen_answer(st, qid, answer, out=print):
             f"(review-rewrite <n>, or a new draft if none was made yet: show it, then "
             f"draft-reply / draft-forward). A lasting hotel fact also goes to MEMORY.md and the scan report.")
     return qid
+
+
+def karen_answers(st, text="", out=print):
+    """Karen's past answers (dev 17/11): every one, or those like TEXT; karen-answers.md is rewritten from the state."""
+    p = karen_memory.write(st)
+    rows = ([(s, k, q) for s, k, q in karen_memory.similar(st, text, least=0.2)] if text.strip() else
+            [(1, k, q) for k, q in sorted(karen_memory.answered(st).items(),
+                                          key=lambda kv: kv[1].get("answered_at") or "", reverse=True)])
+    out(f"KAREN ANSWERS: {len(rows)}" + (f" like '{text}'" if text.strip() else "") + f" (file {p})")
+    for _, qid, q in rows:
+        out("- " + karen_memory.line(qid, q))
 
 
 def questions(st, everything=False, out=print):
@@ -3546,6 +3576,9 @@ def parser():
     s = sub.add_parser("ask-karen", help="a fact for the reply is uncertain: ask Karen; the draft has a CHECK line")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
     s.add_argument("--also", action="store_true", help="a different fact on an email or booking already waiting on Karen")
+    s.add_argument("--again", default="", help="Karen answered a question like this before, but this case differs: say how")
+    s = sub.add_parser("karen-answers", help="Karen's past answers: all, or those like TEXT (also rewrites karen-answers.md)")
+    s.add_argument("text", nargs="*")
     s = sub.add_parser("tg-topics", help="the Telegram group's tabs (email, draft, question, report): show, make, set")
     s.add_argument("--create", action="store_true", help="make the missing tabs in the group and save their ids in .env")
     s.add_argument("--set", default="", help="ids of tabs made by hand, e.g. email=12,draft=34 (saved in .env)")
@@ -3742,8 +3775,11 @@ def main(argv=None):
         elif c == "tg-topics":
             tg_topics(config.telegram(), create=args.create, assign=args.set)
         elif c == "ask-karen":
-            ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref, also=args.also)
+            ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref, also=args.also,
+                      again=args.again)
             st.save()
+        elif c == "karen-answers":
+            karen_answers(st, " ".join(args.text))
         elif c == "karen-answer":
             karen_answer(st, args.qid, " ".join(args.answer))
             st.save()

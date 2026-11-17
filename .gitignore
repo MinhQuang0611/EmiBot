@@ -10,6 +10,7 @@ ascendant-nova-*.json
 
 # Runtime state and temporary files
 emi-state.json
+karen-answers.md
 .state-*.json
 __pycache__/
 *.py[cod]
