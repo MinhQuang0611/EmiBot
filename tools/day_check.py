@@ -187,7 +187,7 @@ def main(argv):
     tg = config.telegram()
     if tg is not None:
         try:
-            tg.send(summary(result, datetime.now(VN).strftime("%d/%m")))
+            tg.send(summary(result, datetime.now(VN).strftime("%d/%m")), topic="report")
         except Exception as e:  # the check stands either way
             print(f"telegram failed: {e}", file=sys.stderr)
     if not (result["CHECK"] or result["MISSING"]):

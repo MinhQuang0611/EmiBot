@@ -63,6 +63,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi review-deny <n> [--reason R]      # draft to Deleted Items
     python -m tools.emi review-rewrite <n> <body.txt> --feedback "reviewer's words"  # new draft replaces old
     python -m tools.emi review-notify <n>                 # notice + buttons back in place (or sent again)
+    python -m tools.emi tg-topics [--create | --set email=12,draft=34,...]  # the group's tabs: show, make, or set ids
     python -m tools.emi sim-reset <scenario>              # test/sim/<scenario>: fresh test inbox, old TEST rows removed
     python -m tools.emi sim-check <scenario>              # grade sheet + drafts after a run with EMI_SIM_DIR set
 
@@ -101,6 +102,7 @@ from .state import hold_lock
 from . import availability as avail
 from . import invoice as invoices
 from . import review, sim
+from . import inbox_notices
 from . import intake_schema as schema
 from .state import REVIEW_OPEN, now_iso
 
@@ -159,7 +161,7 @@ def unhandled_inbox(mail, st, since):
             and _sender(m) not in PHISHING_SENDERS]
 
 
-def inbox_new(mail, st, out=print):
+def inbox_new(mail, st, out=print, tg=None):
     started = now_iso()
     since = st.data["last_scan"]
     if since is None:
@@ -189,6 +191,8 @@ def inbox_new(mail, st, out=print):
         late = "\n  MISSED EARLIER: received before the last scan, never done" if m in earlier else ""
         out(f"\n- id: {m['id']}\n  received: {vn(m['receivedDateTime'])}\n  from: {addr(m.get('from'))}"
             f"\n  subject: {m.get('subject', '')}{clip}{late}")
+    # dev 17/11: each email gets its line in the group's '📥 Email tới' tab; `done` writes the outcome on it
+    inbox_notices.announce(tg, msgs, config.SIM_DIR or WORK_DIR, vn, missed_ids={m["id"] for m in earlier}, out=out)
     return msgs, started
 
 
@@ -2139,7 +2143,7 @@ def stop_sales_gap(tg, why, out=print):
     out(f"STOP SALES NOT CHECKED: {why}. No list today; the last one stands")
     if tg is not None:
         try:
-            tg.send(f"⚠️ Stop sell hôm nay chưa làm được: {telegram.esc(why)}")
+            tg.send(f"⚠️ Stop sell hôm nay chưa làm được: {telegram.esc(why)}", topic="report")
         except Exception as e:  # the line above is still in the job's output
             out(f"Telegram: {type(e).__name__}")
 
@@ -3253,10 +3257,58 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False):
     text = (f"❓ <b>{qid} — câu hỏi cho Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
             + f"\n{review.esc(question)}\n\nTrả lời: <code>{qid} &lt;câu trả lời&gt;</code>. "
             f"Draft đã có dòng CHECK BEFORE SENDING; Emi sửa draft sau khi có câu trả lời.")
-    sent = tg.send(text) if tg is not None else None
+    sent = tg.send(text, topic="question") if tg is not None else None
     out(f"{qid} asked" + (" on Telegram" if sent else " (Telegram off: put it in the scan report)")
         + f"; the draft for this email carries '[CHECK BEFORE SENDING: …]' until karen-answer {qid}")
     return qid
+
+
+# --- the group's tabs (dev, 2026-11-17: "chia nhóm tele ra làm theo các tab, tab email tới, tab draft, tab hỏi đáp") ---
+
+def tg_topics(tg, create=False, assign="", out=print, save_env=None):
+    """Show which tab each kind of notice goes to; --set records tabs made by hand, --create makes the missing ones
+    (each gets a first message saying what goes there). Ids are written to .env as EMI_TELEGRAM_TOPICS."""
+    if save_env is None:
+        from .setenv import set_keys
+        save_env = lambda line: set_keys([(telegram.TOPICS_ENV, line)])  # noqa: E731
+    if tg is None:
+        raise Refused("Telegram is not set up: EMI_TELEGRAM_CHAT_ID and the bot token")
+    changed = False
+    for part in (assign or "").split(","):
+        if not part.strip():
+            continue
+        k, _, v = part.partition("=")
+        k, v = k.strip().lower(), v.strip()
+        if k not in telegram.TOPICS or not v.isdigit():
+            raise Refused(f"--set {part.strip()}: use <kind>=<number>, kind one of {', '.join(telegram.TOPICS)}")
+        tg.topics[k] = int(v)
+        changed = True
+    for kind, (name, about) in telegram.TOPICS.items():
+        if kind in tg.topics or not create:
+            continue
+        try:
+            tid = tg.create_topic(name)
+        except httpjson.HttpError as e:
+            if changed:
+                save_env(telegram.topics_line(tg.topics))
+            raise Refused(f"Telegram refused to make the tab '{name}': {e.body[:200]}. The group needs Topics turned "
+                          f"on (group settings › Topics) and the bot needs admin rights with 'Manage topics'.") from None
+        if not tid:
+            raise Refused(f"Telegram gave no id for the tab '{name}'")
+        tg.topics[kind] = int(tid)
+        changed = True
+        try:
+            tg.send(f"<b>{telegram.esc(name)}</b>\n{telegram.esc(about)}", topic=kind)
+        except Exception:
+            pass  # the tab is there either way
+    if changed:
+        save_env(telegram.topics_line(tg.topics))
+        out(f"saved in .env: {telegram.TOPICS_ENV}={telegram.topics_line(tg.topics)}")
+    for kind, (name, about) in telegram.TOPICS.items():
+        where = f"tab {tg.topics[kind]}" if kind in tg.topics else "no tab: goes to General"
+        out(f"{kind:8} {name} — {where}. {about}")
+    if not create and len(tg.topics) < len(telegram.TOPICS):
+        out("tabs missing: tg-topics --create makes them (bot must be admin with 'Manage topics')")
 
 
 def karen_answer(st, qid, answer, out=print):
@@ -3484,6 +3536,9 @@ def parser():
     s = sub.add_parser("ask-karen", help="a fact for the reply is uncertain: ask Karen; the draft has a CHECK line")
     s.add_argument("message_id"); s.add_argument("question", nargs="+"); s.add_argument("--ref", default="")
     s.add_argument("--also", action="store_true", help="a different fact on an email or booking already waiting on Karen")
+    s = sub.add_parser("tg-topics", help="the Telegram group's tabs (email, draft, question, report): show, make, set")
+    s.add_argument("--create", action="store_true", help="make the missing tabs in the group and save their ids in .env")
+    s.add_argument("--set", default="", help="ids of tabs made by hand, e.g. email=12,draft=34 (saved in .env)")
     s = sub.add_parser("karen-answer", help="record Karen's answer to E-001; then write the waiting draft")
     s.add_argument("qid"); s.add_argument("answer", nargs="+")
     s = sub.add_parser("questions", help="questions to Karen still open")
@@ -3522,7 +3577,7 @@ def main(argv=None):
         st.live = args.cmd not in READ_ONLY  # checkpoint() saves mid-command, under the lock held above
         c = args.cmd
         if c == "inbox-new":
-            inbox_new(config.mail(), st)
+            inbox_new(config.mail(), st, tg=config.telegram())
         elif c == "show":
             show(config.mail(), args.message_id)
         elif c == "mail-find":
@@ -3536,6 +3591,8 @@ def main(argv=None):
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
             print("marked handled")
+            inbox_notices.settle(config.telegram(), args.message_id, " ".join(args.outcome),
+                                 config.SIM_DIR or WORK_DIR)
         elif c == "mark-scanned":
             datetime.strptime(args.scan_started, "%Y-%m-%dT%H:%M:%SZ")  # the scan_started= value, nothing else
             st.mark_scanned(args.scan_started)
@@ -3672,6 +3729,8 @@ def main(argv=None):
         elif c == "sim-check":
             if not sim.check(config.sheet(), args.scenario, WORK_DIR):
                 return 2
+        elif c == "tg-topics":
+            tg_topics(config.telegram(), create=args.create, assign=args.set)
         elif c == "ask-karen":
             ask_karen(st, config.telegram(), args.message_id, " ".join(args.question), ref=args.ref, also=args.also)
             st.save()

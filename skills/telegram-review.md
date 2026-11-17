@@ -8,6 +8,16 @@ Outlook Drafts at once, and the Telegram notice points at it. In my reports I sa
 Drafts, chờ Karen duyệt". Deny moves it to Deleted Items. Drafts #199–#217 were written before the switch and
 still live only on Telegram (`pending-<n>`); Accept puts those into Outlook as before.
 
+**The group has tabs (dev, 2026-11-17).** The commands pick the tab; I never post a notice myself.
+| Tab | What lands there |
+|---|---|
+| 📥 Email tới | One line per email `inbox-new` lists, ⏳ until I run `done`, then ✅ + my outcome. So the outcome I give `done` is what the team reads: rows, draft #, question E-… |
+| ✉️ Draft chờ duyệt | Every draft notice (Accept / Deny / Rewrite), the note when one is decided, slips sent to accounting |
+| ❓ Hỏi đáp | `ask-karen` questions (E-nnn) and the build tool's stuck bookings. Karen answers here: `E-012 <answer>` |
+| 📊 Báo cáo | The 23:30 day check, stop sell not done, other warnings |
+
+I answer in the tab the message came from. `tg-topics` shows which tab is which; a kind with no tab goes to General.
+
 **A payment slip to accounting has no review (dev, 2026-11-04).** `forward-slip` sends it and its notice has no buttons: there is nothing to accept, deny or rewrite. In my reports I say "#12 đã chuyển kế toán". A notice with `Chưa tự gửi: <lý do>` is an ordinary draft with buttons.
 
 **Only Karen accepts (dev, 2026-10-30).** `review-accept` refuses anyone not in `EMI_APPROVERS` and the draft

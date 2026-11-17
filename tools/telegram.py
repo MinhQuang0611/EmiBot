@@ -8,6 +8,11 @@ either way, and `review-list` shows it.
 Token, first found: EMI_TELEGRAM_BOT_TOKEN, the file EMI_TELEGRAM_TOKEN_FILE (default secrets/telegram-bot-token),
 or channels.telegram.botToken in OpenClaw's own config (~/.openclaw/openclaw.json), so the bot token lives
 in one place on the host.
+
+Topics (dev, 2026-11-17: "chia nhóm tele ra làm theo các tab … để dễ xử lý"): the group is a forum and every notice
+goes to the tab of its kind (TOPICS). EMI_TELEGRAM_TOPICS=email=12,draft=34,question=56,report=78 holds each tab's
+message_thread_id; `python -m tools.emi tg-topics --create` makes the missing tabs and writes that line into .env.
+A kind with no tab, or a tab deleted in Telegram, goes to the group's General as before.
 """
 import html
 import json
@@ -41,12 +46,40 @@ def token():
     return _openclaw_token()
 
 
+# kind -> (tab name in the group, its first message saying what goes there)
+TOPICS = {
+    "email": ("📥 Email tới", "Mỗi email mới vào sales@ một dòng; khi Emi xử lý xong, dòng đó ghi kết quả (row, draft #). "
+                             "Dòng còn ⏳ = email chưa xử lý."),
+    "draft": ("✉️ Draft chờ duyệt", "Mỗi draft Emi viết: Accept / Deny / Rewrite. Slip đã chuyển kế toán cũng báo ở đây."),
+    "question": ("❓ Hỏi đáp", "Câu hỏi cho Karen (E-nnn) và booking build tool không nhập được. "
+                              "Trả lời: E-nnn <câu trả lời>."),
+    "report": ("📊 Báo cáo", "Kiểm tra cuối ngày, stop sell không chạy được và các cảnh báo khác."),
+}
+TOPICS_ENV = "EMI_TELEGRAM_TOPICS"
+
+
+def topics_from_env():
+    """EMI_TELEGRAM_TOPICS 'email=12,draft=34' -> {'email': 12, 'draft': 34}. Unknown kinds and bad ids are left out."""
+    out = {}
+    for part in (os.environ.get(TOPICS_ENV) or "").split(","):
+        k, _, v = part.partition("=")
+        k, v = k.strip().lower(), v.strip()
+        if k in TOPICS and v.isdigit():
+            out[k] = int(v)
+    return out
+
+
+def topics_line(topics):
+    return ",".join(f"{k}={topics[k]}" for k in TOPICS if k in topics)
+
+
 class Telegram:
-    def __init__(self, chat_id, bot_token, http=httpjson.request, log_dir=None):
+    def __init__(self, chat_id, bot_token, http=httpjson.request, log_dir=None, topics=None):
         self.chat_id = chat_id
         self.bot_token = bot_token
         self.http = http
         self.log_dir = log_dir  # SIM mode: also keep a copy of every notice here
+        self.topics = dict(topics or {})  # kind -> message_thread_id
 
     def _call(self, method, body):
         if self.log_dir:
@@ -63,13 +96,32 @@ class Telegram:
     def _keyboard(buttons):
         return {"inline_keyboard": [[{"text": t, "callback_data": v} for t, v in row] for row in buttons or []]}
 
-    def send(self, text, buttons=None):
-        """HTML text; buttons = [[(label, callback_value), ...], ...]. Returns Telegram's message id."""
+    def _send(self, body, topic):
+        """sendMessage into the tab of `topic`; a tab deleted or never made in the group -> General, not lost."""
+        thread = self.topics.get(topic) if topic else None
+        if thread:
+            body["message_thread_id"] = thread
+        try:
+            return self._call("sendMessage", body)
+        except httpjson.HttpError as e:
+            if not thread or "thread not found" not in (e.body or "").lower():
+                raise
+            body.pop("message_thread_id")
+            return self._call("sendMessage", body)
+
+    def send(self, text, buttons=None, topic=None):
+        """HTML text; buttons = [[(label, callback_value), ...], ...]; topic = a TOPICS kind (its tab), None =
+        General. Returns Telegram's message id."""
         body = {"chat_id": self.chat_id, "text": text[:LIMIT], "parse_mode": "HTML",
                 "disable_web_page_preview": True}
         if buttons:
             body["reply_markup"] = self._keyboard(buttons)
-        return self._call("sendMessage", body).get("message_id")
+        return self._send(body, topic).get("message_id")
+
+    def create_topic(self, name):
+        """A new tab in the group (the group has Topics on; the bot is an admin allowed to manage topics).
+        Returns its message_thread_id."""
+        return self._call("createForumTopic", {"chat_id": self.chat_id, "name": name}).get("message_thread_id")
 
     def edit(self, message_id, text, buttons=None):
         """Replace an earlier notice's text and buttons in place. Unchanged content is not an error."""
@@ -82,25 +134,25 @@ class Telegram:
                 raise
         return message_id
 
-    def mark(self, message_id, note):
-        """Take the buttons off an earlier notice and say what happened to it."""
+    def mark(self, message_id, note, topic=None):
+        """Take the buttons off an earlier notice and say what happened to it, under it in its tab."""
         if not message_id:
             return
         self._call("editMessageReplyMarkup", {"chat_id": self.chat_id, "message_id": message_id,
                                                "reply_markup": {"inline_keyboard": []}})
-        self._call("sendMessage", {"chat_id": self.chat_id, "text": note[:LIMIT], "parse_mode": "HTML",
-                                   "reply_to_message_id": message_id, "allow_sending_without_reply": True})
+        self._send({"chat_id": self.chat_id, "text": note[:LIMIT], "parse_mode": "HTML",
+                    "reply_to_message_id": message_id, "allow_sending_without_reply": True}, topic)
 
 
 def from_env(sim_dir=None):
     chat = os.environ.get("EMI_TELEGRAM_CHAT_ID")
     if sim_dir:  # SIM run: notices go to files; to Telegram too only when EMI_SIM_TELEGRAM is set
         tok = token() if chat and os.environ.get("EMI_SIM_TELEGRAM") else ""
-        return Telegram(chat or "sim", tok, log_dir=os.path.join(sim_dir, "telegram"))
+        return Telegram(chat or "sim", tok, log_dir=os.path.join(sim_dir, "telegram"), topics=topics_from_env())
     if not chat:
         return None
     tok = token()
-    return Telegram(chat, tok) if tok else None
+    return Telegram(chat, tok, topics=topics_from_env()) if tok else None
 
 
 def esc(text):

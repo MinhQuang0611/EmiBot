@@ -169,9 +169,9 @@ def alert(st, tg, mail, items, mailbox, out=print):
     chunk = head
     for line in lines:
         if len(chunk) + len(line) + 2 > TG_LIMIT:
-            tg.send(chunk)
+            tg.send(chunk, topic="question")
             chunk = ""
         chunk += "\n" + line + "\n"
-    tg.send(chunk)
+    tg.send(chunk, topic="question")
     out(f"build-stuck: {len(new)} sent to Telegram")
     return new

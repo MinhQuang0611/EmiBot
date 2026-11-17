@@ -21,7 +21,7 @@ class FakeTelegram:
     def __init__(self):
         self.sent = []
 
-    def send(self, text, buttons=None):
+    def send(self, text, buttons=None, topic=None):
         self.sent.append((text, buttons))
         return len(self.sent)
 

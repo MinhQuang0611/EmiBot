@@ -106,7 +106,7 @@ def notify(tg, n, r, note="", in_place=False, held=""):
         except Exception:
             pass  # too old or deleted: send a fresh one
     try:
-        r["tg"] = tg.send("\n".join(lines), _buttons(n))
+        r["tg"] = tg.send("\n".join(lines), _buttons(n), topic="draft")
         r.pop("tg_error", None)
     except Exception as e:  # the draft is kept either way; review-list still shows it
         r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
@@ -117,7 +117,7 @@ def _mark(tg, r, note):
     if tg is None or not r.get("tg"):
         return
     try:
-        tg.mark(r["tg"], note)
+        tg.mark(r["tg"], note, topic="draft")
     except Exception:
         pass
 
@@ -153,7 +153,7 @@ def sent(st, tg, n):
                                      f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
                                      f"<b>Tiêu đề:</b> {esc(r['subject'])}", "",
                                      "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
-                                     "Đã gửi, không cần duyệt. Thư nằm trong Outlook › Sent Items."]))
+                                     "Đã gửi, không cần duyệt. Thư nằm trong Outlook › Sent Items."]), topic="draft")
     except Exception as e:  # the forward went either way
         r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
 
