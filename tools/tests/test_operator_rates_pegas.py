@@ -32,8 +32,10 @@ class PegasTest(unittest.TestCase):
         self.assertEqual(free[2]["meal"], 400000 * 3)
         self.assertEqual(q["net"]["meal"], 400000 * 3 * 19)
 
-    def test_child_always_charged_infant_free(self):
-        self.assertEqual(pegas(date(2026, 11, 20), date(2026, 11, 22), "STD", 1, [8])["gross"]["child"], 600000)
+    def test_child_charged_only_as_third_person_infant_free(self):
+        # dev 17/11, Pegas 11136304: the rate is for 2 persons, 1A+1C (SGL+CH) pays no child surcharge
+        self.assertEqual(pegas(date(2026, 11, 20), date(2026, 11, 22), "STD", 1, [8])["gross"]["child"], 0)
+        self.assertEqual(pegas(date(2026, 11, 20), date(2026, 11, 22), "STD", 2, [8])["gross"]["child"], 600000)
         self.assertEqual(pegas(date(2026, 11, 20), date(2026, 11, 22), "STD", 2, [2])["gross"]["child"], 0)
         q = pegas(date(2026, 11, 20), date(2026, 11, 22), "STD", 2, [8, 1])
         self.assertTrue(any("capacity" in g for g in q["gaps"]))
@@ -58,3 +60,9 @@ class PegasTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Pegas11136304(unittest.TestCase):
+    def test_sgl_ch_total(self):
+        q = pegas(date(2027, 1, 14), date(2027, 1, 26), "STD", 1, [10], booked=date(2026, 11, 16))
+        self.assertEqual(q["gross"]["child"], 0)

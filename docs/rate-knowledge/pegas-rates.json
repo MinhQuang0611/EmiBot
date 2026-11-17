@@ -182,10 +182,10 @@
     }
   },
   "children": {
-    "_note": "Max 1 child (0–11.99, infants included) per room, sharing the parents' bed: 0–2.99 free, 3–11.99 charged per night whatever the adult count. 12+ = adult, must book Triple / Quadruple. infant_under 0 so a baby still counts toward the 1-child maximum.",
+    "_note": "Max 1 child (0–11.99, infants included) per room, sharing the parents' bed: 0–2.99 free, 3–11.99 charged only as a 3rd person sharing the bed (2A+1C). The rate is for 2 persons, so 1A+1C takes the spare place free (dev, 2026-11-17, Pegas 11136304). 12+ = adult, must book Triple / Quadruple. infant_under 0 so a baby still counts toward the 1-child maximum.",
     "infant_under": 0,
     "adult_from": 12,
-    "free_if_spare_bed": false,
+    "free_if_spare_bed": true,
     "bands": [
       {
         "from": 0,

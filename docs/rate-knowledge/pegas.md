@@ -25,7 +25,7 @@ Bên lữ hành: CÔNG TY TNHH LỮ HÀNH PEGAS MISR VIỆT NAM. Số HĐ **0002
 
 Sức chứa tối đa: phòng 2A → 2A+1C (0–11.99) ngủ chung giường; Triple 3A+1C; Quadruple 4A+1C.
 
-Phụ thu trẻ em (ngủ chung giường): 0–2.99 miễn phí; 3–11.99 **300,000/bé/đêm** (Normal, High), **450,000/bé/đêm** (Holidays). Từ 12 tuổi tính người lớn, phải đặt Triple/Quadruple. Tối đa 1 trẻ / phòng.
+Phụ thu trẻ em (ngủ chung giường): 0–2.99 miễn phí; 3–11.99 **300,000/bé/đêm** (Normal, High), **450,000/bé/đêm** (Holidays). Chỉ thu khi bé là người thứ 3 ngủ chung giường (2A+1C). Giá phòng là giá cho 2 người, nên 1 người lớn + 1 bé (SGL+CH) = giá phòng, không phụ thu (dev, 2026-11-17, Pegas 11136304). Từ 12 tuổi tính người lớn, phải đặt Triple/Quadruple. Tối đa 1 trẻ / phòng.
 
 ## Allotment và cut-off
 | Hạng | Normal + High | Holidays |
