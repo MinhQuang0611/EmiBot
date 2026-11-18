@@ -94,7 +94,7 @@ class NationalityIsNoQuestionTest(unittest.TestCase):
             self.assertNotIn("Pakistan", str(e.exception))
 
     def test_other_questions_still_go(self):
-        self.assertEqual(self.ask("Khách Ấn Độ: đại lý báo giá chưa có +20%, nhận giá nào?"), "E-001")
+        self.assertEqual(self.ask("Indian guests: the agency quoted without the +20%, which rate do we accept?"), "E-001")
 
 
 class MissingGoesToColumnAJTest(unittest.TestCase):

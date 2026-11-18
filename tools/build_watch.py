@@ -130,11 +130,12 @@ def _email_for(mail, item, mailbox):
 
 
 def question(i):
-    """What Karen is asked, in plain Vietnamese (USER.md: explainable to her parents)."""
+    """What Karen is asked, in plain English (dev, 18/11; USER.md: explainable to her parents)."""
     who = f"{i['company']} {i['ref']}".strip()
-    return (f"Hệ thống nhập EZFOLIO dừng ở booking {who} (dòng {', '.join(map(str, i['rows']))}, email {i['received']}): "
-            f"{i['note'][:NOTE_CHARS] or 'không ghi lý do'}. Đại lý chưa được trả lời. Karen/Long quyết định thế nào "
-            f"(nhận overbook, đổi hạng phòng, từ chối, sửa trên EZFOLIO) để Emi viết draft trả lời?")
+    return (f"The EZFOLIO build tool stopped on booking {who} (row {', '.join(map(str, i['rows']))}, email "
+            f"{i['received']}): {i['note'][:NOTE_CHARS] or 'no reason given'}. The agency has had no reply yet. What "
+            f"do Karen/Long decide (accept the overbooking, change the room type, decline, fix it in EZFOLIO), so Emi "
+            f"can draft the reply?")
 
 
 def alert(st, tg, mail, items, mailbox, out=print):
@@ -152,20 +153,20 @@ def alert(st, tg, mail, items, mailbox, out=print):
         asked = _open_question(st, i["ref"]) if i["kind"] == "stuck" else None
         if asked:
             qid = asked
-            lines.append(f"↩️ <b>{qid}</b> (đã hỏi, chưa có trả lời) · {_esc(i['company'])} <b>{_esc(i['ref'])}</b>: "
-                         f"{_esc(i['note'][:NOTE_CHARS]) or 'không ghi lý do'}")
+            lines.append(f"↩️ <b>{qid}</b> (asked, no answer yet) · {_esc(i['company'])} <b>{_esc(i['ref'])}</b>: "
+                         f"{_esc(i['note'][:NOTE_CHARS]) or 'no reason given'}")
         elif i["kind"] == "stuck":
             qid = st.ask(i["ref"], question(i), _email_for(mail, i, mailbox))
-            lines.append(f"❓ <b>{qid}</b> · {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (dòng "
+            lines.append(f"❓ <b>{qid}</b> · {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (row "
                          f"{', '.join(map(str, i['rows']))}, email {_esc(i['received'])})\n"
-                         f"{_esc(i['note'][:NOTE_CHARS]) or 'không ghi lý do'}")
+                         f"{_esc(i['note'][:NOTE_CHARS]) or 'no reason given'}")
         else:
             qid = None
-            lines.append(f"⏳ {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (dòng {', '.join(map(str, i['rows']))}): "
-                         f"email {_esc(i['received'])}, sau {i['hours']} giờ hệ thống nhập EZFOLIO chưa xử lý")
+            lines.append(f"⏳ {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (row {', '.join(map(str, i['rows']))}): "
+                         f"email {_esc(i['received'])}, not picked up by the EZFOLIO build tool after {i['hours']} hours")
         seen[i["key"]] = {"at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "question": qid}
-    head = ("⚠️ <b>Booking chưa nhập được vào EZFOLIO</b> — đại lý chưa có xác nhận.\n"
-            "Trả lời <code>E-… &lt;quyết định&gt;</code>; Emi viết draft trả lời đại lý theo quyết định đó.\n")
+    head = ("⚠️ <b>Bookings not built in EZFOLIO</b> — the agency has no confirmation yet.\n"
+            "Reply <code>E-… &lt;your decision&gt;</code>; Emi drafts the agency's reply from it.\n")
     chunk = head
     for line in lines:
         if len(chunk) + len(line) + 2 > TG_LIMIT:

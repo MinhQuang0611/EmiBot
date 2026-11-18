@@ -73,7 +73,7 @@ class TopicsTest(unittest.TestCase):
         self.assertIn("Draft #1", sent[0]["text"])
 
     def test_a_question_for_karen_goes_to_the_question_tab(self):
-        emi.ask_karen(self.st, self.tg, "sim-01-new-1512", "Giá phòng cho ngày lễ là bao nhiêu?", out=self.lines.append)
+        emi.ask_karen(self.st, self.tg, "sim-01-new-1512", "What is the room rate for the holiday nights?", out=self.lines.append)
         self.assertEqual(self.http.of("sendMessage")[0]["message_thread_id"], 33)
 
     def test_a_deleted_tab_falls_back_to_general(self):

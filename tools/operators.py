@@ -192,8 +192,8 @@ def on_request_gate(rec, header):
         if _KAREN_YES.search(inote):
             return None
         return ("on request: no NEW row until Karen says yes (dev, 10/11, Pegas 11131133). on-request for the "
-                "check, then ask-karen <id> \"<operator> <ref> on request, <dates, rooms>: nhận không? Emi đề xuất "
-                "<ACCEPT/REJECT, why>\" --ref <ref>, done <id> \"waiting on Karen E-…\". Her yes -> these rows with "
+                "check, then ask-karen <id> \"<operator> <ref> on request, <dates, rooms>: accept? Emi suggests "
+                "<ACCEPT/DECLINE, why>\" --ref <ref>, done <id> \"waiting on Karen E-…\". Her yes -> these rows with "
                 "internal_notes 'On request, accepted by Karen E-…'; her no -> CANCEL rows + decline draft")
     if "internal_notes" in (header or ()) and not _ALLOTMENT.search(inote):
         return ("tour operator NEW: internal_notes must say 'Allotment' (the booking says allotment, inside the "

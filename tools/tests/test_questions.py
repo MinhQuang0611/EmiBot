@@ -52,9 +52,18 @@ class QuestionTest(unittest.TestCase):
         self.assertEqual(self.ask(), "E-001")
         self.assertEqual(self.ask(), "E-001")  # same question for the same email: not asked twice
         self.assertEqual(len(self.sent), 1)
-        self.assertIn("E-001 — câu hỏi cho Karen", self.sent[0]["text"])
+        self.assertIn("E-001 — question for Karen", self.sent[0]["text"])
+        self.assertIn("Reply: <code>E-001 &lt;your answer&gt;</code>", self.sent[0]["text"])
         q = self.st.data["questions"]["E-001"]
         self.assertEqual((q["message_id"], q["booking_ref"], q["answer"]), ("m1", "R1", None))
+
+    def test_question_in_english_names_may_stay_vietnamese(self):  # dev 18/11, E-580…E-583
+        with self.assertRaises(emi.Refused) as e:
+            self.ask("Chị xác nhận giúp: khoản quẹt Amex 30.010.500 VND ngày 13/11/2026 của nhóm Mary Ang là khoản gì?")
+        self.assertIn("in English", str(e.exception))
+        self.assertEqual(self.sent, [])
+        self.assertEqual(self.ask("Guest Nguyễn Thị Phương Thảo (Công ty Lữ Hành Việt Đẹp) asks for a late "
+                                  "check-out on 19/11: allowed, and at what charge?"), "E-001")
 
     def test_question_must_be_words_not_a_gap(self):
         with self.assertRaises(emi.Refused):

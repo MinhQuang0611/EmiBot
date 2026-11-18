@@ -2919,11 +2919,11 @@ def run_on_request(args, data, out=print):
     age = _stale(data)
     if age:  # a suggestion on old figures is no suggestion
         verdict, why = "ASK KAREN", [f"availability sheet {age}"] + why
-    hint = {"REJECT": "Emi đề xuất TỪ CHỐI", "ACCEPT": "Emi đề xuất NHẬN"}.get(verdict, "Emi không đề xuất được")
+    hint = {"REJECT": "Emi suggests DECLINE", "ACCEPT": "Emi suggests ACCEPT"}.get(verdict, "Emi has no suggestion")
     out(f"\nON REQUEST: suggest {verdict} — {'; '.join(why)}")
     # dev, 2026-11-10, Pegas 11131133: Karen decides every on-request booking; the rule is only the suggestion.
     out(f"Next: Karen decides (dev 10/11). No row now. ask-karen <message_id> \"<operator> <ref> on "
-        f"request, <dates, rooms, pax>: nhận không? {hint}: {'; '.join(why)}\" --ref <ref>; the received note "
+        f"request, <dates, rooms, pax>: accept? {hint}: {'; '.join(why)}\" --ref <ref>; the received note "
         f"(email-templates.md 6c, dev 15/11): draft-reply <message_id> <body> --kind reply --ref <ref>; then done "
         f"<message_id> \"on request, waiting on Karen E-…, received note #n\".\n"
         f"  Her yes -> NEW rows as for an allotment booking (tour-operators.md step 4), internal_notes \"On request, "
@@ -3234,6 +3234,23 @@ NATIONALITY_NOT_A_QUESTION = (
     "transfer (column AJ), nothing in missing_info, no guess from the name (booking-intake.md, Nationality). Write the "
     "row now with sheet-append. Not asked.")
 
+# Dev, 2026-11-18 (the ❓ Hỏi đáp tab, E-580…E-583 written in Vietnamese): "Mấy cái hỏi đáp này - cho Emi viết bằng
+# tiếng Anh nhé". The question is written in English; names, quoted email text and booking refs stay as they are.
+# Vietnamese = Vietnamese grammar words, not accents: a Vietnamese name (Trần Văn Minh) or company in an English
+# question is fine; "Chị xác nhận giúp … là khoản gì" is not.
+VI_WORDS = re.compile(
+    r"(?<!\w)(?:không|được|của|và|là|này|chị|giúp|xác|nhận|đã|chưa|với|thì|để|trả|lời|hỏi|nào|bao|nhiêu|đề|xuất|"
+    r"có|cho|hay|gì|những|các|một|nếu|khi|sau|trước|vào|theo|đến|phải|cần|em|ạ|nhé)(?!\w)", re.I)
+
+
+def check_english_question(question):
+    vi = VI_WORDS.findall(question)
+    if len(vi) >= 3:
+        raise Refused("write the question to Karen in English (dev, 18/11). Guest and company names and refs stay "
+                      "as they are; what the sender wrote is told in English, not quoted; plain and short. "
+                      f"Vietnamese words seen: {' '.join(vi[:8])}. Not asked.")
+
+
 def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again=""):
     question = " ".join(question.split())
     if not question:
@@ -3242,6 +3259,7 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
         raise Refused("write the question in words, not as a '[...: hotel to confirm]' gap")
     if MISSING_NATIONALITY.search(question):
         raise Refused(NATIONALITY_NOT_A_QUESTION)
+    check_english_question(question)
     # dev 17/11: Karen's answers are kept (karen-answers.md); one she already gave is used, not asked for again
     seen = karen_memory.similar(st, question, ref)
     same = [x for x in seen if x[0] >= karen_memory.SAME]
@@ -3252,7 +3270,7 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
     for _, qid, q in seen[:3]:
         out(f"KAREN ANSWERED A SIMILAR ONE: {karen_memory.line(qid, q)}")
     if again.strip():
-        question += f" (Hỏi lại vì khác {', '.join(q for _, q, _ in same[:3])}: {' '.join(again.split())})"
+        question += f" (Asked again, differs from {', '.join(q for _, q, _ in same[:3])}: {' '.join(again.split())})"
     for qid, q in st.open_questions().items():
         if q.get("message_id") == message_id and q["ask"] == question:
             out(f"{qid} already asked for this email, still open: {question}")
@@ -3267,9 +3285,9 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
             f"asked again: {q['ask']}. Wait for her answer (questions). Only a different fact → ask-karen … --also")
         return qid
     qid = st.ask(ref, question, message_id)
-    text = (f"❓ <b>{qid} — câu hỏi cho Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
-            + f"\n{review.esc(question)}\n\nTrả lời: <code>{qid} &lt;câu trả lời&gt;</code>. "
-            f"Draft đã có dòng CHECK BEFORE SENDING; Emi sửa draft sau khi có câu trả lời.")
+    text = (f"❓ <b>{qid} — question for Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
+            + f"\n{review.esc(question)}\n\nReply: <code>{qid} &lt;your answer&gt;</code>. "
+            f"The draft carries a CHECK BEFORE SENDING line; Emi updates it once you answer.")
     sent = tg.send(text, topic="question") if tg is not None else None
     out(f"{qid} asked" + (" on Telegram" if sent else " (Telegram off: put it in the scan report)")
         + f"; the draft for this email carries '[CHECK BEFORE SENDING: …]' until karen-answer {qid}")

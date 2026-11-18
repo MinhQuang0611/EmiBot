@@ -106,7 +106,7 @@ class AlertTest(unittest.TestCase):
         build_watch.alert(st, tg, FakeMail(), build_watch.stuck(rows, emi.booking_state, NOW), MAILBOX,
                           out=lambda *_: None)
         self.assertEqual(list(st.open_questions()), [qid])
-        self.assertIn(f"{qid}</b> (đã hỏi", tg.sent[0])
+        self.assertIn(f"{qid}</b> (asked, no answer yet", tg.sent[0])
 
     def test_telegram_off_records_nothing(self):
         st = State(os.devnull + "-none")

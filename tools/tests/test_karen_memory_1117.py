@@ -50,7 +50,7 @@ class KarenMemoryTest(unittest.TestCase):
         emi.karen_answer(self.st, "E-001", "1 outdoor pool", out=self.lines.append)
         qid = self.ask("How many pools, indoor or outdoor?", mid="m2", ref="R2", again="new pool opened in 2027")
         self.assertEqual(qid, "E-002")
-        self.assertIn("Hỏi lại vì khác E-001: new pool opened in 2027", self.st.data["questions"]["E-002"]["ask"])
+        self.assertIn("Asked again, differs from E-001: new pool opened in 2027", self.st.data["questions"]["E-002"]["ask"])
 
     def test_unrelated_question_goes_and_a_near_one_is_shown(self):
         self.ask("Is the pool indoor or outdoor, and how many pools?")

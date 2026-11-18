@@ -51,8 +51,8 @@ TOPICS = {
     "email": ("📥 Email tới", "Mỗi email mới vào sales@ một dòng; khi Emi xử lý xong, dòng đó ghi kết quả (row, draft #). "
                              "Dòng còn ⏳ = email chưa xử lý."),
     "draft": ("✉️ Draft chờ duyệt", "Mỗi draft Emi viết: Accept / Deny / Rewrite. Slip đã chuyển kế toán cũng báo ở đây."),
-    "question": ("❓ Hỏi đáp", "Câu hỏi cho Karen (E-nnn) và booking build tool không nhập được. "
-                              "Trả lời: E-nnn <câu trả lời>."),
+    "question": ("❓ Hỏi đáp", "Questions for Karen (E-nnn) and bookings the build tool could not build. "
+                              "Reply: E-nnn <your answer>."),
     "report": ("📊 Báo cáo", "Kiểm tra cuối ngày, stop sell không chạy được và các cảnh báo khác."),
 }
 TOPICS_ENV = "EMI_TELEGRAM_TOPICS"
