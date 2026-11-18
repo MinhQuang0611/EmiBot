@@ -96,7 +96,12 @@ class State:
         return qid
 
     def open_questions(self):
-        return {k: v for k, v in self.data["questions"].items() if v["answer"] is None}
+        return {k: v for k, v in self.data["questions"].items() if v["answer"] is None and not v.get("closed")}
+
+    def close_question(self, qid, reason):
+        """Settled without Karen's answer (dev 18/11: 442 questions open since 30/10, most moot). Not an answer:
+        karen-answers.md never holds it, and Karen can still answer it later (that reopens it as answered)."""
+        self.data["questions"][qid]["closed"] = {"at": now_iso(), "reason": reason}
 
     def answer(self, text):
         """Match Karen's reply to a question. 'E-014 yes' -> E-014. A bare 'yes' only when exactly one is open.
@@ -111,6 +116,7 @@ class State:
                 return None
             qid, body = opened[0], text.strip()
         self.data["questions"][qid].update(answer=body, answered_at=now_iso())
+        self.data["questions"][qid].pop("closed", None)
         return qid
 
     # --- drafts, confirmations, reminders ---

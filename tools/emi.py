@@ -56,6 +56,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
     python -m tools.emi questions --not-english           # open ones still in Vietnamese (dev 18/11)
     python -m tools.emi ask-karen-reword <E-001> "<English>"  # reword an open one in English, same E-number
+    python -m tools.emi questions-sweep [--apply]         # old open questions settled another way: close them
+    python -m tools.emi question-close <E-001> "<why>"     # one settled without Karen's answer
     python -m tools.emi karen-answers [text]              # Karen's past answers (all, or like TEXT); karen-answers.md
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
@@ -3076,7 +3078,7 @@ def report_holds(st, out=print):
     questions = st.data["questions"]
     for ref, h in st.data["confirmation_holds"].items():
         asked = [(q, v) for q, v in questions.items() if v.get("booking_ref") == ref]
-        open_ = [q for q, v in asked if v.get("answer") is None]
+        open_ = [q for q, v in asked if v.get("answer") is None and not v.get("closed")]
         answered = [(q, v) for q, v in asked if v.get("answer") is not None]
         if open_:
             state = f"waiting on Karen {', '.join(open_)}"
@@ -3317,8 +3319,8 @@ def reword_question(st, tg, qid, question, out=print):
     q = st.data["questions"].get(qid)
     if q is None:
         raise Refused(f"no question {qid}")
-    if q["answer"] is not None:
-        raise Refused(f"{qid} is already answered: nothing to reword")
+    if q["answer"] is not None or q.get("closed"):
+        raise Refused(f"{qid} is already {'answered' if q['answer'] is not None else 'closed'}: nothing to reword")
     if not question:
         raise Refused("the question is empty")
     if GAP.search(question):
@@ -3446,6 +3448,96 @@ def karen_answers(st, text="", out=print):
         out("- " + karen_memory.line(qid, q))
 
 
+# --- old questions that no longer wait on Karen (dev, 2026-11-18: "cho Emi rà và đóng mấy câu cũ đi"; 442 were open,
+# asked 30/10–18/11, most of them settled another way and never closed) ---
+
+SWEEP_MIN_DAYS = 2  # a question younger than this is still live, whatever the signs say
+BUILD_STOP = re.compile(r"Hệ thống nhập EZFOLIO dừng|EZFOLIO build tool stopped|EZFOLIO intake stopped", re.I)
+
+
+def _qnum(qid):
+    return int(re.sub(r"\D", "", qid) or 0)
+
+
+def _held_on(st, ref):
+    mine = _parts(ref)
+    return next((h for h in st.data["confirmation_holds"] if mine and _parts(h) & mine), None)
+
+
+def _why_settled(qid, q, rows, st, today):
+    """The reason this open question no longer waits on Karen, or None. Signs only from the sheet and Emi's state."""
+    ref, mid = q.get("booking_ref") or "", q.get("message_id") or ""
+    state = booking_state(rows, ref) if ref and _parts(ref) else []
+    if state:
+        if all((r.get("action") or "").upper() == "CANCEL" for r in state):
+            return f"booking cancelled (row {state[0].get('_row', '?')})"
+        deps = [d for d in (schema._date(r.get("departure"), "%d/%m/%Y") for r in state) if d]
+        if deps and max(deps).date() < today:
+            return f"stay over (departure {max(deps):%d/%m/%Y})"
+        if BUILD_STOP.search(q["ask"]) and all(r.get("ez_status") in payments.BUILT_STATUSES
+                                               and (r.get("pdf_link") or "").strip() for r in state):
+            return "built in EZFOLIO since the stop"
+    later = [(k, v) for k, v in st.data["questions"].items() if _qnum(k) > _qnum(qid)
+             and ((mid and v.get("message_id") == mid) or (ref and _parts(ref) & _parts(v.get("booking_ref"))))]
+    for k, v in later:
+        if v.get("answer") is not None:
+            return f"Karen answered {k} on the same {'email' if mid and v.get('message_id') == mid else 'booking'}"
+    if later:
+        return f"asked again later as {later[-1][0]}"
+    revs = [(n, r) for n, r in st.data["reviews"].items() if mid and r.get("source") == mid]
+    if revs and all(r["status"] != REVIEW_OPEN for _, r in revs):
+        n, r = revs[-1]
+        return f"its email's draft #{n} is {r['status']} (a person dealt with it)"
+    return None
+
+
+def sweep_questions(sheet, st, apply=False, out=print, today=None):
+    """Every open question at least SWEEP_MIN_DAYS old: CLOSE with the reason, or KEEP. --apply closes them.
+    A booking with a held confirmation is always kept (its hold waits on the answer)."""
+    today = today or _today_vn()
+    rows = sheet.rows()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=SWEEP_MIN_DAYS)
+    close, keep, young = [], [], 0
+    for qid, q in sorted(st.open_questions().items(), key=lambda kv: _qnum(kv[0])):
+        asked = datetime.fromisoformat((q.get("asked_at") or now_iso()).replace("Z", "+00:00"))
+        if asked > cutoff:
+            young += 1
+            continue
+        held = _held_on(st, q.get("booking_ref") or "")
+        why = None if held else _why_settled(qid, q, rows, st, today)
+        (close if why else keep).append((qid, q, why or (f"confirmation held on {held}" if held else "")))
+    out(f"QUESTIONS SWEEP: {len(close)} to close, {len(keep)} kept, {young} younger than {SWEEP_MIN_DAYS} days left "
+        f"alone" + ("" if apply else " (nothing changed: --apply closes them)"))
+    for qid, q, why in close:
+        if apply:
+            st.close_question(qid, why)
+        out(f"CLOSE {qid} {vn(q['asked_at'])} · {q.get('booking_ref') or '-'}: {why}")
+    for qid, q, why in keep:
+        out(f"KEEP {qid} {vn(q['asked_at'])} · {q.get('booking_ref') or '-'}" + (f" ({why})" if why else "")
+            + f": {q['ask'][:160]}")
+    if keep:
+        out("Each KEEP: look (show / mail-find / sheet-find). Settled → question-close <E-nnn> \"<what settled it>\"; "
+            "still needs Karen → leave it open.")
+    return close, keep
+
+
+def question_close(st, qid, reason, out=print):
+    qid = qid.strip().upper()
+    q = st.data["questions"].get(qid)
+    if q is None:
+        raise Refused(f"no question {qid}")
+    if q["answer"] is not None or q.get("closed"):
+        raise Refused(f"{qid} is already {'answered' if q['answer'] is not None else 'closed'}")
+    if not reason.strip():
+        raise Refused("say what settled it")
+    held = _held_on(st, q.get("booking_ref") or "")
+    if held:
+        raise Refused(f"{qid}: the confirmation of {held} is held on it; settle the hold (confirmation-hold "
+                      f"{held} 0 --clear) or record Karen's answer with karen-answer")
+    st.close_question(qid, " ".join(reason.split()))
+    out(f"{qid} closed: {' '.join(reason.split())}")
+
+
 def questions(st, everything=False, out=print, not_english=False):
     qs = st.data["questions"] if everything else st.open_questions()
     if not_english:  # dev 18/11: the open ones still in Vietnamese, for ask-karen-reword
@@ -3455,13 +3547,16 @@ def questions(st, everything=False, out=print, not_english=False):
     if not qs:
         out("no questions to Karen" + ("" if everything else " open"))
     for qid, q in qs.items():
-        line = f"{qid} [{'answered' if q['answer'] is not None else 'open'}] {vn(q['asked_at'])}"
+        tag = "answered" if q["answer"] is not None else "closed" if q.get("closed") else "open"
+        line = f"{qid} [{tag}] {vn(q['asked_at'])}"
         line += f" · {q['booking_ref']}" if q.get("booking_ref") else ""
         line += f" · email {q['message_id']}" if q.get("message_id") else ""
         out(line)
         out(f"  Q: {q['ask']}")
         if q["answer"] is not None:
             out(f"  A: {q['answer']} ({vn(q['answered_at'])})")
+        elif q.get("closed"):
+            out(f"  closed: {q['closed']['reason']} ({vn(q['closed']['at'])})")
 
 
 def status(st, out=print):
@@ -3666,6 +3761,10 @@ def parser():
     s = sub.add_parser("questions", help="questions to Karen still open")
     s.add_argument("--all", action="store_true", help="also the answered ones")
     s.add_argument("--not-english", action="store_true", help="only the open ones still in Vietnamese (dev 18/11)")
+    s = sub.add_parser("questions-sweep", help="open questions 2+ days old: which no longer wait on Karen (dev 18/11)")
+    s.add_argument("--apply", action="store_true", help="close the CLOSE ones; without it nothing changes")
+    s = sub.add_parser("question-close", help="an open question settled without Karen's answer: close it, say why")
+    s.add_argument("qid"); s.add_argument("reason", nargs="+")
     s = sub.add_parser("ask-karen-reword", help="an open question asked in Vietnamese: its English wording, same E-number")
     s.add_argument("qid"); s.add_argument("question", nargs="+")
     sub.add_parser("status")
@@ -3867,6 +3966,12 @@ def main(argv=None):
             st.save()
         elif c == "questions":
             questions(st, everything=args.all, not_english=args.not_english)
+        elif c == "questions-sweep":
+            sweep_questions(config.sheet(), st, apply=args.apply)
+            st.save()
+        elif c == "question-close":
+            question_close(st, args.qid, " ".join(args.reason))
+            st.save()
         elif c == "ask-karen-reword":
             reword_question(st, config.telegram(), args.qid, " ".join(args.question))
             st.save()

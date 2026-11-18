@@ -41,7 +41,8 @@ def holds_need_a_look(state):
     """A held confirmation with no open question to Karen: never asked, or answered and not acted on (Karen 15/11,
     Greentours 0349-IN 1211 held three days unseen). One waiting on Karen's answer doesn't wake job 2."""
     questions = state.data["questions"].values()
-    return any(not any(q.get("booking_ref") == ref and q.get("answer") is None for q in questions)
+    return any(not any(q.get("booking_ref") == ref and q.get("answer") is None and not q.get("closed")
+                       for q in questions)
                for ref in state.data["confirmation_holds"])
 
 
