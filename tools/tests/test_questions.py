@@ -65,6 +65,34 @@ class QuestionTest(unittest.TestCase):
         self.assertEqual(self.ask("Guest Nguyễn Thị Phương Thảo (Công ty Lữ Hành Việt Đẹp) asks for a late "
                                   "check-out on 19/11: allowed, and at what charge?"), "E-001")
 
+    def test_reword_an_old_vietnamese_question(self):  # dev 18/11: "rewrite lại các câu cũ"
+        qid = self.st.ask("2053556827", "Chị xác nhận giúp: khoản quẹt Amex này là khoản gì và phòng họp có trống không?", "m9")
+        self.st.ask("R7", "Is the pool heated?", "m7")
+        emi.questions(self.st, out=self.lines.append, not_english=True)
+        self.assertIn("OPEN QUESTIONS NOT IN ENGLISH: 1", self.lines[0])
+        self.assertTrue(any(l.startswith(qid) for l in self.lines))
+        self.assertFalse(any(l.startswith("E-002") for l in self.lines))
+        with self.assertRaises(emi.Refused):
+            emi.reword_question(self.st, self.tg, qid, "Chị xác nhận giúp khoản này là gì?", out=self.lines.append)
+        emi.reword_question(self.st, self.tg, qid, "What is the Amex charge for, and is the meeting room free?",
+                            out=self.lines.append)
+        q = self.st.data["questions"][qid]
+        self.assertEqual(q["ask"], "What is the Amex charge for, and is the meeting room free?")
+        self.assertTrue(q["ask_vi"].startswith("Chị xác nhận"))
+        self.assertIn(f"{qid} — question for Karen", self.sent[-1]["text"])
+        self.assertIn("replaces the earlier message", self.sent[-1]["text"])
+        self.assertEqual(q["tg_message_id"], len(self.sent))
+        emi.reword_question(self.st, self.tg, qid, "What is the Amex charge for, and is the meeting room free today?",
+                            out=self.lines.append)  # now it knows the message: edited in place
+        self.assertIn("edited in place", self.lines[-1])
+        self.assertEqual(self.sent[-1]["message_id"], q["tg_message_id"])
+
+    def test_reword_refuses_an_answered_question(self):
+        self.ask()
+        emi.karen_answer(self.st, "E-001", "outdoor", out=self.lines.append)
+        with self.assertRaises(emi.Refused):
+            emi.reword_question(self.st, self.tg, "E-001", "Is the pool outdoor?", out=self.lines.append)
+
     def test_question_must_be_words_not_a_gap(self):
         with self.assertRaises(emi.Refused):
             self.ask("[pool type: hotel to confirm]")

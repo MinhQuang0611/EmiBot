@@ -54,6 +54,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi ask-karen <message_id> "<question>" [--ref R]  # an uncertain fact: ask; the draft carries a CHECK line
     python -m tools.emi karen-answer <E-001> "<answer>"   # her answer: then write the draft for that email
     python -m tools.emi questions [--all]                 # questions to Karen still open (--all: answered too)
+    python -m tools.emi questions --not-english           # open ones still in Vietnamese (dev 18/11)
+    python -m tools.emi ask-karen-reword <E-001> "<English>"  # reword an open one in English, same E-number
     python -m tools.emi karen-answers [text]              # Karen's past answers (all, or like TEXT); karen-answers.md
     python -m tools.emi status                            # scan clock and counts
     python -m tools.emi review-list [--all]               # drafts #n waiting for a person (Telegram notices)
@@ -3243,6 +3245,18 @@ VI_WORDS = re.compile(
     r"có|cho|hay|gì|những|các|một|nếu|khi|sau|trước|vào|theo|đến|phải|cần|em|ạ|nhé)(?!\w)", re.I)
 
 
+def is_english(question):
+    return len(VI_WORDS.findall(question or "")) < 3
+
+
+def question_text(qid, ref, question, note=""):
+    """The ❓ Hỏi đáp notice for one question (dev 18/11: in English)."""
+    return (f"❓ <b>{qid} — question for Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
+            + (f" <i>({review.esc(note)})</i>" if note else "")
+            + f"\n{review.esc(question)}\n\nReply: <code>{qid} &lt;your answer&gt;</code>. "
+            f"The draft carries a CHECK BEFORE SENDING line; Emi updates it once you answer.")
+
+
 def check_english_question(question):
     vi = VI_WORDS.findall(question)
     if len(vi) >= 3:
@@ -3285,12 +3299,55 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
             f"asked again: {q['ask']}. Wait for her answer (questions). Only a different fact → ask-karen … --also")
         return qid
     qid = st.ask(ref, question, message_id)
-    text = (f"❓ <b>{qid} — question for Karen</b>" + (f" · {review.esc(ref)}" if ref else "")
-            + f"\n{review.esc(question)}\n\nReply: <code>{qid} &lt;your answer&gt;</code>. "
-            f"The draft carries a CHECK BEFORE SENDING line; Emi updates it once you answer.")
-    sent = tg.send(text, topic="question") if tg is not None else None
+    sent = tg.send(question_text(qid, ref, question), topic="question") if tg is not None else None
+    if sent:
+        st.data["questions"][qid]["tg_message_id"] = sent  # so a later reword edits this message in place
     out(f"{qid} asked" + (" on Telegram" if sent else " (Telegram off: put it in the scan report)")
         + f"; the draft for this email carries '[CHECK BEFORE SENDING: …]' until karen-answer {qid}")
+    return qid
+
+
+def reword_question(st, tg, qid, question, out=print):
+    """Dev, 2026-11-18: "để Emi rewrite lại các câu cũ đi, hiện tại vẫn là tiếng việt". An open question asked in
+    Vietnamese gets its English wording: the state's 'ask' is replaced (the old one kept in 'ask_vi'), and the
+    Telegram notice is edited in place when its id is known, else posted again in the ❓ Hỏi đáp tab under the same
+    E-number. Same fact, same booking: no new question, no new E-number."""
+    qid = qid.strip().upper()
+    question = " ".join(question.split())
+    q = st.data["questions"].get(qid)
+    if q is None:
+        raise Refused(f"no question {qid}")
+    if q["answer"] is not None:
+        raise Refused(f"{qid} is already answered: nothing to reword")
+    if not question:
+        raise Refused("the question is empty")
+    if GAP.search(question):
+        raise Refused("write the question in words, not as a '[...: hotel to confirm]' gap")
+    check_english_question(question)
+    if question == q["ask"]:
+        out(f"{qid} already reads that way")
+        return qid
+    q.setdefault("ask_vi", q["ask"])
+    q["ask"] = question
+    q["reworded_at"] = now_iso()
+    st.checkpoint()
+    if tg is None:
+        out(f"{qid} reworded in the state; Telegram off, notice not changed")
+        return qid
+    ref = q.get("booking_ref") or ""
+    if q.get("tg_message_id"):
+        try:
+            tg.edit(q["tg_message_id"], question_text(qid, ref, question))
+            out(f"{qid} reworded, Telegram notice edited in place")
+            return qid
+        except httpjson.HttpError as e:
+            out(f"{qid}: old notice not editable ({e.body[:120]}), posting it again")
+    sent = tg.send(question_text(qid, ref, question, note="in English, replaces the earlier message"),
+                   topic="question")
+    if sent:
+        q["tg_message_id"] = sent
+    st.checkpoint()
+    out(f"{qid} reworded" + (", posted again in the question tab" if sent else "; Telegram didn't take it"))
     return qid
 
 
@@ -3389,8 +3446,12 @@ def karen_answers(st, text="", out=print):
         out("- " + karen_memory.line(qid, q))
 
 
-def questions(st, everything=False, out=print):
+def questions(st, everything=False, out=print, not_english=False):
     qs = st.data["questions"] if everything else st.open_questions()
+    if not_english:  # dev 18/11: the open ones still in Vietnamese, for ask-karen-reword
+        qs = {k: v for k, v in st.open_questions().items() if not is_english(v["ask"])}
+        out(f"OPEN QUESTIONS NOT IN ENGLISH: {len(qs)}" + (". Each: ask-karen-reword <E-nnn> \"<the same question in "
+            "English>\" (same fact, names and refs as they are; nothing added, nothing dropped)" if qs else ""))
     if not qs:
         out("no questions to Karen" + ("" if everything else " open"))
     for qid, q in qs.items():
@@ -3604,6 +3665,9 @@ def parser():
     s.add_argument("qid"); s.add_argument("answer", nargs="+")
     s = sub.add_parser("questions", help="questions to Karen still open")
     s.add_argument("--all", action="store_true", help="also the answered ones")
+    s.add_argument("--not-english", action="store_true", help="only the open ones still in Vietnamese (dev 18/11)")
+    s = sub.add_parser("ask-karen-reword", help="an open question asked in Vietnamese: its English wording, same E-number")
+    s.add_argument("qid"); s.add_argument("question", nargs="+")
     sub.add_parser("status")
     s = sub.add_parser("review-list", help="drafts waiting for a person's accept / deny / rewrite")
     s.add_argument("--all", action="store_true", help="also the ones already decided")
@@ -3802,7 +3866,10 @@ def main(argv=None):
             karen_answer(st, args.qid, " ".join(args.answer))
             st.save()
         elif c == "questions":
-            questions(st, everything=args.all)
+            questions(st, everything=args.all, not_english=args.not_english)
+        elif c == "ask-karen-reword":
+            reword_question(st, config.telegram(), args.qid, " ".join(args.question))
+            st.save()
         elif c == "status":
             status(st)
     except Exception as e:
