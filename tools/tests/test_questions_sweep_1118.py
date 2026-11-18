@@ -102,6 +102,15 @@ class SweepTest(unittest.TestCase):
             emi.question_close(self.st, q, "moot", out=self.lines.append)
         self.assertIn("confirmation-hold TA666 0 --clear", str(e.exception))
 
+    def test_duplicate_on_a_held_booking_closes_while_one_stays(self):  # dev 18/11, Odeon 1326004734 ×6
+        old = self.ask("Odeon 1326004734", "SPO code?")
+        new = self.ask("Odeon 1326004734", "SPO code and arrival date?")
+        self.st.data["confirmation_holds"]["Odeon 1326004734"] = {"reason": "price"}
+        emi.question_close(self.st, old, f"duplicate, merged into {new}", out=self.lines.append)
+        self.assertEqual(list(self.st.open_questions()), [new])
+        with self.assertRaises(emi.Refused):
+            emi.question_close(self.st, new, "moot", out=self.lines.append)
+
 
 if __name__ == "__main__":
     unittest.main()

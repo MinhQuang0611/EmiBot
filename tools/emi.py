@@ -3531,7 +3531,11 @@ def question_close(st, qid, reason, out=print):
     if not reason.strip():
         raise Refused("say what settled it")
     held = _held_on(st, q.get("booking_ref") or "")
-    if held:
+    # dev 18/11 "gom mấy câu trùng lại": a duplicate on a held booking may go as long as another question on the
+    # same booking stays open for the hold to wait on
+    mine = _parts(q.get("booking_ref") or "")
+    others = [k for k, v in st.open_questions().items() if k != qid and mine & _parts(v.get("booking_ref"))]
+    if held and not others:
         raise Refused(f"{qid}: the confirmation of {held} is held on it; settle the hold (confirmation-hold "
                       f"{held} 0 --clear) or record Karen's answer with karen-answer")
     st.close_question(qid, " ".join(reason.split()))
