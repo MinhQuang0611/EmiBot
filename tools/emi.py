@@ -93,8 +93,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import attachments, config, drive, stop_sales, telegram
-from .graph_mail import (ACCOUNTING, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES, SendBlocked,
-                         clean_subject, is_internal, share_links)
+from .graph_mail import (ACCOUNTING, AUTO_KINDS, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES,
+                         SendBlocked, clean_subject, is_internal, share_links)
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -422,6 +422,10 @@ def ota_note(mail, sheet, st, args, tg=None, out=print, live=None):
     subject = msg.get("subject", "")
     if not is_ota_notice(sender, subject):
         raise Refused(f"{sender} '{subject}' is not an OTA or SynXis booking notice: answer it with draft-reply")
+    sent = [n for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
+            and r.get("kind") == "ota_note" and r.get("status") == "sent"]
+    if sent:
+        raise Refused(f"this notice's note #{sent[0]} was already sent to {FRONT_OFFICE}: no second one")
     had = [n for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
            and r.get("kind") == "ota_note" and r.get("status") in (REVIEW_OPEN, "approved")]
     replaces = {str(x) for x in _replaces(args)}
@@ -1745,7 +1749,7 @@ def booking_email(text):
 
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
-GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder")
+GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup")
 REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
@@ -1857,13 +1861,16 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None):
         if st.reminder_drafted(args.ref, args.kind.split("_")[0]) and not _replaces(args):
             raise Refused(f"{args.ref} already had its {args.kind}: one reminder per deadline. Overdue → report to "
                           f"Karen (confirmation-replies.md)")
+    if args.kind == "pickup":
+        check_pickup_decided(st, args.ref)
     check_not_stop_sales(args.kind)
     text = read_text(args.body) if text is None else text
     check_no_gaps(text, args.message_id)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
     older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
-    if telegram_first(tg):
+    auto = args.kind in auto_send_kinds()
+    if telegram_first(tg) and not auto:
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
                            to=to, cc=cc, mailbox=config.MAILBOX)
@@ -1876,9 +1883,69 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None):
     d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc, **suffix)
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
-                      row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to))
-    out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+                      row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to),
+                      notice=not auto)
     close_replaced(mail, st, tg, older, n, out=out)
+    if auto:
+        return auto_send(mail, st, tg, n, d, args, text, out=out)
+    out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    return d
+
+
+def auto_send_kinds():
+    """EMI_AUTO_SEND=deposit_reminder,balance_reminder,ota_note,pickup (Karen, 2026-11-19, the auto-send list: "không
+    cần phải chị Karen duyệt"): these kinds are sent by Emi with nobody pressing Send. Each must be named; a name
+    outside AUTO_KINDS is ignored. Needs Karen's Mail.Send sign-in, like the slips. Unset = every draft waits."""
+    named = {k.strip() for k in os.environ.get("EMI_AUTO_SEND", "").split(",")}
+    return {k for k in AUTO_KINDS if k in named}
+
+
+# A pick-up reply's outcome must be in its text: the paid transfer's price, never in the free one
+PICKUP_PRICE = re.compile(r"200[.,\s]?000|200\s*k\b", re.I)
+
+
+def check_pickup_decided(st, ref):
+    """email-templates.md 7: the answer comes from `pickup`, never from one row. A pick-up reply names the booking,
+    and `pickup <ref>` has run for it."""
+    if not ref:
+        raise Refused("a pickup reply needs --ref: the booking_ref you ran 'pickup' on")
+    if ref not in st.data.get("pickups", {}):
+        raise Refused(f"run 'pickup {ref} --ota-rooms N' first: the free-or-paid answer comes from it "
+                      f"(email-templates.md 7). No draft made.")
+
+
+def auto_hold(st, args, text):
+    """Why this auto-send draft must wait for a person, or '' to send it. Unsure = hold, as for the slips."""
+    if CHECK_MARK.lower() in text.lower():
+        return "còn dòng [CHECK BEFORE SENDING], một người phải xem trước"
+    if args.kind == "pickup":
+        outcome = (st.data.get("pickups", {}).get(args.ref) or {}).get("outcome")
+        if outcome not in (pickups.FREE, pickups.PAID):
+            return f"pickup {args.ref} ra {outcome or 'chưa chạy'}, không phải FREE/PAID: một người quyết"
+        priced = bool(PICKUP_PRICE.search(text))
+        if outcome == pickups.PAID and not priced:
+            return "pickup ra PAID nhưng thư không ghi giá 200,000 VND"
+        if outcome == pickups.FREE and priced:
+            return "pickup ra FREE nhưng thư lại ghi giá 200,000 VND"
+    return ""
+
+
+def auto_send(mail, st, tg, n, d, args, text, out=print):
+    """Send an auto-send draft just made in Outlook (Karen 19/11). Anything that stops it leaves the normal draft
+    with the reason on Telegram, so nothing is lost and nothing unsure goes out."""
+    held = auto_hold(st, args, text)
+    st.save()  # before the send: a run that stops after it must not send again
+    if not held:
+        try:
+            mail.send_auto_draft(d["id"], args.kind)
+            review.sent(st, tg, n, by=f"auto-send {args.kind}")
+            st.save()
+            out(f"#{n} ({args.kind}) SENT, no review needed: {', '.join(st.data['reviews'][n].get('to') or [])}")
+            return d
+        except (SendBlocked, PermissionError, OSError, httpjson.HttpError) as e:
+            held = f"gửi lỗi ({type(e).__name__}: {str(e)[:120]})"
+    review.notify(tg, n, st.data["reviews"][n], held=held)
+    out(f"draft #{n} saved in Drafts: {d['id']}, NOT sent: {held}")
     return d
 
 
@@ -2331,14 +2398,19 @@ def run_upgrade(args, data, out=print):
         out("NO SEA VIEW FREE: say so in the reply, no charge quoted (email-templates.md 5b)")
 
 
-def run_pickup(sheet, args, out=print, live=None):
-    """Free or paid airport pick-up for one booking: every room of it, every SynXis number (dev 06/11)."""
+def run_pickup(sheet, args, out=print, live=None, st=None):
+    """Free or paid airport pick-up for one booking: every room of it, every SynXis number (dev 06/11). The outcome
+    is kept in the state: a pickup reply needs it, and only FREE or PAID goes out without a person (Karen 19/11)."""
     rows = sheet.rows() + live_rows(live, out)
     res = pickups.check(rows, args.booking_ref, _parts, ota_rooms=args.ota_rooms, paid_vnd=args.paid_vnd,
                         paid_usd=args.paid_usd)
     if res is None:
         raise Refused(f"no rows for booking_ref {args.booking_ref!r} on the sheet: write the booking first")
     out(pickups.render(res, _where))
+    if st is not None:
+        st.data.setdefault("pickups", {})[args.booking_ref] = {"outcome": res.get("outcome"),
+                                                               "why": res.get("why", ""), "at": review.now_iso()}
+        st.save()
     return res
 
 
@@ -3578,6 +3650,9 @@ def status(st, out=print):
                           else "outlook (saved in Drafts at once)"))
     out("payment slips: " + (f"SENT to {ACCOUNTING} (needs Karen's Mail.Send sign-in)" if send_slips()
                              else "drafts, a person sends"))
+    auto = sorted(auto_send_kinds())
+    out("auto-send: " + (f"{', '.join(auto)} SENT by Emi (needs Karen's Mail.Send sign-in)" if auto
+                         else "off (EMI_AUTO_SEND not set), every draft but the slips waits for a person"))
 
 
 def _recipient_args(s):
@@ -3647,7 +3722,7 @@ def parser():
                                                                 "'- PAYMENT REMINDER #30742'")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
-                            "inquiry, request")
+                            "inquiry, request, pickup (airport pick-up answer, after 'pickup <ref>')")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
@@ -3793,7 +3868,7 @@ def parser():
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
 READ_ONLY = ("show", "mail-find", "inbox-new", "status", "ota-audit", "day-check", "sheet-find", "change-replay", "quote", "availability", "payments-due",
-             "confirmations-due", "pickup", "build-stuck", "deposit-extension")
+             "confirmations-due", "build-stuck", "deposit-extension")  # pickup keeps its outcome (19/11): not read-only
 
 
 def main(argv=None):
@@ -3914,7 +3989,7 @@ def main(argv=None):
             if not args.preview:
                 st.save()
         elif c == "pickup":
-            run_pickup(config.sheet(), args, live=config.live_sheet())
+            run_pickup(config.sheet(), args, live=config.live_sheet(), st=st)
         elif c == "cancel-fee":
             run_cancel_fee(config.sheet(), args, live=config.live_sheet())
         elif c == "pdf-fetch":

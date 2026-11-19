@@ -189,7 +189,7 @@ The agency sent a UNC with the booking or before the confirmation went out, and 
 - Also drafted: the slip forward to accounting (4c), and the CHANGE row with the payment.
 
 ### 1d. OTA notice: the intake note (`ota-note`, Karen 2026-11-14)
-Every OTA or SynXis booking notice (new, modification, cancellation) is answered by a note on its own thread, to haya@haya-hotels.com (Karen, 2026-11-15: a reply to the no-reply address bounces), once its rows are on the sheet, so Karen sees in the thread that it was entered. `ota-note <id> --ref <booking_ref>` writes it; nothing to write by hand:
+Every OTA or SynXis booking notice (new, modification, cancellation) is answered by a note on its own thread, sent at once when `EMI_AUTO_SEND` names `ota_note` (Karen, 2026-11-19), to haya@haya-hotels.com (Karen, 2026-11-15: a reply to the no-reply address bounces), once its rows are on the sheet, so Karen sees in the thread that it was entered. `ota-note <id> --ref <booking_ref>` writes it; nothing to write by hand:
 
 A courteous email to front office, not a data dump (dev, 2026-11-15, on TONY TRAN's cancellation note: "sao lại reply ntn, sửa lại đi"): greeting, one sentence saying what happened and through which channel, the booking in plain words (room names, not codes; nights counted), the intake rows in one line, what is still missing in words, "Trân trọng," and "Bộ phận Đặt phòng".
 
@@ -335,7 +335,7 @@ sales@haya-hotels.com
 ## 4. Payment emails
 Sources: Victoria #29648 / #28931 (22/10, VI), Travel Concierge 2779479 (22/10, EN), Travel Concierge 2779479 slip (23/10, VI), Threeland 65-061126-MVS-GD (26/10, VI), Tripackers (19/10, EN), Phú Minh Quang An0109 forward (15/10).
 
-### 4a. Payment reminder — deposit (at 40 hours) or balance (before the 7-day date), `--kind deposit_reminder` / `balance_reminder`
+### 4a. Payment reminder — deposit (at 40 hours) or balance (before the 7-day date), `--kind deposit_reminder` / `balance_reminder` (sent at once with `EMI_AUTO_SEND`, Karen 2026-11-19)
 Reply on the booking's thread; add `- NHẮC THANH TOÁN #[mã đoàn]` / `- PAYMENT REMINDER #[code]` to the end of the subject.
 
 Vietnamese:
@@ -663,7 +663,7 @@ sales@haya-hotels.com
 ```
 Cancellation of an operator booking: section 3.
 
-## 7. Airport transfer asked for (`--kind request`)
+## 7. Airport transfer asked for (`--kind pickup`, sent at once on FREE / PAID, Karen 2026-11-19)
 Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
 - **The guest gets one answer: free or paid (dev, 05/11, Ms. Ip's draft).** Never the rule on its own ("applies when the amount paid is above USD 250", "if the booking does not qualify") and never both outcomes in one draft.
 - **The answer comes from `pickup`, never from one row (dev, 06/11).** `py -m tools.emi pickup <booking_ref> --ota-rooms <N>`, N = the room count the OTA itself gives: the Booking.com message's `Tổng số phòng` / `Total rooms`, the voucher, or the SynXis notices. It adds up **every room of the booking**: an OTA booking reaches SynXis one room per number, so a 2-room Booking.com booking is two SynXis numbers and two NEW rows, and the guest's messages land on one of them. On 06/11 Emi priced two such bookings on one room and told both guests the pick-up was paid (Erkinbek Uzakbaev 6907944253: 003193 + 003194 = 11,520,000; Adrian Sequeira 5337759531: Booking.com says 2 rooms, the sheet had 003205 only). The figure the guest paid, when the email or voucher gives it, goes in with `--paid-vnd` / `--paid-usd` (an Agoda voucher's `Reference sell rate`, not `Total Cost with Tax`, which is the net). `PICK-UP: FREE` → the free form below; `PAID` → the paid form; `CHECK` → its `why` says what to read or pass; still nothing → the CHECK case at the end of this section. A note that a room is missing from the sheet → find its email (`mail-find <surname>`) and write the row before the reply.
@@ -687,6 +687,7 @@ Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
 - **Doesn't qualify:** `Complimentary one-way airport pick-up applies when the amount paid for the booking is above USD 250. Your booking is below that amount, so pick-up is available as a paid transfer at [price] VND one way.` Price from `hotel-info.md` (200.000 VND, 4-seat car); a larger car's price → Karen until it's in `hotel-info.md`. Then `If you would like us to arrange it, please reply to confirm and send your flight number and landing time.`
 - **`pickup` says CHECK and the booking email has no figure, or it falls between the two marks in `hotel-info.md`:** still one form, with `[CHECK BEFORE SENDING: guest paid <figure or "not shown">, confirm free or paid]` on top and `ask-karen`. Above the upper mark on the net alone → the free form, no check line. Otherwise the paid form.
 - Asking for the flight here is fine: they asked for the transfer.
+- **`--kind pickup --ref <the ref given to pickup>` (Karen, 2026-11-19, auto-send list).** `draft-reply` refuses it before `pickup <ref>` has run. With `pickup` in `EMI_AUTO_SEND` the reply goes out at once when `pickup` said FREE or PAID and the text matches: the paid form names 200,000 VND, the free form doesn't. CHECK, TA, a CHECK line or a mismatch → a normal draft with the reason on Telegram.
 
 ## 8. Reconfirmation / hotel confirmation number (HCN) request — bedbanks, OTAs, B2B desks (`--kind reply`)
 Sources: RezLive (15/10), BiziTrip (19/10), TBO 22541062 (26/10), Within Earth (25/10), Arbitrip (27/10).

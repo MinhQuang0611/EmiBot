@@ -1,9 +1,12 @@
 """Outlook access for sales@haya-hotels.com through Microsoft Graph.
 
 Emi drafts (AGENTS.md rule 1); `_call` refuses any Graph endpoint that sends, so a prompt can't talk its way into
-sending. The one exception is `send_slip_forward`: a payment slip forwarded to accounting, to that one address and
-nobody else (dev, 2026-11-04). It works only with EMI_SEND_SLIPS=1 and once Karen has signed sales@ in again with
-Mail.Send (`tools.acceptance mail-login-start --send`); the ordinary sign-in is Mail.ReadWrite only.
+sending. Two exceptions, both needing Karen's sign-in with Mail.Send (`tools.acceptance mail-login-start --send`;
+the ordinary sign-in is Mail.ReadWrite only):
+- `send_slip_forward`: a payment slip forwarded to accounting, to that one address and nobody else (dev,
+  2026-11-04), with EMI_SEND_SLIPS=1.
+- `send_auto_draft`: one of AUTO_KINDS (Karen, 2026-11-19, the auto-send list), with that kind named in
+  EMI_AUTO_SEND. Payment reminders and pick-up replies to the guest or agency, the OTA intake note to front office.
 """
 import base64
 import html
@@ -31,6 +34,31 @@ STOP_LINES = (DO_NOT_SEND, NO_INVOICE)
 RED_LINES = (CHECK_LINE, DO_NOT_SEND[:-1], NO_INVOICE[:-1])
 # The only address Emi may send to, and only a payment slip (send_slip_forward).
 ACCOUNTING = "accountant@palmahotel.vn"
+FRONT_OFFICE = "haya@haya-hotels.com"
+# Drafts Emi may send itself (Karen, 2026-11-19: "Các email được auto send, không cần phải chị Karen duyệt"), each only
+# when named in EMI_AUTO_SEND. The OTA intake note goes to front office alone; the others to the guest or agency.
+AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup")
+OWN_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
+
+
+def auto_send_refusal(kind, to, cc, bcc, text):
+    """Why a draft of this kind must not be sent by Emi, or '' (shared by GraphMail and SimMail)."""
+    if kind not in AUTO_KINDS:
+        return f"a {kind} draft is never sent by Emi"
+    if any(line.lower() in (text or "").lower() for line in RED_LINES):
+        return "it still has a red [CHECK BEFORE SENDING] / [DO NOT SEND …] line"
+    if bcc:
+        return "it has Bcc recipients"
+    if kind == "ota_note":
+        if to != [FRONT_OFFICE] or cc:
+            return f"an OTA note goes to {FRONT_OFFICE} alone"
+        return ""
+    if not to:
+        return "it has no recipient"
+    ours = [a for a in to if a.split("@")[-1] in OWN_DOMAINS]
+    if ours:
+        return f"it is addressed to our own {', '.join(ours)}, not the guest or agency"
+    return ""
 
 # Graph actions that send mail immediately. The create* versions only make drafts.
 SEND_ACTIONS = {"send", "sendmail", "reply", "replyall", "forward"}
@@ -697,6 +725,19 @@ class GraphMail:
             raise SendBlocked(f"{draft_id} is not addressed to {ACCOUNTING} alone; not sent")
         if CHECK_LINE.lower() in html.unescape(d.get("body", {}).get("content", "")).lower():
             raise SendBlocked(f"{draft_id} still has its {CHECK_LINE}] line; not sent")
+        self.http("POST", f"{self.base}/messages/{draft_id}/send",
+                  headers={"Authorization": f"Bearer {self.token()}"})
+
+    def send_auto_draft(self, draft_id, kind):
+        """Send one Emi draft of an AUTO_KINDS kind (tools.emi draft-reply / ota-note with EMI_AUTO_SEND). The
+        recipients are read back from Outlook, not taken from the caller."""
+        self._own_draft(draft_id)
+        d = self._call("GET", f"/messages/{draft_id}?$select=toRecipients,ccRecipients,bccRecipients,body")
+        addrs = lambda k: [a["emailAddress"]["address"].lower() for a in d.get(k) or []]
+        why = auto_send_refusal(kind, addrs("toRecipients"), addrs("ccRecipients"), addrs("bccRecipients"),
+                                html.unescape(d.get("body", {}).get("content", "")))
+        if why:
+            raise SendBlocked(f"{draft_id} not sent: {why}")
         self.http("POST", f"{self.base}/messages/{draft_id}/send",
                   headers={"Authorization": f"Bearer {self.token()}"})
 

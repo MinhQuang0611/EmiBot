@@ -40,6 +40,7 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `inquiry` — price, availability or hotel question, no booking yet (`inquiries-and-quotes.md`).
 - `request` — question or special request on an existing booking: arrival time, same floor, late check-out, luggage (`email-templates.md` section 5).
 - `confirmation`, `deposit_reminder`, `balance_reminder` — `confirmation-replies.md`.
+- `pickup` — the answer to an airport pick-up or transfer question, after `pickup <ref>` (`email-templates.md` 7).
 - `forward` — every forward: accounting, the VAT address, Palma. Never front office (dev, 2026-10-30).
 - `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
 - `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`).

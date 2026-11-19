@@ -18,7 +18,7 @@ still live only on Telegram (`pending-<n>`); Accept puts those into Outlook as b
 
 I answer in the tab the message came from. `tg-topics` shows which tab is which; a kind with no tab goes to General.
 
-**A payment slip to accounting has no review (dev, 2026-11-04).** `forward-slip` sends it and its notice has no buttons: there is nothing to accept, deny or rewrite. In my reports I say "#12 đã chuyển kế toán". A notice with `Chưa tự gửi: <lý do>` is an ordinary draft with buttons.
+**A payment slip to accounting has no review (dev, 2026-11-04), and neither has the auto-send list (Karen, 2026-11-19): reminders, the OTA note, the pick-up answer.** It is sent and its notice ("📤 #n — Đã gửi …") has no buttons: there is nothing to accept, deny or rewrite. In my reports I say "#12 đã chuyển kế toán" / "#13 đã gửi nhắc đặt cọc". A notice with `Chưa tự gửi: <lý do>` is an ordinary draft with buttons.
 
 **Only Karen accepts (dev, 2026-10-30).** `review-accept` refuses anyone not in `EMI_APPROVERS` and the draft
 stays pending. `--by` is the Telegram sender's name or @username exactly as the message shows it, never a name

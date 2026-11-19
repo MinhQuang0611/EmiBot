@@ -194,7 +194,7 @@ When those details arrive, the email becomes a NEW booking → `booking-intake.m
 A paid sea-view upgrade on a booking: `email-templates.md` 5b. Discount, free upgrade, waived fee, free extra: acknowledge, give the real reason it isn't offered on this rate, offer what is available at its price. Never yes, never "let me see what I can do." If it's something Karen might grant, it goes to her as a request.
 
 ## Replies
-- Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send.
+- Every reply, including a plain greeting, is saved to Drafts for a person to send. I never send. On the auto-send list (Karen, 2026-11-19) but not built yet: a travel company asking for the TA rate table, once it has sent its business licence (GPKD), gets the table + photo link + fact sheet + presentation. Until the files and the licence check exist, that reply is a draft like any other.
 - No "we'll check and get back to you." Work out the full answer; after 3 failed attempts, Karen. A vague date or a big group is not a reason to ask first: quote the period they named (above).
 - Write it the way HAYA's own sent mail reads (`email-templates.md`, "Rules that apply to every email"): one line of thanks, then the numbers.
 - **Never write about what I can or can't see** (`email-templates.md`, rules for all). Not "the policy is not shown in the information available to us", not "cannot be confirmed from the reservation information". A fact I don't have means no draft yet: `ask-karen`, and the scan report names the question.

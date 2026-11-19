@@ -15,7 +15,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from datetime import timezone
 
-from .graph_mail import ACCOUNTING, CHECK_LINE, DO_NOT_SEND, SendBlocked, reply_subject, text_to_html
+from .graph_mail import ACCOUNTING, CHECK_LINE, DO_NOT_SEND, SendBlocked, auto_send_refusal, reply_subject, text_to_html
 
 
 def _thread_key(subject):
@@ -195,6 +195,17 @@ class SimMail:
         if CHECK_LINE.lower() in meta.get("text", "").lower():
             raise SendBlocked(f"{draft_id} still has its {CHECK_LINE}] line; not sent")
         meta["sent"] = True  # kept on disk, like Outlook's Sent Items
+        self._save(meta)
+
+    def send_auto_draft(self, draft_id, kind):
+        meta = self._meta(draft_id)
+        if meta is None or meta.get("deleted") or meta.get("sent"):
+            raise PermissionError(f"{draft_id} is no longer in Drafts")
+        low = lambda k: [a.lower() for a in meta.get(k) or []]
+        why = auto_send_refusal(kind, low("to"), low("cc"), low("bcc"), meta.get("text", ""))
+        if why:
+            raise SendBlocked(f"{draft_id} not sent: {why}")
+        meta["sent"] = True
         self._save(meta)
 
     def list_sent_since(self, since_iso):

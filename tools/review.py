@@ -31,7 +31,12 @@ KIND_LABEL = {
     "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
     "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking on request",
     "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
+    "pickup": "Trả lời đón sân bay",
 }
+# The headline of a draft Emi sent itself (forward-slip; Karen's auto-send list, 19/11)
+SENT_LABEL = {"forward": "Đã chuyển kế toán", "deposit_reminder": "Đã gửi nhắc đặt cọc",
+              "balance_reminder": "Đã gửi nhắc thanh toán", "ota_note": "Đã gửi ghi nhận cho lễ tân",
+              "pickup": "Đã gửi trả lời đón sân bay"}
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
 
@@ -140,21 +145,22 @@ def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, re
     return n
 
 
-def sent(st, tg, n):
-    """A payment slip went to accounting (forward-slip): closed as sent, a notice with nothing left to press."""
+def sent(st, tg, n, by="forward-slip"):
+    """Emi sent the draft itself: a payment slip to accounting (forward-slip) or one of the auto-send kinds (dev
+    19/11). Closed as sent, a notice with nothing left to press."""
     n, r = st.review(n)
-    st.close_review(n, "sent", "forward-slip")
+    st.close_review(n, "sent", by)
     if tg is None:
         return
     text = r["text"] if len(r["text"]) <= PREVIEW else r["text"][:PREVIEW] + f"\n… (nhắn: xem {n} để đọc hết)"
     ref = f" · {r['ref']}" + (f" (dòng {r['row']})" if r.get("row") else "") if r.get("ref") else ""
     try:
-        r["tg"] = tg.send("\n".join([f"📤 <b>#{n} — Đã chuyển kế toán{esc(ref)}</b>",
+        r["tg"] = tg.send("\n".join([f"📤 <b>#{n} — {SENT_LABEL.get(r.get('kind'), 'Đã gửi')}{esc(ref)}</b>",
                                      f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
                                      f"<b>Tiêu đề:</b> {esc(r['subject'])}", "",
                                      "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
                                      "Đã gửi, không cần duyệt. Thư nằm trong Outlook › Sent Items."]), topic="draft")
-    except Exception as e:  # the forward went either way
+    except Exception as e:  # the email went either way
         r["tg_error"] = f"{type(e).__name__}: {e}"[:300]
 
 
