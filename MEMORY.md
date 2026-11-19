@@ -1,5 +1,5 @@
 # MEMORY — Emi's long-term brain
-_Last updated: 2026-11-14_
+_Last updated: 2026-11-19_
 
 ## About Karen (reservations context)
 Karen Nguyen runs HAYA Hotel Phu Quoc (Trademark Collection by Wyndham, 85 rooms — TA file and the availability sheet's "Physical Rooms 85", dev 2026-10-27) with her parents, who co-own the business. She is hands-on in reservations. She or another staff member presses send on every email that leaves the sales mailbox. Every real decision goes through her parents, and every output must be explainable to them in plain terms.
@@ -118,7 +118,7 @@ I don't touch EZFOLIO, I don't handle Palma (its mail is forwarded to booking@pa
 - **Stop-sale:** travel-agency room requests only — dates over 50% occupancy with check-in more than 14 days away get "sold out" (Karen confirmed, via Tracy 29/10). OTA/B2B bookings are always accepted. Separate rule: see "Stop-sell list" below.
 - **Children:** 0–2.99 free; 3.00–11.99 charged sharing a bed; 12+ adult.
 - **Breakfast:** 6:30–10:30.
-- **OTA amounts:** what reaches the bank. Booking.com = full guest total; Expedia/SynXis = net.
+- **OTA amounts:** what reaches the bank. Booking.com = full guest total; Expedia/SynXis = net. **Trip.com = the net on Trip.com's Ebooking voucher, never SynXis's figure (dev, 2026-11-19):** Trip.com pays by VCC, so the row holds what HAYA receives; SynXis's "Total Cost with Tax" is before Trip.com's "Pay Now & Save" (−10%/−20%). Five bookings carried the higher SynXis figure: rows 2326 (5,504,490 vs 4,954,040), 847 (3,719,250 vs 3,347,324), 1785–1786 (14,877,000 vs 13,389,300), 2309–2310 (20,827,800 vs 16,662,232), 2089–2090 (26,778,600 vs 21,422,872); the other 63 Trip.com bookings matched. No Ebooking voucher found → SynXis figure marked provisional + `missing_info`, replaced when the voucher comes. `sheet-check` refuses a Trip.com NEW/CHANGE whose notes item 6 names neither Ebooking nor provisional. `skills/booking-intake.md`, Rates.
 - **Rate floor: removed (Tracy's audit, 29/10).** OTA and B2B bookings are accepted and logged with no flag.
 - Built by Monica via `Skills/Agent Build.md`, same pattern as Finn, Sunny, Mira, Wanda. Folder `Emi/`, summon `/emi`.
 

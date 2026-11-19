@@ -454,6 +454,19 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
         if g("rate_source") != want:
             errors.append(f"rate_source: {g('rate_source')!r} on a {g('company') or 'non-Booking.com'} row; write "
                           f"{want!r} (Booking.com pays the guest total, every other OTA the net)")
+    # Dev, 2026-11-19 (rows 847, 1785-1786, 2089-2090, 2309-2310, 2326): Trip.com is paid by VCC, so the price is
+    # the net on Trip.com's Ebooking voucher, what HAYA receives. SynXis's "Total Cost with Tax" is the price before
+    # Trip.com's own promotions ("Pay Now & Save" -10% / -20%): 3,719,250 on the sheet against 3,347,324 received.
+    if action in ("NEW", "CHANGE") and canon == "Trip.com":
+        items = [x.strip() for x in g("notes").splitlines() if x.strip()]
+        item6 = items[5] if len(items) == NOTES_ITEMS else g("notes")
+        if not re.search(r"ebooking|provisional", item6, re.I):
+            errors.append("notes: item 6 on a Trip.com row is the net on Trip.com's Ebooking voucher, what the VCC "
+                          "pays ('Trip.com Ebooking net 1,673,662 × 2 nights × 1 room = 3,347,324 VND'), never "
+                          "SynXis's Total Cost with Tax, which is before Pay Now & Save. No Ebooking voucher found "
+                          "(mail-find <Trip.com number>) → the SynXis figure, item 6 'SynXis total, provisional, no "
+                          "Trip.com Ebooking yet: …' and missing_info 'Trip.com Ebooking not received: price is "
+                          "SynXis's, before Trip.com promotions'")
     received = _date(g("received_at"), "%d/%m/%Y %H:%M")
     if action in ("NEW", "CHANGE") and a and received and a.date() < received.date():
         # 2026-10-24, Footprint 211Q1126Y: "12 Nov" written as 12/11/2025
