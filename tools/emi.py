@@ -832,6 +832,27 @@ def show(mail, message_id, work_dir=None, out=print):
         # body is an inline image (UMA AVD-4246445, 05/11: slip never read, payment not recorded).
         _show_attachments(mail, m, work_dir, out)
         _show_links(mail, m["id"], body.get("content", ""), work_dir, out, opened)
+        _show_pegasys(body.get("content", ""), out, opened)
+
+
+def _show_pegasys(text, out, opened, client=None):
+    """A Pegas robot mail is only a link to the booking on provider.pegasys.pegast.com (dev, 2026-11-20, Pegas
+    11120333: three link-only mails on 03–05/11, never entered). With the Pegas account on the host the page is read
+    and printed under the mail: guests, dates, room, meal, flights, requests, status. Read only."""
+    from . import pegasys
+    for bid, guid in pegasys.LINK.findall(text or ""):
+        if ("pegasys", bid) in opened:
+            continue
+        opened.add(("pegasys", bid))
+        try:
+            client = client or pegasys.from_env()
+            lines = pegasys.render_details(bid, client.details(bid, guid))
+        except (pegasys.PegasysError, OSError) as e:
+            out(f"\n[Pegasys page not read: booking {bid} — {e}. pegas-booking {bid} tries again]")
+            continue
+        out("\n[Pegasys page, read now]")
+        for line in lines:
+            out(line)
 
 
 def _show_links(mail, message_id, text, work_dir, out, opened):
@@ -3657,6 +3678,18 @@ def status(st, out=print):
                          else "off (EMI_AUTO_SEND not set), every draft but the slips waits for a person"))
 
 
+def run_pegas_booking(mail, st, booking_id, client=None, out=print):
+    """Dev, 2026-11-20: the booking page read for intake when Pegas's robot mail is only a link (tools/pegasys.py)."""
+    from . import pegasys
+    bid = re.sub(r"\D", "", booking_id)
+    hit = pegasys.find_link(mail, st, bid)
+    if not hit:
+        raise Refused(f"no Pegasys link for booking {bid} in the mailbox (robot mails from {pegasys.ROBOT})")
+    for line in pegasys.render_details(bid, (client or pegasys.from_env()).details(*hit)):
+        out(line)
+    out("END pegas-booking")
+
+
 def run_pegas_confirm(mail, sheet, st, args, tg=None, out=print):
     """Dev, 2026-11-20: Emi presses Confirm on provider.pegasys.pegast.com once HAYA's confirmation has gone to Pegas
     (tools/pegasys.py). Without EMI_PEGAS_CONFIRM=1 it only lists, as with --dry-run."""
@@ -3760,6 +3793,8 @@ def parser():
     s.add_argument("--current", help="their current deposit deadline, DD/MM/YYYY HH:MM")
     s.add_argument("--balance-by", help="the balance date already in COD, DD/MM/YYYY")
     sub.add_parser("confirmations-due", help="bookings built since 30/10 with no confirmation from sales@")
+    s = sub.add_parser("pegas-booking", help="a Pegas booking as its page on the provider site shows it (read only)")
+    s.add_argument("booking_id")
     s = sub.add_parser("pegas-confirm", help="press Confirm on the Pegas provider site for bookings whose "
                                              "confirmation has gone to Pegas (EMI_PEGAS_CONFIRM=1)")
     s.add_argument("--dry-run", action="store_true", help="read the site and list, press nothing")
@@ -3898,7 +3933,7 @@ def parser():
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
 READ_ONLY = ("show", "mail-find", "inbox-new", "status", "ota-audit", "day-check", "sheet-find", "change-replay", "quote", "availability", "payments-due",
-             "confirmations-due", "build-stuck", "deposit-extension")  # pickup keeps its outcome (19/11): not read-only
+             "confirmations-due", "build-stuck", "deposit-extension", "pegas-booking")  # pickup keeps its outcome (19/11): not read-only
 
 
 def main(argv=None):
@@ -3995,6 +4030,8 @@ def main(argv=None):
             st.save()
         elif c == "build-stuck":
             run_build_stuck(config.sheet(), st)
+        elif c == "pegas-booking":
+            run_pegas_booking(config.mail(), st, args.booking_id)
         elif c == "pegas-confirm":
             run_pegas_confirm(config.mail(), config.sheet(), st, args)
             st.save()

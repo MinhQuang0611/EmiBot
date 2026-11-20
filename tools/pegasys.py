@@ -16,7 +16,11 @@ Here that is: the booking's latest robot notice, a mail from sales@ to Pegas aft
 a before-PDF draft sent bare doesn't count), the booking built on the intake sheet and not cancelled, and the site
 saying New or Changed. Anything else is left alone.
 
-Off unless EMI_PEGAS_CONFIRM=1 with EMI_PEGAS_USER / EMI_PEGAS_PASSWORD (secrets: .env on the host only).
+Reading (dev, 2026-11-20): every robot mail is only a link, and when Pegas's own "New booking #… for …" mail doesn't
+come (11120333, 03/11) the page is the booking's only source. parse_details / render_details read it for intake:
+`show` prints it under a robot mail, `pegas-booking <id>` on its own. Needs only the account, not EMI_PEGAS_CONFIRM.
+
+Pressing is off unless EMI_PEGAS_CONFIRM=1 with EMI_PEGAS_USER / EMI_PEGAS_PASSWORD (secrets: .env on the host only).
 Confirmation #: the EZFOLIO group code, as Palma does (dev, 2026-11-20: "trước tiên cứ ghi như Palma"): EMI_PEGAS_CONF_NO=group.
 =conf writes the EZFOLIO confirmation no. instead; unset = the field is left as it is.
 """
@@ -88,6 +92,100 @@ def parse_booking(page):
             "confirmation_number": _input_value(page, "ConfirmationNumber") or "", "token": _token(page)}
 
 
+def _plain(fragment):
+    """Text of an HTML fragment, one line per block, blank lines dropped."""
+    s = re.sub(r"(?is)<(script|style).*?</\1>", " ", fragment)
+    s = re.sub(r"(?i)<br\s*/?>|</(div|li|p|tr|td|th)>", "\n", s)
+    s = html.unescape(re.sub(r"<[^>]+>", " ", s))
+    return [ln for ln in (re.sub(r"\s+", " ", x).strip() for x in s.split("\n")) if ln]
+
+
+def _block(page, header):
+    """The HTML of one k-block, from its k-header to the next block's header."""
+    m = re.search(rf'<div class="k-header">\s*{re.escape(header)}\s*</div>(.*?)(?=<div class="k-header">|$)', page, re.S)
+    return m.group(1) if m else ""
+
+
+def _age(born, on):
+    try:
+        b, d = (datetime.strptime(x, "%d.%m.%Y").date() for x in (born, on))
+    except ValueError:
+        return None
+    return d.year - b.year - ((d.month, d.day) < (b.month, b.day))
+
+
+def parse_details(page):
+    """Everything the booking page shows (dev, 2026-11-20: the robot's mail is only a link; when Pegas's own "New
+    booking #… for …" mail doesn't come, as for 11120333 on 03/11, the page is the only source). No price and no
+    allotment / on-request on the page."""
+    head = parse_booking(page) or {}
+    fields = {}
+    for label, value in re.findall(r"<label[^>]*>(.*?)</label>\s*<div[^>]*>(.*?)</div>", _block(page, "Booking"), re.S):
+        k, v = " ".join(_plain(label)), " ".join(_plain(value))
+        fields.setdefault(k, v)
+    requests = [" ".join(_plain(li)) for li in re.findall(r"<li[^>]*>(.*?)</li>", _block(page, "Special Requests"), re.S)]
+    guests = []
+    table = _block(page, "Guests")
+    body = re.split(r"</thead>", table, maxsplit=1)[-1]
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", body, re.S):
+        cells = [_plain(td) for td in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+        if len(cells) < 9:
+            continue
+        g = {"title": " ".join(cells[0]), "last": " ".join(cells[1]), "first": " ".join(cells[2]),
+             "born": " ".join(cells[3]), "age": " ".join(cells[4]), "document": cells[5], "info": " ".join(cells[6]),
+             "arrival": " ".join(cells[7]), "departure": " ".join(cells[8])}
+        g["age_at_checkin"] = _age(g["born"], fields.get("Check-in", ""))
+        guests.append(g)
+    msgs = [x for x in _plain(re.split(r'<div[^>]*id="new-message-window"', _block(page, "Messages"))[0])
+            if x not in ("New message", "No messages.", "Send")]
+    return {**{k: v for k, v in head.items() if k != "token"}, "fields": fields, "requests": requests,
+            "guests": guests, "messages": msgs}
+
+
+CANCELLED = ("Cancellation request", "Cancelled", "Cancellation confirmed")
+
+
+def render_details(booking_id, d):
+    f = d["fields"]
+    status = d.get("status", "?")
+    out = [f"PEGASYS BOOKING {booking_id} — status on the site: {status}"
+           + (" (CANCELLED BY PEGAS)" if status in CANCELLED or "cancel" in status.lower() else "")]
+    out.append(f"Check-in {f.get('Check-in', '?')} → check-out {f.get('Check-out', '?')}, {f.get('Nights', '?')} nights")
+    out.append(f"Room: {f.get('Room', '?')} | Accommodation: {f.get('Accommodation', '?')} | Meal: {f.get('Meal', '?')}")
+    out.append(f"Market: {f.get('Market', '')} | Package: {f.get('Package', '')} | Booked {f.get('Booking date', '')}"
+               f" | Last update {f.get('Last update', '')}")
+    if d.get("confirmation_number"):
+        out.append(f"Confirmation # on the site: {d['confirmation_number']}")
+    out.append(f"Guests ({len(d['guests'])}; age at check-in from the date of birth):")
+    for g in d["guests"]:
+        doc = " ".join(g["document"])
+        line = f"  {g['title']} {g['last']} {g['first']}, born {g['born']}"
+        line += f" (age {g['age_at_checkin']} at check-in)" if g["age_at_checkin"] is not None else f" (age {g['age']})"
+        line += f", document {doc}" if doc else ""
+        line += f", arrival {g['arrival']}" if g["arrival"] else ""
+        line += f", departure {g['departure']}" if g["departure"] else ""
+        line += f", note: {g['info']}" if g["info"] else ""
+        out.append(line)
+    out.append("Special requests: " + ("; ".join(d["requests"]) if d["requests"] else "none"))
+    out.append("Messages: " + (" / ".join(d["messages"]) if d["messages"] else "none"))
+    out.append("NOT ON THE PAGE: the price (to-price --operator Pegas) and allotment / on request (Pegas's own "
+               "'New booking #… for …' mail; none -> on request, skills/tour-operators.md step 5). The document's "
+               "first word is the guest's citizenship.")
+    return out
+
+
+def find_link(mail, st, booking_id):
+    """(booking_id, guid) of a booking from the robot links already read, else from the mailbox."""
+    for v in (_rec(st)["links"].values() if st else ()):
+        if v and v[0] == str(booking_id):
+            return v[0], v[1]
+    for m in mail.search(str(booking_id), top=25):
+        found = LINK.search(html.unescape(mail.get_message_html(m["id"])))
+        if found and found.group(1) == str(booking_id):
+            return found.group(1), found.group(2)
+    return None
+
+
 class Pegasys:
     """One session on the provider site; the cookie jar lives as long as the object."""
 
@@ -148,6 +246,12 @@ class Pegasys:
                 continue
             break
         raise PegasysError(f"booking {booking_id}: page has no data-version / Status (link wrong or layout changed)")
+
+    def details(self, booking_id, guid):
+        """parse_details of the booking page (read only)."""
+        self.booking(booking_id, guid)  # logs in, and again if the session ran out
+        _, page = self._open("GET", f"/HotelBookings/{booking_id}/{guid}")
+        return parse_details(page)
 
     def confirm(self, booking_id, guid, version, token=""):
         self._post("/HotelServiceListView/Confirm",

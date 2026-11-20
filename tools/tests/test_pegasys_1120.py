@@ -255,5 +255,147 @@ class PegasysTests(unittest.TestCase):
             pegasys.Pegasys("haya", "wrong", opener=FakeSite()).booking("11138234", GUID)
 
 
+# The real page's structure (11120333, read 20/11), with made-up guests.
+DETAIL_PAGE = """<html><body>
+<input name="__RequestVerificationToken" type="hidden" value="tok" />
+<article data-booking-id="11120333" data-service-guid="g" data-version="639;108" class="row">
+<section class="row"><div class="booking-block col-xs-12">
+<div class="k-block">
+    <div class="k-header">
+        Booking
+    </div>
+    <div class="container-fluid"><div class="row">
+      <div class="form-group row"><label class="col-xs-5">
+                        Booking #
+                    </label>
+                    <div class="col-xs-7">
+                        <span>11120333</span>
+                    </div></div>
+      <div class="form-group row"><label class="col-xs-5">Check-in</label><div class="col-xs-7">15.11.2026</div></div>
+      <div class="form-group row"><label class="col-xs-5">Check-out</label><div class="col-xs-7">27.11.2026</div></div>
+      <div class="form-group row"><label class="col-xs-5">Nights</label><div class="col-xs-7">12</div></div>
+      <div class="form-group row"><label class="col-xs-5">Package</label><div class="col-xs-7">Vietnam Phu Quoc (Ekaterinburg)</div></div>
+      <div class="form-group row"><label class="col-xs-5">Market</label><div class="col-xs-7">Russia</div></div>
+      <div class="form-group row"><label class="col-xs-5">Room</label><div class="col-xs-7">
+                        Superior Double or Twin Room
+                    </div></div>
+      <div class="form-group row"><label class="col-xs-5">Meal</label><div class="col-xs-7">Bed &amp; Breakfast</div></div>
+      <div class="form-group row"><label class="col-xs-5">Accommodation</label><div class="col-xs-7">DBL+CHD</div></div>
+      <div class="form-group row"><label class="col-xs-5">Booking date</label><div class="col-xs-7">03.11.2026 16:34</div></div>
+      <div class="form-group row"><label class="col-xs-5">Room</label><div class="col-xs-7">Superior Double or Twin Room</div></div>
+    </div></div>
+</div>
+<div class="k-block"><div class="k-header">
+        Confirmation
+    </div>
+<input class="k-textbox" id="Status" name="Status" value="New" />
+<input class="k-textbox" id="ConfirmationNumber" value="" />
+</div>
+<div class="special-requests-block col-xs-12 col-md-6">
+<div class="k-block">
+    <div class="k-header">Special Requests</div>
+    <div class="container-fluid">
+        <ul class="ul-with-padding">
+                <li>Upper Floor if possible</li>
+                <li>Sea View if possible</li>
+        </ul>
+    </div>
+</div></div>
+<div class="k-block">
+    <div class="k-header">
+        Guests
+    </div>
+    <table class="table"><thead><tr><th>Title</th><th>Last Name</th><th>First Name</th><th>Date of birth</th>
+      <th>Age</th><th>Document</th><th>Additional information</th><th>Arrival flight</th><th>Departure flight</th></tr></thead>
+      <tr><td>MR</td><td>IVANOV</td><td>PETR</td><td>25.04.1996</td><td>30</td>
+          <td><div>Russia</div><div>700000001</div></td><td>
+          </td><td><div>09:30</div><div><div class='font-size-tertiary'>N4-3831 (SVX-PQC)</div></div></td>
+          <td><div>12:15</div><div><div class='font-size-tertiary'>N4-3832 (PQC-SVX)</div></div></td></tr>
+      <tr><td>CHD</td><td>IVANOVA</td><td>ANNA</td><td>20.11.2014</td><td>12</td>
+          <td><div>Russia</div><div>700000002</div></td><td></td><td></td><td></td></tr>
+    </table>
+</div>
+<div class="k-block">
+    <div class="k-header">
+        Messages
+    </div>
+<div component-id="m" class="container-fluid">
+    <button class="k-button new-message-button">New message</button>
+    <p><em>No messages.</em></p>
+    <div id="new-message-window"><button>Send</button></div>
+</div></div>
+</section></article></body></html>"""
+
+
+class DetailClient:
+    def __init__(self):
+        self.calls = []
+
+    def details(self, bid, guid):
+        self.calls.append((bid, guid))
+        return pegasys.parse_details(DETAIL_PAGE)
+
+
+class DetailsTests(unittest.TestCase):
+    """Dev, 2026-11-20: "làm luôn phần đọc chi tiết booking để ghi intake". Pegas's robot mail is only a link."""
+
+    def test_page_fields(self):
+        d = pegasys.parse_details(DETAIL_PAGE)
+        self.assertEqual(d["status"], "New")
+        f = d["fields"]
+        self.assertEqual((f["Booking #"], f["Check-in"], f["Check-out"], f["Nights"], f["Meal"], f["Accommodation"]),
+                         ("11120333", "15.11.2026", "27.11.2026", "12", "Bed & Breakfast", "DBL+CHD"))
+        self.assertEqual(f["Room"], "Superior Double or Twin Room")
+        self.assertEqual(d["requests"], ["Upper Floor if possible", "Sea View if possible"])
+        self.assertEqual(d["messages"], [])
+        man, child = d["guests"]
+        self.assertEqual((man["title"], man["last"], man["first"], man["document"]),
+                         ("MR", "IVANOV", "PETR", ["Russia", "700000001"]))
+        self.assertEqual((man["arrival"], man["departure"]), ("09:30 N4-3831 (SVX-PQC)", "12:15 N4-3832 (PQC-SVX)"))
+        # 12 on the site today, 11 at check-in: the age that decides adult or child is the one at check-in
+        self.assertEqual((child["age"], child["age_at_checkin"]), ("12", 11))
+
+    def test_render(self):
+        text = "\n".join(pegasys.render_details("11120333", pegasys.parse_details(DETAIL_PAGE)))
+        self.assertIn("status on the site: New", text)
+        self.assertIn("CHD IVANOVA ANNA, born 20.11.2014 (age 11 at check-in), document Russia 700000002", text)
+        self.assertIn("NOT ON THE PAGE: the price", text)
+        cancelled = DETAIL_PAGE.replace('value="New"', 'value="Cancellation request"')
+        self.assertIn("CANCELLED BY PEGAS", pegasys.render_details("1", pegasys.parse_details(cancelled))[0])
+
+    def test_show_prints_the_page_under_a_robot_mail(self):
+        from tools import emi
+        out, client, opened = [], DetailClient(), set()
+        body = f"Please confirm the reservation: https://provider.pegasys.pegast.com/HotelBookings/11120333/{GUID}\n"
+        emi._show_pegasys(body, out.append, opened, client=client)
+        emi._show_pegasys(body, out.append, opened, client=client)  # quoted again lower in the thread
+        self.assertEqual(client.calls, [("11120333", GUID)])
+        self.assertIn("\n[Pegasys page, read now]", out)
+        self.assertTrue(any("IVANOV PETR" in line for line in out))
+
+    def test_show_says_when_the_page_is_not_read(self):
+        from tools import emi
+        out = []
+        old = {k: os.environ.pop(k, None) for k in ("EMI_PEGAS_USER", "EMI_PEGAS_PASSWORD")}
+        try:
+            emi._show_pegasys(f"https://provider.pegasys.pegast.com/HotelBookings/11120333/{GUID}", out.append, set())
+        finally:
+            os.environ.update({k: v for k, v in old.items() if v})
+        self.assertIn("Pegasys page not read", out[-1])
+
+    def test_pegas_booking_finds_the_link_in_the_mailbox(self):
+        from tools import emi
+        fd, path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        os.remove(path)
+        st, client, out = State(path), DetailClient(), []
+        mail = FakeMail(notice("n1", "11120333", "2026-11-03T09:48:42Z"))
+        emi.run_pegas_booking(mail, st, "#11120333", client=client, out=out.append)
+        self.assertEqual(client.calls, [("11120333", GUID)])
+        self.assertEqual(out[-1], "END pegas-booking")
+        with self.assertRaises(emi.Refused):
+            emi.run_pegas_booking(FakeMail(), st, "999", client=client, out=out.append)
+
+
 if __name__ == "__main__":
     unittest.main()
