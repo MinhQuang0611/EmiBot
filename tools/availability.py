@@ -150,6 +150,36 @@ def fits(result, alloc):
     return problems
 
 
+# Never sold to an agency or operator (MEMORY, Rates): not offered as the way round a full type either.
+NOT_FOR_AGENCIES = re.compile(r"^(TW-DLX|APT)")
+
+
+def advice(data, result, alloc):
+    """What Karen needs to decide an on-request booking (Karen, 2026-11-20, Pegas 11149632: "Booking on request của
+    tour operator thì phải đối chiếu với Future Availability file để ra lời khuyên em"): the file read, the asked
+    type's nights with no room or only the rooms asked left, and the types free every night that could take the
+    booking instead. Facts only; the yes or no stays hers."""
+    rooms = (data or {}).get("rooms") or {}
+    nights = result.get("nights") or []
+    parts = []
+    if (data or {}).get("title"):
+        parts.append(f"checked on {data['title']}")
+    for code, count in alloc.items():
+        free = (rooms.get(code) or {}).get("free") or {}
+        short = [(n, free[n]) for n in nights if free.get(n) is not None and free[n] <= count]
+        if short:
+            parts.append(f"{code} free per night: " + ", ".join(f"{n:%d/%m} {max(f, 0)}" for n, f in short)
+                         + " (other nights more)")
+    need = sum(alloc.values())
+    others = [(c, r["min_free"]) for c, r in (result.get("rooms") or {}).items()
+              if c not in alloc and not NOT_FOR_AGENCIES.match(c) and not r["none_left"]
+              and r["min_free"] is not None and r["min_free"] >= need]
+    if result.get("rooms") is not None:
+        parts.append("free every night instead: " + (", ".join(f"{c} (fewest {m})" for c, m in others)
+                                                       if others else "no other type"))
+    return "; ".join(parts)
+
+
 def render(data, result):
     out = [f"AVAILABILITY ({data['title']}), nights {result['nights'][0]:%d/%m/%Y}–{result['nights'][-1]:%d/%m/%Y}:"]
     for code, r in result["rooms"].items():

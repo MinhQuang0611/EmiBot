@@ -5,7 +5,7 @@ import base64
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest import mock
 
@@ -113,6 +113,36 @@ class OnRequestGateTest(unittest.TestCase):
         self.assertIn("ask-karen", text)
         self.assertIn("No row now", text)
         self.assertIn("received note (email-templates.md 6c", text)
+
+
+    def test_on_request_advice_reads_the_availability_file(self):  # Karen 20/11, Pegas 11149632
+        from tools import availability as avail
+        nights = [date(2026, 12, 2) + timedelta(days=i) for i in range(4)]
+        def row(name, frees):
+            return {"name": name, "free": dict(zip(nights, frees))}
+        data = {"title": "Future Availability — HAYA — 2026-11-20_2027-04-03",
+                "start": nights[0], "end": nights[-1], "dates": set(nights),
+                "occupancy": dict(zip(nights, [60, 54, 55, 63])),
+                "rooms": {"SUP-DBL": row("SUPERIOR DOUBLE", [3, 1, 2, 0]),
+                          "SUP-TWN": row("SUPERIOR TWIN", [2, 2, 0, 0]),
+                          "DLX-SV": row("DELUXE SEAVIEW", [5, 4, 6, 4]),
+                          "TW-DLX": row("TWIN DELUXE", [3, 3, 3, 3]),
+                          "APT-04": row("APARTMENT", [1, 1, 1, 1]),
+                          "SUITE-SV": row("SUITE SEAVIEW", [2, 2, 2, 2])}}
+        lines = []
+        args = SimpleNamespace(alloc="SUP-DBL:1", arrival="02/12/2026", departure="06/12/2026")
+        with mock.patch.object(emi, "_stale", return_value=None), \
+                mock.patch.object(emi, "_today_vn", return_value=date(2026, 11, 20)):
+            v = emi.run_on_request(args, data, out=lines.append)
+        self.assertEqual(v, "REJECT")
+        text = "\n".join(lines)
+        self.assertIn("checked on Future Availability — HAYA — 2026-11-20_2027-04-03", text)
+        self.assertIn("SUP-DBL free per night: 03/12 1, 05/12 0", text)
+        self.assertIn("free every night instead: DLX-SV (fewest 4), SUITE-SV (fewest 2)", text)
+        self.assertNotIn("TW-DLX (", text)
+        self.assertNotIn("APT-04 (", text)
+        ask = next(l for l in lines if l.startswith("Next:"))
+        self.assertIn("free every night instead: DLX-SV", ask)  # the question to Karen carries it
 
 
 class AnexRobotTest(unittest.TestCase):

@@ -3017,6 +3017,11 @@ def run_on_request(args, data, out=print):
     if age:  # a suggestion on old figures is no suggestion
         verdict, why = "ASK KAREN", [f"availability sheet {age}"] + why
     hint = {"REJECT": "Emi suggests DECLINE", "ACCEPT": "Emi suggests ACCEPT"}.get(verdict, "Emi has no suggestion")
+    # Karen, 20/11 (Pegas 11149632): the advice is read off the Future Availability file, and shows it: which file,
+    # the tight nights of the asked type, and what is free every night instead.
+    facts = avail.advice(data, result, alloc)
+    if facts:
+        why = why + [facts]
     out(f"\nON REQUEST: suggest {verdict} — {'; '.join(why)}")
     # dev, 2026-11-10, Pegas 11131133: Karen decides every on-request booking; the rule is only the suggestion.
     out(f"Next: Karen decides (dev 10/11). No row now. ask-karen <message_id> \"<operator> <ref> on "
