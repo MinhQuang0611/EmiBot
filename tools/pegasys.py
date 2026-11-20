@@ -17,8 +17,8 @@ a before-PDF draft sent bare doesn't count), the booking built on the intake she
 saying New or Changed. Anything else is left alone.
 
 Off unless EMI_PEGAS_CONFIRM=1 with EMI_PEGAS_USER / EMI_PEGAS_PASSWORD (secrets: .env on the host only).
-Confirmation #: what HAYA writes there is Karen's call (Palma writes the EZFOLIO group code). EMI_PEGAS_CONF_NO=group
-writes the group code, =conf the EZFOLIO confirmation no.; unset = the field is left as it is.
+Confirmation #: the EZFOLIO group code, as Palma does (dev, 2026-11-20: "trước tiên cứ ghi như Palma"): EMI_PEGAS_CONF_NO=group.
+=conf writes the EZFOLIO confirmation no. instead; unset = the field is left as it is.
 """
 import html
 import http.cookiejar
