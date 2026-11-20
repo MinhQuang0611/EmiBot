@@ -134,15 +134,42 @@ class OnRequestGateTest(unittest.TestCase):
         with mock.patch.object(emi, "_stale", return_value=None), \
                 mock.patch.object(emi, "_today_vn", return_value=date(2026, 11, 20)):
             v = emi.run_on_request(args, data, out=lines.append)
-        self.assertEqual(v, "REJECT")
+        self.assertEqual(v, "DECLINE")  # Karen 20/11: no availability = decline, no question to her
         text = "\n".join(lines)
         self.assertIn("checked on Future Availability — HAYA — 2026-11-20_2027-04-03", text)
         self.assertIn("SUP-DBL free per night: 03/12 1, 05/12 0", text)
         self.assertIn("free every night instead: DLX-SV (fewest 4), SUITE-SV (fewest 2)", text)
         self.assertNotIn("TW-DLX (", text)
         self.assertNotIn("APT-04 (", text)
-        ask = next(l for l in lines if l.startswith("Next:"))
-        self.assertIn("free every night instead: DLX-SV", ask)  # the question to Karen carries it
+        nxt = next(l for l in lines if l.startswith("Next:"))
+        self.assertIn("no question to Karen", nxt)
+        self.assertIn("CANCEL rows", nxt)
+        self.assertIn("--kind decline", nxt)
+        self.assertNotIn("ask-karen <", nxt)
+        # the same booking on a stale sheet is not declined: old figures decide nothing
+        lines = []
+        with mock.patch.object(emi, "_stale", return_value="dated 18/11"), \
+                mock.patch.object(emi, "_today_vn", return_value=date(2026, 11, 20)):
+            v = emi.run_on_request(args, data, out=lines.append)
+        self.assertEqual(v, "ASK KAREN")
+        self.assertIn("ask-karen <", next(l for l in lines if l.startswith("Next:")))
+
+    def test_occupancy_reject_is_still_karens_call(self):  # only "no availability" was handed over (20/11)
+        lines = []
+        with mock.patch.object(emi, "run_availability", return_value=occupancy([55, 61])), \
+                mock.patch.object(emi.avail, "fits", return_value=[]), \
+                mock.patch.object(emi, "_stale", return_value=None), \
+                mock.patch.object(emi, "_today_vn", return_value=date(2026, 11, 1)):
+            v = emi.run_on_request(SimpleNamespace(alloc="DLX-SV:1", arrival="10/12/2026"), {}, out=lines.append)
+        self.assertEqual(v, "REJECT")
+        self.assertIn("Emi suggests DECLINE", next(l for l in lines if l.startswith("Next:")))
+
+    def test_ask_karen_refuses_a_no_availability_on_request(self):
+        st = State(os.path.join(tempfile.mkdtemp(), "s.json"))
+        with self.assertRaises(emi.Refused) as e:
+            emi.ask_karen(st, None, "m1", "Pegas 11149632 on request, 02/12/2026–14/12/2026, 1 Superior Double: "
+                          "accept? Emi suggests DECLINE: no availability on 05/12 and 12/12.", ref="11149632")
+        self.assertIn("NO AVAILABILITY IS A DECLINE", str(e.exception))
 
 
 class AnexRobotTest(unittest.TestCase):

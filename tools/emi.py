@@ -3011,8 +3011,8 @@ def run_on_request(args, data, out=print):
         raise Refused("--alloc names the rooms asked for, e.g. 'DLX-SV:1'")
     result = run_availability(args, data, out=out)
     alloc = {k.strip(): int(v) for k, v in (part.split(":") for part in args.alloc.split(","))}
-    verdict, why = operators.on_request(result, avail.fits(result, alloc), quoting.parse_date(args.arrival),
-                                        _today_vn())
+    problems = avail.fits(result, alloc)
+    verdict, why = operators.on_request(result, problems, quoting.parse_date(args.arrival), _today_vn())
     age = _stale(data)
     if age:  # a suggestion on old figures is no suggestion
         verdict, why = "ASK KAREN", [f"availability sheet {age}"] + why
@@ -3022,6 +3022,20 @@ def run_on_request(args, data, out=print):
     facts = avail.advice(data, result, alloc)
     if facts:
         why = why + [facts]
+    if verdict == "REJECT" and problems:
+        # Karen, 2026-11-20 (Pegas 11149632, E-635): "Nếu no availability thì tất nhiên phải decline luôn nhé. Không
+        # cần phải xin ý kiến chị." No room on a night of the stay -> declined at once, no question to her. A stale
+        # sheet never gets here (verdict ASK KAREN above); the 60% occupancy rule is still her call.
+        out(f"\nON REQUEST: DECLINE — {'; '.join(why)}")
+        out(f"Next: decline now, no question to Karen (Karen 20/11: no availability = decline). No NEW row, no "
+            f"received note. CANCEL rows (status Cancelled, what_changed \"{operators.DECLINE_REASON}\", "
+            f"internal_notes \"On request, no availability on the Future Availability file: declined (Karen 20/11)\"), "
+            f"then the decline draft (email-templates.md section 6): Odeon -> draft-new to "
+            f"{','.join(operators.OPERATORS['Odeon']['confirm_to'])} --kind decline; others -> draft-reply "
+            f"<message_id> <body> --kind decline --ref <ref> on the operator's email (a received note still in "
+            f"Drafts: review-deny it); then done <message_id> \"on request, no availability, declined: CANCEL "
+            f"rows …, decline #n\".")
+        return "DECLINE"
     out(f"\nON REQUEST: suggest {verdict} — {'; '.join(why)}")
     # dev, 2026-11-10, Pegas 11131133: Karen decides every on-request booking; the rule is only the suggestion.
     out(f"Next: Karen decides (dev 10/11). No row now. ask-karen <message_id> \"<operator> <ref> on "
@@ -3365,6 +3379,9 @@ def check_english_question(question):
                       f"Vietnamese words seen: {' '.join(vi[:8])}. Not asked.")
 
 
+NO_ROOM = re.compile(r"\bno\s+availability\b|\bnone\s+left\b|\bno\s+rooms?\s+(?:left|free|available)\b", re.I)
+
+
 def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again=""):
     question = " ".join(question.split())
     if not question:
@@ -3374,6 +3391,10 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
     if MISSING_NATIONALITY.search(question):
         raise Refused(NATIONALITY_NOT_A_QUESTION)
     check_english_question(question)
+    if operators._ON_REQUEST.search(question) and NO_ROOM.search(question):
+        raise Refused("NO AVAILABILITY IS A DECLINE, NOT A QUESTION (Karen, 20/11: \"Nếu no availability thì tất nhiên "
+                      "phải decline luôn nhé. Không cần phải xin ý kiến chị\"): CANCEL rows + the decline draft now, "
+                      "as on-request prints. Not asked.")
     # dev 17/11: Karen's answers are kept (karen-answers.md); one she already gave is used, not asked for again
     seen = karen_memory.similar(st, question, ref)
     same = [x for x in seen if x[0] >= karen_memory.SAME]
