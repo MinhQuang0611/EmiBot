@@ -2,6 +2,7 @@
 
     python -m tools.precheck inbox          # job 1
     python -m tools.precheck confirmations  # job 2; also sends Karen the bookings the build tool stopped on
+                                            # and presses Confirm on Pegasys (EMI_PEGAS_CONFIRM=1)
     python -m tools.precheck payments       # job 3: a reminder is due
     python -m tools.precheck inbox --agent  # the agent's own first step in job 1 (schedule.md)
 
@@ -64,6 +65,27 @@ def alert_build_stuck(mail, sheet):
         print(f"build-stuck alert failed: {e}", file=sys.stderr)
 
 
+def pegas_confirm(mail, sheet):
+    """Dev 20/11: Emi presses Confirm on the Pegas provider site once HAYA's confirmation has gone to Pegas
+    (tools/pegasys.py). A side job of the 15-minute confirmation check, like the build-stuck alert: no model, and its
+    own failure never changes the check's answer. Off unless EMI_PEGAS_CONFIRM=1."""
+    from . import pegasys
+    if not pegasys.enabled():
+        return
+    from .emi import booking_state, VN
+    from .state import hold_lock
+    try:
+        hold_lock(config.state_path())
+        st = config.state()
+        items, _ = pegasys.due(mail, sheet.rows(), booking_state, st, config.MAILBOX, datetime.now(VN))
+        if items:
+            pegasys.run(items, pegasys.from_env(), st, field=pegasys.conf_field(), tg=config.telegram(),
+                        out=lambda s: print(s, file=sys.stderr))
+        st.save()  # the robot links read this run are kept even when nothing was pressed
+    except Exception as e:
+        print(f"pegas confirm failed: {e}", file=sys.stderr)
+
+
 def payments_have_work(mail, sheet, state):
     from .emi import _parts, booking_state, VN
     from datetime import datetime
@@ -85,6 +107,7 @@ def main(argv):
             mail, sheet = config.mail(), config.sheet()
             work = confirmations_have_work(mail, sheet, st)
             alert_build_stuck(mail, sheet)
+            pegas_confirm(mail, sheet)
         else:
             work = payments_have_work(config.mail(), config.sheet(), st)
     except Exception as e:

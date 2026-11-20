@@ -3650,9 +3650,35 @@ def status(st, out=print):
                           else "outlook (saved in Drafts at once)"))
     out("payment slips: " + (f"SENT to {ACCOUNTING} (needs Karen's Mail.Send sign-in)" if send_slips()
                              else "drafts, a person sends"))
+    out("pegas extranet: " + ("Emi presses Confirm after the confirmation is sent" if os.environ.get("EMI_PEGAS_CONFIRM") == "1"
+                              else "a person presses Confirm (EMI_PEGAS_CONFIRM not 1)"))
     auto = sorted(auto_send_kinds())
     out("auto-send: " + (f"{', '.join(auto)} SENT by Emi (needs Karen's Mail.Send sign-in)" if auto
                          else "off (EMI_AUTO_SEND not set), every draft but the slips waits for a person"))
+
+
+def run_pegas_confirm(mail, sheet, st, args, tg=None, out=print):
+    """Dev, 2026-11-20: Emi presses Confirm on provider.pegasys.pegast.com once HAYA's confirmation has gone to Pegas
+    (tools/pegasys.py). Without EMI_PEGAS_CONFIRM=1 it only lists, as with --dry-run."""
+    from . import pegasys
+    items, lines = pegasys.due(mail, sheet.rows(), booking_state, st, config.MAILBOX, datetime.now(VN), days=args.days)
+    for line in lines:
+        out(line)
+    dry = args.dry_run or not pegasys.enabled()
+    if not items:
+        out("PEGAS: nothing to confirm on Pegasys")
+    else:
+        if not pegasys.enabled():
+            out("PEGAS: EMI_PEGAS_CONFIRM is not 1, nothing is pressed")
+        try:
+            client = pegasys.from_env()
+        except pegasys.PegasysError as e:
+            out(f"PEGAS: {e}; nothing read on Pegasys")
+            client = None
+        if client:
+            pegasys.run(items, client, st, field=pegasys.conf_field(), dry_run=dry,
+                        tg=None if dry else (tg or config.telegram()), out=out)
+    out("END pegas-confirm")
 
 
 def _recipient_args(s):
@@ -3734,6 +3760,10 @@ def parser():
     s.add_argument("--current", help="their current deposit deadline, DD/MM/YYYY HH:MM")
     s.add_argument("--balance-by", help="the balance date already in COD, DD/MM/YYYY")
     sub.add_parser("confirmations-due", help="bookings built since 30/10 with no confirmation from sales@")
+    s = sub.add_parser("pegas-confirm", help="press Confirm on the Pegas provider site for bookings whose "
+                                             "confirmation has gone to Pegas (EMI_PEGAS_CONFIRM=1)")
+    s.add_argument("--dry-run", action="store_true", help="read the site and list, press nothing")
+    s.add_argument("--days", type=int, default=30, help="robot notices this many days back")
     sub.add_parser("build-stuck", help="bookings the build tool stopped on (needs_review / error) or hasn't picked "
                                        "up after 4 h, with its reason; Karen gets them from the hourly check")
     s = sub.add_parser("confirmation-hold", help="leave a booking out of confirmations-due: its PDF doesn't match, or "
@@ -3965,6 +3995,9 @@ def main(argv=None):
             st.save()
         elif c == "build-stuck":
             run_build_stuck(config.sheet(), st)
+        elif c == "pegas-confirm":
+            run_pegas_confirm(config.mail(), config.sheet(), st, args)
+            st.save()
         elif c == "confirmation-hold":
             run_confirmation_hold(config.sheet(), st, args)
             st.save()

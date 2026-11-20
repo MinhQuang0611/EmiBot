@@ -87,6 +87,14 @@ class SimMail:
     def list_attachments(self, message_id):
         return list(self._load()[message_id]["_attachments"])
 
+    def list_from_since(self, address, since_iso):
+        return sorted((self._public(m) for m in self._load().values()
+                       if m["from"]["emailAddress"]["address"].lower() == address.lower()
+                       and m["receivedDateTime"] >= since_iso), key=lambda m: m["receivedDateTime"])
+
+    def get_message_html(self, message_id):
+        return self._load()[message_id]["body"]["content"]
+
     def search(self, text, top=10):
         t = text.lower()
         hits = [self._public(m) for m in self._load().values()

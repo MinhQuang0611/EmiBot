@@ -518,6 +518,16 @@ class GraphMail:
                                                                          "hasAttachments,isDraft", top=str(top))
         return [m for m in self._call("GET", f"/messages?{q}").get("value", []) if not m.get("isDraft")]
 
+    def list_from_since(self, address, since_iso):
+        """Messages from one sender, any folder, received at or after since_iso (the Pegas robot, tools/pegasys.py)."""
+        q = self._query(filter=f"from/emailAddress/address eq '{address}' and receivedDateTime ge {since_iso}",
+                        select="id,subject,from,receivedDateTime", top="50")
+        return list(self._pages(f"/messages?{q}"))
+
+    def get_message_html(self, message_id):
+        """The body as Outlook holds it (HTML): the links' addresses, which the text body may drop."""
+        return (self._call("GET", f"/messages/{message_id}?$select=body").get("body") or {}).get("content", "")
+
     def has_new_inbox_mail(self, since_iso):
         q = self._query(filter=f"receivedDateTime ge {since_iso}", select="id", top="1")
         return bool(self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value"))

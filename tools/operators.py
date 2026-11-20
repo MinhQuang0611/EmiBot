@@ -98,8 +98,9 @@ OPERATORS = {
         "steps": [
             "Emails come from the robot pegasys-notifications@pegast.su: every reply, the confirmation included, "
             "goes to reservation.vtm@pegast.com (draft-reply / draft-confirmation do this by itself).",
-            "The robot also asks to change the booking's status on the Pegas provider site: someone still has to do "
-            "it, an email reply doesn't count. Say so in the scan report.",
+            "The robot also asks to change the booking's status on the Pegas provider site: Emi presses Confirm "
+            "itself once the confirmation has gone (pegas-confirm, dev 2026-11-20, EMI_PEGAS_CONFIRM=1). A cancel or "
+            "decline on the site is still a person's job.",
             "Proforma invoice at least 14 days before check-in.",
             "Pegas pays 100% by bank transfer at least 7 days before check-in and emails the slip. Paid late "
             "without a word -> the booking can be released: that is Karen's call, never Emi's.",
