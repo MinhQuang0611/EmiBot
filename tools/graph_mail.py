@@ -39,7 +39,9 @@ FRONT_OFFICE = "haya@haya-hotels.com"
 # when named in EMI_AUTO_SEND. The OTA intake note goes to front office alone; the others to the guest or agency.
 # dev, 2026-11-21: "Email của khách - họ hỏi booking của mình đã nhận được chưa thì cũng cho auto gửi nếu đã có trong
 # intake sheet rồi" (booking_status) and the cancellation reply once its CANCEL rows are on the sheet (cancellation).
-AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup", "booking_status", "cancellation")
+# dev, 2026-11-21: Long's stop-sale chart to the partners (Karen's list item 2), Bcc to stop_sales.RECIPIENTS only.
+AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup", "booking_status", "cancellation",
+              "stop_sales")
 OWN_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
 # A send to a no-reply robot bounces (Karen, 15/11, SynXis): such a draft waits for a person to readdress it.
 NO_REPLY_ADDRESS = re.compile(r"(?:^|[._-])(?:no-?reply|do-?not-?reply|donotreply)[^@]*@", re.I)
@@ -51,6 +53,11 @@ def auto_send_refusal(kind, to, cc, bcc, text):
         return f"a {kind} draft is never sent by Emi"
     if any(line.lower() in (text or "").lower() for line in RED_LINES):
         return "it still has a red [CHECK BEFORE SENDING] / [DO NOT SEND …] line"
+    if kind == "stop_sales":
+        from .stop_sales import RECIPIENTS
+        if to or cc or sorted(bcc) != sorted(a.lower() for a in RECIPIENTS):
+            return "a stop-sale chart goes Bcc to the partner list alone, no To or Cc"
+        return ""
     if bcc:
         return "it has Bcc recipients"
     if kind == "ota_note":

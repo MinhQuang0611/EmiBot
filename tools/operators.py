@@ -265,7 +265,8 @@ def checkouts(rows, state_of, company, first, last):
     hits = []
     for state in bookings(rows, state_of):
         head = state[0]
-        if head.get("company", "").strip().lower() != company.strip().lower() or cancelled(state):
+        co, want = head.get("company", "").strip().lower(), company.strip().lower()
+        if not (co == want or co.startswith(want + " ")) or cancelled(state):  # "Anex" and "Anex Tour"
             continue
         dep = _date(head.get("departure"))
         if dep and first <= dep <= last:

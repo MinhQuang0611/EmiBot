@@ -88,6 +88,21 @@ def availability():
     return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_FOLDER_ID)
 
 
+# Long's stop-sale charts, HAYA's and Palma's, a new version every hour (dev, 2026-11-21). Emi sends the
+# "Stop Sale OTA — HAYA — <date>" one to the partners; the folder must be shared with the service account (Viewer).
+STOP_SALE_FOLDER_ID = os.environ.get("EMI_STOP_SALE_FOLDER_ID", "1stqTv0pQD2o5h6pWkoEiqrPig1i5Kb8D")
+
+# EZFOLIO's weekly Anex reports (dev, 2026-11-21): one folder per week, "YYYY-MM-DD_YYYY-MM-DD" (Monday_Sunday), made
+# Monday ~06:15 Vietnam time: "FDR002 Departure" (group, folio, confirm, dates, links), "CAR007C1 Báo cáo đặt phòng"
+# (what each folio owes, Công nợ), and per group the "Hợp đồng" (confirmation) and "Bill" PDFs. Read by anex-recon.
+ANEX_REPORTS_FOLDER_ID = os.environ.get("EMI_ANEX_REPORTS_FOLDER_ID", "1RJyGQzU_nQWZN5K09tAUo2skKhkyBnJs")
+
+
+def stop_sale_transport():
+    from .intake_sheet import google_service_account_transport
+    return google_service_account_transport(_need("EMI_GOOGLE_KEYFILE"))
+
+
 # Sunny's notes of what she told agencies on Zalo (sold out, quotes), one JSON line each (dev, 2026-11-21). Read only.
 ZALO_NOTES = os.environ.get("EMI_ZALO_NOTES", "/data/shared/haya-notes.jsonl")
 

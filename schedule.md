@@ -115,8 +115,11 @@ Then write the day's log to `memory/YYYY-MM-DD.md`.
 - Sheet write access and draft-with-attachment are untested.
 - Job 2 depends on the EZFOLIO build tool being live and on what it writes for cancellations and failures.
 
-## 5. Stop-sell list (dev, 2026-11-05)
-OpenClaw command job, no model: `.venv/bin/python -m tools.emi stop-sales`, from `/data/emi`, `0 8,9 * * *`. One list a day; a second run the same day does nothing. Details: `skills/inquiries-and-quotes.md`, Stop sales.
+## 5. Stop-sale chart (dev, 2026-11-05; Long's chart since 2026-11-21)
+OpenClaw command job, no model: `.venv/bin/python -m tools.emi stop-sales`, from `/data/emi`, `0 9,12,17 * * *` Asia/Ho_Chi_Minh (dev, 21/11: "9AM, 12PM, 5PM - only send if there are changes between each version"). Each run reads Long's newest chart and sends it only when the closed nights differ from the last list sent; same nights → nothing. Details: `skills/inquiries-and-quotes.md`, Stop sales.
+
+## 7. Anex reconciliation — `0 9 * * 1`, Monday only (dev, 2026-11-21)
+OpenClaw command job, no model: `.venv/bin/python -m tools.emi anex-recon`, from `/data/emi`, `0 9 * * 1` Asia/Ho_Chi_Minh, **Monday 09:00 only** (dev: "mình chỉ làm mỗi thứ 2"). Last week's (Monday to Sunday) Anex check-outs from EZFOLIO's weekly reports in Drive (FDR002 Departure: groups, folios; CAR007C1: Công nợ per folio; made ~06:15); each needs its VAT invoice PDF (sent into sales@ by a person at HAYA) and its Hợp đồng PDF (in the same week folder). Palma's moved bookings are left out, named on Telegram. All there → one draft to Anex accounting with the .xlsx in Anex's layout, the VAT PDFs and the confirmations; a person presses Send. Missing → one 📊 Telegram line naming what is missing (Telegram only for now, no email to staff: dev 21/11), no draft; a week still waiting is taken again the next Monday. Drafted once per week. `anex-recon --preview` shows the week without doing anything. Details: `skills/tour-operators.md`, Anex. **Automation not created yet.**
 
 ## 6. End-of-day check — `30 23 * * *` (dev, 2026-11-14)
 "Cuối ngày thì AI cũng phải tự check lại là nó làm đúng hay sai. Ví dụ 23:30 --> sẽ vào từng email một để kiểm tra lại là đã log vào intake sheet chưa." Same day as Karen's "rất nhiều New booking hoặc cancel bị miss".

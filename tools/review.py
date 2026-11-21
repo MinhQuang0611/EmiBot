@@ -38,7 +38,7 @@ KIND_LABEL = {
 SENT_LABEL = {"forward": "Đã chuyển kế toán", "deposit_reminder": "Đã gửi nhắc đặt cọc",
               "balance_reminder": "Đã gửi nhắc thanh toán", "ota_note": "Đã gửi ghi nhận cho lễ tân",
               "pickup": "Đã gửi trả lời đón sân bay", "booking_status": "Đã trả lời khách: đã nhận booking",
-              "cancellation": "Đã gửi xác nhận huỷ"}
+              "cancellation": "Đã gửi xác nhận huỷ", "stop_sales": "Đã gửi stop sale cho đối tác"}
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
 
@@ -162,7 +162,8 @@ def sent(st, tg, n, by="forward-slip"):
     ref = f" · {r['ref']}" + (f" (dòng {r['row']})" if r.get("row") else "") if r.get("ref") else ""
     try:
         r["tg"] = tg.send("\n".join([f"📤 <b>#{n} — {SENT_LABEL.get(r.get('kind'), 'Đã gửi')}{esc(ref)}</b>",
-                                     f"<b>Gửi:</b> {esc(', '.join(r['to']))}",
+                                     f"<b>Gửi:</b> {esc(', '.join(r['to']))}"
+                                     + (f"\n<b>Bcc:</b> {esc(', '.join(r['bcc']))}" if r.get("bcc") else ""),
                                      f"<b>Tiêu đề:</b> {esc(r['subject'])}", "",
                                      "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
                                      "Đã gửi, không cần duyệt. Thư nằm trong Outlook › Sent Items."]), topic="draft")

@@ -30,7 +30,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi draft-attach <draft_id> <file>
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
-    python -m tools.emi stop-sales [--preview]            # daily stop-sell PDF; a draft to the partners only when it changed
+    python -m tools.emi stop-sales [--preview]            # Long's stop-sale chart (OTA, .xlsx) to the partners, only when it changed
     python -m tools.emi pickup <booking_ref> [--ota-rooms N] [--paid-vnd X | --paid-usd X]  # airport pick-up: free or paid
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
@@ -46,6 +46,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi upgrade --arrival D --departure D --booked STD --adults 2 --channel OTA  # sea view: free? surcharge
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
+    python -m tools.emi anex-recon [--preview] [--week DD/MM/YYYY]  # job 7, Monday 09:00: Anex reconciliation draft, or what's missing
     python -m tools.emi payments-due       # job 3: TA deposits and balances, reminders to draft now
     python -m tools.emi deposit-extension --asked "DD/MM/YYYY HH:MM" [--wanted "DD/MM/YYYY[ HH:MM]"] [--current "…"] [--balance-by DD/MM/YYYY]
                                                           # agency asks to move the deposit: the new deadline + COD
@@ -93,8 +94,9 @@ import re
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
-from . import attachments, config, drive, stop_sales, telegram
+from . import anex_recon, attachments, config, drive, stop_sales, telegram
 from .graph_mail import (ACCOUNTING, AUTO_KINDS, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES,
                          SendBlocked, clean_subject, is_internal, share_links)
 from . import httpjson
@@ -1982,6 +1984,15 @@ def zalo_lines(rows, out=print):
     return lines
 
 
+def zalo_done(rows, ref):
+    """The booking is built (a row of it has its pdf_link): what Sunny said on Zalo before it was booked is history.
+    A reply after that (a payment reminder, a question) gets no Zalo lines (dev, 2026-11-21, draft #1565, Victoria
+    Tour #31215: nine Zalo warnings on a payment reminder). The confirmation itself still gets them
+    (draft-confirmation, not through here)."""
+    mine = _parts(ref)
+    return any(mine and _parts(r.get("booking_ref")) & mine and str(r.get("pdf_link") or "").strip() for r in rows)
+
+
 def run_zalo_notes(args, out=print):
     notes, gap = zalo_notes.load(config.ZALO_NOTES)
     if gap:
@@ -2030,7 +2041,7 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     if args.kind == "booking_status":
         check_booking_status(rows, args.ref)
     zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
-            if rows is not None and args.ref and args.kind in ZALO_KINDS else [])
+            if rows is not None and args.ref and args.kind in ZALO_KINDS and not zalo_done(rows(), args.ref) else [])
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
     older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
@@ -2444,65 +2455,75 @@ def stop_sales_gap(tg, why, out=print):
             out(f"Telegram: {type(e).__name__}")
 
 
-def draft_stop_sales(mail, st, tg, path, text, subject, out=print):
-    """One open list at a time: today's takes the place of any list nobody has sent yet. The whole list is in every
-    file, so the older one carries nothing the new one lacks."""
+def draft_stop_sales(mail, st, tg, chart, text, subject, out=print):
+    """One open list at a time: the new chart takes the place of any list nobody has sent yet (the whole chart is in
+    every file). EMI_AUTO_SEND names stop_sales → sent at once (Karen's auto-send list, item 2; dev 21/11)."""
     older = [n for n, r in st.data["reviews"].items() if r.get("kind") == "stop_sales"
              and r.get("status") in (REVIEW_OPEN, "approved") and still_in_drafts(mail, st, n, r)]
-    files = read_pdfs([path])
+    files = [chart]
     bcc = list(stop_sales.RECIPIENTS)
-    if telegram_first(tg):
+    auto = "stop_sales" in auto_send_kinds()
+    if telegram_first(tg) and not auto:
         n = review.propose(mail, st, tg, pending_store(), how="new", source="", kind="stop_sales", text=text, bcc=bcc,
                            files=files, new_subject=subject)
         st.record_draft(review.PENDING + n, "", 0, "stop_sales")
-        out(f"stop-sell draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}")
-    else:
-        d = mail.create_new_draft([], subject, text, bcc=bcc)
-        try:
-            for fname, fdata, ctype in files:
-                mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
-        except Exception:  # a list without its PDF must not sit in Drafts; the second run of the day writes it again
-            mail.delete_draft(d["id"])
-            raise
-        st.record_draft(d["id"], "", 0, "stop_sales")
-        n = review.opened(mail, st, tg, d["id"], how="new", source="", kind="stop_sales", text=text, bcc=bcc,
-                          attachments=[f[0] for f in files])
-        out(f"stop-sell draft #{n} saved in Drafts: {d['id']} (bcc {', '.join(bcc)})")
+        out(f"stop-sale draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}")
+        close_replaced(mail, st, tg, older, n, out=out)
+        return n
+    d = mail.create_new_draft([], subject, text, bcc=bcc)
+    try:
+        for fname, fdata, ctype in files:
+            mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
+    except Exception:  # a list without its chart must not sit in Drafts; the next run writes it again
+        mail.delete_draft(d["id"])
+        raise
+    st.record_draft(d["id"], "", 0, "stop_sales")
+    n = review.opened(mail, st, tg, d["id"], how="new", source="", kind="stop_sales", text=text, bcc=bcc,
+                      attachments=[f[0] for f in files], notice=not auto)
     close_replaced(mail, st, tg, older, n, out=out)
+    if auto:
+        auto_send(mail, st, tg, n, d, SimpleNamespace(kind="stop_sales", ref=""), text, out=out)
+    else:
+        out(f"stop-sale draft #{n} saved in Drafts: {d['id']} (bcc {', '.join(bcc)})")
     return n
 
 
-def run_stop_sales(mail, st, tg, data, preview=False, out=print):
-    """Job 5: the day's stop-sell PDF, always; a draft to the partners only when it differs from the last list.
-    Once a day: a second run the same day does nothing, so the job can run twice in case the first one fails."""
+def load_stop_sale(out=print):
+    """(Long's newest OTA chart, the transport to export it), or (None, the reason it can't be read)."""
+    try:
+        call = config.stop_sale_transport()
+        return stop_sales.load(call, config.STOP_SALE_FOLDER_ID), call
+    except Exception as e:  # folder not shared, network, Long's layout changed: no email, a line for the team
+        return None, f"Long's stop-sale chart not readable ({type(e).__name__}: {str(e)[:200]})"
+
+
+def run_stop_sales(mail, st, tg, data, call, preview=False, out=print):
+    """Job 5 (dev, 2026-11-21: 09:00, 12:00, 17:00): Long's newest "Stop Sale OTA — HAYA" chart to the partners, only
+    when its closed nights differ from the last list they got. Same closed nights → no email."""
     today = _today_vn()
-    last = st.data.get("stop_sales_report") or {}
-    if last.get("date") == today.isoformat() and not preview:
-        out(f"STOP SALES: today's list is already made ({today:%d/%m/%Y})")
-        return None
-    age = _stale(data)
-    why = f"availability sheet {age}" if age else stop_sales.code_problem(data)
+    why = stop_sales.stale(data, datetime.now(timezone.utc), today)
     if why:
         stop_sales_gap(tg, why, out=out)
         return None
-    now = stop_sales.closed(data, today)
+    last = st.data.get("stop_sales_report") or {}
     before = stop_sales.from_state(last["rows"]) if "rows" in last else None
-    rows = stop_sales.lines(now, before, data, today)
-    path = os.path.join(WORK_DIR, "stop-sales", f"Stop-Sell-HAYA-{today.isoformat()}.pdf")
-    stop_sales.write_pdf(rows, path)
-    new, reopened = stop_sales.counts(rows)
-    out(f"STOP SALES {today:%d/%m/%Y}: {len(now)} line(s) closed, {new} new, {reopened} reopened ({data['title']}). "
-        f"PDF: {os.path.abspath(path)}")
+    new, reopened = stop_sales.changes(data["closed"], before, today)
+    out(f"STOP SALES {today:%d/%m/%Y}: {data['name']} ({data['id']}), {len(data['closed'])} line(s) closed, "
+        f"{len(new)} new, {len(reopened)} reopened"
+        + (f", last list sent {last['at']}" if last.get("at") else ""))
     if preview:
-        return rows
+        return new, reopened
     first = before is None
-    if (first and now) or new or reopened:
-        text = stop_sales.body(rows, today, first)
-        draft_stop_sales(mail, st, tg, path, text, stop_sales.subject(today), out=out)
-    else:
+    if not ((first and new) or (not first and (new or reopened))):
         out("STOP SALES: no change since the last list, nothing to the partners")
-    st.data["stop_sales_report"] = {"date": today.isoformat(), "rows": stop_sales.to_state(now)}
-    return rows
+        return new, reopened
+    chart = (stop_sales.attachment_name(today), stop_sales.export_xlsx(call, data["id"]), stop_sales.XLSX)
+    text = stop_sales.body(new, reopened, today, first)
+    draft_stop_sales(mail, st, tg, chart, text, stop_sales.subject(today), out=out)
+    st.data["stop_sales_report"] = {"date": today.isoformat(), "at": datetime.now(VN).strftime("%d/%m/%Y %H:%M"),
+                                    "file": data["name"], "file_id": data["id"],
+                                    "rows": stop_sales.to_state(data["closed"])}
+    return new, reopened
 
 
 def run_quote(args, out=print, availability=None):
@@ -3457,6 +3478,221 @@ def run_checkouts(sheet, args, out=print):
     return hits
 
 
+# --- Anex weekly reconciliation (dev, 2026-11-21; tools/anex_recon.py) ---
+
+ANEX_SCAN_MAX = 150  # inbox emails with files whose files are read in one run (their text stays in emi-work)
+
+
+def anex_vat_files(mail, first, work_dir=None, out=print):
+    """Every VAT invoice to Anex attached to an inbox email received since `first` (the period's Monday, Vietnam
+    time): the invoice is issued at check-out, never before. [{message_id, received, name, subject, text, vat}]."""
+    work_dir = work_dir or WORK_DIR
+    since = (datetime(first.year, first.month, first.day, tzinfo=VN).astimezone(timezone.utc)
+             .strftime("%Y-%m-%dT%H:%M:%SZ"))
+    found, read = [], 0
+    for m in mail.list_inbox_since(since, with_files=True):
+        idx = _read_index(work_dir, m["id"])
+        if idx is None:
+            if read >= ANEX_SCAN_MAX:
+                out(f"GAP: files of {m['id']} ({vn(m.get('receivedDateTime'))}) not read this run")
+                continue
+            read += 1
+            try:
+                idx = _index_message(mail, m, work_dir)
+            except Exception as e:
+                out(f"GAP: files of {m['id']} ({vn(m.get('receivedDateTime'))}, {addr(m.get('from'))}) not read: "
+                    f"{str(e).splitlines()[0][:120]}")
+                continue
+        for f in (idx or {}).get("files", []):
+            if not (f.get("name") or "").lower().endswith(".pdf"):
+                continue
+            vat = anex_recon.parse_vat(f.get("text"))
+            if vat:
+                found.append({"message_id": m["id"], "received": m.get("receivedDateTime") or "",
+                              "from": addr(m.get("from")), "name": f["name"], "subject": m.get("subject", ""),
+                              "text": f.get("text") or "", "vat": vat})
+    return found
+
+
+def anex_reports(call, first, last):
+    """(departure rows, {folio: Công nợ}) from EZFOLIO's folder for the week (config.ANEX_REPORTS_FOLDER_ID).
+    Refused, naming what isn't there, when the folder or a report is missing. A week with no Anex departure has
+    an empty Departure sheet and no CAR007C1 (02–08/11)."""
+    name = anex_recon.week_folder(first, last)
+    folder = next((f for f in drive.children(call, config.ANEX_REPORTS_FOLDER_ID)
+                   if f["name"] == name and f.get("mimeType", "").endswith("folder")), None)
+    if folder is None:
+        raise Refused(f"no folder {name} in the EZFOLIO reports folder")
+    files = drive.children(call, folder["id"])
+    dep = next((f for f in files if anex_recon.is_departure(f["name"])), None)
+    if dep is None:
+        raise Refused(f"{name}: no '{anex_recon.DEPARTURE}' sheet")
+    departure = anex_recon.parse_departure(drive.export_csv(call, dep["id"]))
+    if not departure:
+        return [], {}
+    debts = next((f for f in files if anex_recon.is_debts(f["name"])), None)
+    if debts is None:
+        raise Refused(f"{name}: no '{anex_recon.DEBTS}' sheet")
+    return departure, anex_recon.parse_debts(drive.export_csv(call, debts["id"]))
+
+
+def anex_confirmation(call, b):
+    """(file name, bytes) of the group's Hợp đồng PDF (EZFOLIO's group confirmation), None when it has none."""
+    fid = drive.file_id(b.get("contract"))
+    if not fid:
+        return None
+    name, mime, data = drive.download(call, fid)
+    if not data.startswith(b"%PDF"):
+        return None
+    return name, data
+
+
+def _anex_ref_on_sheet(rows, group):
+    """The Anex number of the intake row carrying this EZFOLIO group code, '' when none."""
+    for r in rows:
+        if (r.get("ezfolio_group_code") or "").strip().lstrip("#") == group:
+            ref = anex_recon.ref_in("ANEX " + (r.get("booking_ref") or ""))
+            if ref:
+                return ref
+    return ""
+
+
+def _anex_vat_bytes(mail, f):
+    for a in mail.list_attachments(f["message_id"]):
+        if a.get("name") == f["name"] and "data" in a:
+            return a["data"]
+    raise Refused(f"VAT file {f['name']} is no longer on email {f['message_id']}")
+
+
+def draft_anex_recon(mail, st, tg, key, subject, text, files, out=print):
+    """A new email to Anex accounting with every file; a person presses Send (not on the auto-send list)."""
+    to, cc = list(anex_recon.TO), list(anex_recon.CC)
+    if telegram_first(tg):
+        n = review.propose(mail, st, tg, pending_store(), how="new", source="", kind=anex_recon.KIND, ref=key,
+                           text=text, to=to, cc=cc, files=files, new_subject=subject)
+        st.record_draft(review.PENDING + n, key, 0, anex_recon.KIND)
+        out(f"Anex reconciliation draft #{n} sent to Telegram for review: {review.PENDING}{n}")
+        return n
+    d = mail.create_new_draft(to, subject, text, cc=cc)
+    try:
+        for fname, fdata, ctype in files:
+            mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
+    except Exception:  # an email without its files must not sit in Drafts; the next run writes it again
+        mail.delete_draft(d["id"])
+        raise
+    st.record_draft(d["id"], key, 0, anex_recon.KIND)
+    st.checkpoint()
+    n = review.opened(mail, st, tg, d["id"], how="new", source="", kind=anex_recon.KIND, ref=key, text=text,
+                      to=to, cc=cc, attachments=[f[0] for f in files])
+    out(f"Anex reconciliation draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    return n
+
+
+def _anex_tell(tg, text, out):
+    if tg is None:
+        return
+    try:
+        tg.send(text, topic="report")
+    except Exception as e:  # the line is in the job's output anyway
+        out(f"Telegram: {type(e).__name__}")
+
+
+def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None, out=print, call=None):
+    """Monday 09:00 only (schedule.md job 7). Last week's reconciliation, and any earlier week still waiting:
+    everything there → the draft, once; the week's EZFOLIO reports, a VAT invoice, a confirmation PDF or an Anex
+    number missing → a Telegram line, no draft. Bookings, folios and amounts: EZFOLIO's reports (tools/anex_recon.py)."""
+    today = today or _today_vn()
+    call = call or sheet.call
+    done = st.data.setdefault("anex_recon", {})
+    first, last = anex_recon.period(today)
+    weeks = {first.isoformat()} | {k for k, v in done.items() if v.get("status") == "waiting"}
+    sheet_rows = None
+    results = {}
+    for key in sorted(weeks):
+        first = datetime.strptime(key, "%Y-%m-%d").date()
+        last = first + timedelta(days=6)
+        span = f"{first:%d/%m} – {last:%d/%m/%Y}"
+        stamp = datetime.now(VN).strftime("%d/%m/%Y %H:%M")
+        if done.get(key, {}).get("status") == "drafted":
+            out(f"ANEX RECON {span}: already drafted as #{done[key].get('n')}, nothing to do")
+            results[key] = "drafted"
+            continue
+        try:
+            departure, debts = anex_reports(call, first, last)
+        except Exception as e:  # not made yet, not shared, layout changed: a line for the team, the week waits
+            why = str(e).splitlines()[0][:200] if str(e) else type(e).__name__
+            out(f"ANEX RECON {span}: REPORTS NOT READ — {why}")
+            if not preview:
+                _anex_tell(tg, anex_recon.report_missing(first, last, telegram.esc(why)), out)
+                done[key] = {"status": "waiting", "at": stamp, "missing": [f"reports: {why}"]}
+            results[key] = "missing" if preview else "waiting"
+            continue
+        bookings, left = anex_recon.bookings_from_reports(departure, debts, ROOM_NAMES_VI)
+        for g in left:
+            out(f"  not billed to Anex (no Công nợ on any folio), left out: group {g['group']} {g['name']}")
+        confirmations = {}
+        for b in bookings:
+            try:
+                c = anex_confirmation(call, b)
+            except Exception as e:
+                out(f"GAP: group {b['group']} Hợp đồng PDF not downloaded: {str(e).splitlines()[0][:120]}")
+                c = None
+            if c:
+                confirmations[b["group"]] = c
+                anex_recon.apply_contract(b, anex_recon.contract_info(attachments.search_text(c[0], c[1])))
+            if not b["ref"]:
+                if sheet_rows is None:
+                    try:
+                        sheet_rows = sheet.rows()
+                    except Exception as e:
+                        out(f"GAP: intake sheet not read: {str(e).splitlines()[0][:120]}")
+                        sheet_rows = []
+                b["ref"] = _anex_ref_on_sheet(sheet_rows, b["group"])
+        moved = [b for b in bookings if b.get("palma")]
+        bookings = [b for b in bookings if not b.get("palma")]
+        for b in moved:
+            out(f"  PALMA MOVE, left out (Palma reconciles it): group {b['group']} ANEX {b['ref'] or '?'} "
+                f"{b['guests']} {b['total']:,} VND")
+        if moved and not preview:
+            _anex_tell(tg, anex_recon.palma_line(first, last, moved, esc=telegram.esc), out)
+        files = anex_vat_files(mail, first, work_dir=work_dir, out=out) if bookings else []
+        vats = anex_recon.match_vats(bookings, files)
+        out(f"ANEX RECON {span}: {len(bookings)} booking(s) billed to Anex, {sum(b['total'] for b in bookings):,} VND")
+        for b in bookings:
+            v = vats.get(b["group"])
+            out(f"- group {b['group']} | ANEX {b['ref'] or '?'} | folio {', '.join(x['folio'] for x in b['lines'])} | "
+                f"{b['guests'] or 'TBA'} | {b['arrival']:%d/%m} – {b['departure']:%d/%m/%Y} | {b['rooms_text']} | "
+                f"{b['total']:,} VND | VAT "
+                + (f"{anex_recon.invoice_label(v['vat'])} ({v['name']}, {vn(v['received'])})" if v else "MISSING")
+                + f" | Hợp đồng {'OK' if b['group'] in confirmations else 'MISSING'}")
+            if v and v["vat"]["total"] and v["vat"]["total"] != b["total"]:
+                out(f"  CHECK: VAT total {v['vat']['total']:,} ≠ Công nợ {b['total']:,}")
+        gaps = anex_recon.missing(bookings, vats, confirmations)
+        if preview:
+            results[key] = "missing" if gaps else "ready"
+            continue
+        if gaps:
+            out(f"ANEX RECON {span}: WAITING — " + "; ".join(f"group {b['group']} {', '.join(w)}" for b, w in gaps))
+            _anex_tell(tg, anex_recon.reminder(first, last, gaps, esc=telegram.esc), out)
+            done[key] = {"status": "waiting", "at": stamp,
+                         "missing": [f"{b['group']}: {', '.join(w)}" for b, w in gaps]}
+            results[key] = "waiting"
+            continue
+        attached = [(anex_recon.file_name(first, last),
+                     anex_recon.build_xlsx(first, last, bookings, vats, today), anex_recon.XLSX)]
+        for b in bookings:
+            attached.append((vats[b["group"]]["name"], _anex_vat_bytes(mail, vats[b["group"]]), "application/pdf"))
+            attached.append((f"Confirm_Reservation_HAYA_{b['ref']}_{b['group']}.pdf", confirmations[b["group"]][1],
+                             "application/pdf"))
+        text = anex_recon.body(first, last, bookings, vats)
+        check_no_gaps(text)
+        n = draft_anex_recon(mail, st, tg, key, anex_recon.subject(first, last), text, attached, out=out)
+        done[key] = {"status": "drafted", "n": n, "at": stamp, "groups": [b["group"] for b in bookings],
+                     "palma": [b["group"] for b in moved]}
+        results[key] = "drafted"
+    return results
+
+
 def run_invoice_data(sheet, ref, out=print):
     state = booking_state(sheet.rows(), ref)
     if not state:
@@ -4092,8 +4328,9 @@ def parser():
     s.add_argument("--children", help="ages separated by ';'")
     s.add_argument("--indian", action="store_true", help="Indian guests on the TA table: +20%% on room rate")
     s.add_argument("--channel", default="TA", choices=["TA", "Tour operator", "OTA", "Direct"])
-    s = sub.add_parser("stop-sales", help="daily stop-sell PDF; a draft to the partners only when it changed")
-    s.add_argument("--preview", action="store_true", help="make the PDF only: no draft, nothing remembered")
+    s = sub.add_parser("stop-sales", help="Long's stop-sale chart to the partners, only when the closed nights changed")
+    s.add_argument("--preview", action="store_true", help="read Long's chart and print the changes: no email, nothing "
+                                                         "remembered")
     s = sub.add_parser("cancel-fee", help="TA cancellation charge for a booking on the sheet")
     s.add_argument("booking_ref")
     s.add_argument("--cancelled-at", help="'DD/MM/YYYY HH:MM' Vietnam time the cancellation email arrived (default now)")
@@ -4143,6 +4380,11 @@ def parser():
     s.add_argument("--from", dest="from_", help="DD/MM/YYYY")
     s.add_argument("--to", help="DD/MM/YYYY, default = --from")
     s.add_argument("--last-week", action="store_true", help="last Monday to Sunday")
+    s = sub.add_parser("anex-recon", help="job 7, Monday 09:00: last week's Anex reconciliation email (xlsx + VAT + "
+                                          "confirmations), or a Telegram line for what is missing")
+    s.add_argument("--preview", action="store_true", help="print the week and what is missing: no draft, no "
+                                                         "Telegram, nothing remembered")
+    s.add_argument("--week", help="a date DD/MM/YYYY inside the week to reconcile (default: last week)")
     s = sub.add_parser("invoice-data", help="proforma invoice figures for a tour operator booking")
     s.add_argument("booking_ref")
     s = sub.add_parser("invoice-make", help="Odeon proforma: a new tab in the invoice workbook, saved as a PDF")
@@ -4311,11 +4553,11 @@ def main(argv=None):
             run_upgrade(args, load_availability())
         elif c == "stop-sales":
             tg = None if args.preview else config.telegram()
-            data = load_availability()
+            data, call = load_stop_sale()
             if data is None:
-                stop_sales_gap(tg, "availability sheet not readable")
+                stop_sales_gap(tg, call)
                 return 0
-            run_stop_sales(None if args.preview else config.mail(), st, tg, data, preview=args.preview)
+            run_stop_sales(None if args.preview else config.mail(), st, tg, data, call, preview=args.preview)
             if not args.preview:
                 st.save()
         elif c == "pickup":
@@ -4350,6 +4592,12 @@ def main(argv=None):
             run_on_request(args, data)
         elif c == "checkouts":
             run_checkouts(config.sheet(), args)
+        elif c == "anex-recon":
+            today = quoting.parse_date(args.week) + timedelta(days=7) if args.week else None
+            run_anex_recon(config.mail(), config.sheet(), st, None if args.preview else config.telegram(),
+                           today=today, preview=args.preview)
+            if not args.preview:
+                st.save()
         elif c == "invoice-data":
             run_invoice_data(config.sheet(), args.booking_ref)
         elif c == "invoice-make":

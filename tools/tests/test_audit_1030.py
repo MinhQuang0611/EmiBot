@@ -227,14 +227,18 @@ class AvailabilityUnreadableTest(unittest.TestCase):
     """F-02: HTTP 404 on the Future Availability sheet stopped runs 29/10 08:19 and 17:01."""
 
     def test_gap_and_carry_on(self):
-        for argv, word in ((["availability", "--arrival", "01/12/2026", "--departure", "03/12/2026"],
-                            "AVAILABILITY NOT CHECKED"), (["stop-sales"], "STOP SALES NOT CHECKED")):
-            out = io.StringIO()
-            with mock.patch.object(emi.config, "availability", side_effect=RuntimeError("HTTP 404")), \
-                    redirect_stdout(out):
-                self.assertEqual(emi.main(argv), 0, argv)
-            self.assertIn("GAP: availability sheet not readable", out.getvalue())
-            self.assertIn(word, out.getvalue())
+        out = io.StringIO()
+        with mock.patch.object(emi.config, "availability", side_effect=RuntimeError("HTTP 404")),                 redirect_stdout(out):
+            self.assertEqual(emi.main(["availability", "--arrival", "01/12/2026", "--departure", "03/12/2026"]), 0)
+        self.assertIn("GAP: availability sheet not readable", out.getvalue())
+        self.assertIn("AVAILABILITY NOT CHECKED", out.getvalue())
+
+    def test_stop_sales_gap_and_carry_on(self):
+        """Since 21/11 the list is Long's chart in its own Drive folder (tools/stop_sales.py)."""
+        out = io.StringIO()
+        with mock.patch.object(emi.config, "stop_sale_transport", side_effect=RuntimeError("HTTP 404")),                 redirect_stdout(out):
+            self.assertEqual(emi.main(["stop-sales"]), 0)
+        self.assertIn("STOP SALES NOT CHECKED: Long's stop-sale chart not readable", out.getvalue())
 
     def test_the_suite_has_no_real_telegram(self):
         self.assertIsNone(emi.config.telegram())  # this test's stop-sales gap reached the group, 05/11

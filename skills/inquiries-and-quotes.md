@@ -203,10 +203,9 @@ A paid sea-view upgrade on a booking: `email-templates.md` 5b. Discount, free up
 - Sender's language. Karen's voice. `anti-ai-slop` on every draft.
 - Breakfast: 6:30–10:30. Other hotel facts: `docs/rate-knowledge/hotel-info.md`.
 
-## Stop sales on the B2B and OTA sites (dev, 2026-11-05)
-Job 5 makes this once a day with `py -m tools.emi stop-sales`. I never write a stop-sales email by hand: `draft-new` and `draft-reply` refuse one.
-1. Room types are merged first: Standard Twin into Superior Twin, Twin Deluxe into Deluxe Seaview, Triple Partial Seaview into Triple. Apartments are left out. A merged type with **1 room or fewer** on a night is STOP SELL (`tools/stop_sales.py`).
-   **24/12/2026 to 06/01/2027: every room type is STOP SELL** (both nights included), whatever the sheet says (dev, 2026-11-14; `ALWAYS_CLOSED`). This season only, not every year.
-2. The PDF follows the agreed list (`docs/Stop-Sell-Room-Types-HAYA--AGENCY-through-Feb2027…pdf`) with a last column NEW UPDATE, filled on the day a line changes: `NEW - <date>`, or `REOPENED - <date>` on a line with status OPEN, shown that one day. It is saved every day in `emi-work/stop-sales/`.
-3. Only a list that differs from the last one becomes a draft: Bcc to the partners, PDF attached, Telegram notice. A person presses Send. An older list nobody sent is replaced. A night that has simply passed is not a change.
-4. `STOP SALES NOT CHECKED` (sheet unreadable, older than yesterday, or room codes changed) → no list, a Telegram line, and the comparison waits for the next good day. New room code → add it to `MAPPED`.
+## Stop sales on the B2B and OTA sites (dev, 2026-11-05; Long's chart since 2026-11-21)
+Job 5 runs `py -m tools.emi stop-sales` at 09:00, 12:00 and 17:00. I no longer work the list out myself (dev, 21/11: "Emi sẽ dừng cái tạo stop sale và thay vào đó sẽ dùng stop sale của Long tạo"). I never write a stop-sales email by hand: `draft-new` and `draft-reply` refuse one.
+1. Long's tool writes a new chart every hour into the Drive folder `1stqTv0pQD2o5h6pWkoEiqrPig1i5Kb8D` (`EMI_STOP_SALE_FOLDER_ID`), older copies into its Backup folder. Two HAYA files a day: "Stop Sale — HAYA — <date>" (1 room or fewer = stopped) and **"Stop Sale OTA — HAYA — <date>"** (50% of the free rooms open to the channel, 0 = stopped). The partners get the OTA one (dev, 21/11). Palma's files in the same folder are never read.
+2. The closed nights come from its "Danh sách" tab: STOPPED and NEW lines closed, REOPENED lines open. The 24/12/2026–06/01/2027 close is in Long's chart.
+3. Sent only when the closed nights differ from the list the partners last got: the email lists the new stop sales and the re-opened nights, Long's chart attached as .xlsx (both tabs, his colours), Bcc to the partners. Same nights → no email, whatever Long's NEW / REOPENED marks say. A night that has passed is not a change. With `stop_sales` in `EMI_AUTO_SEND` I send it myself (Karen's auto-send list, item 2); without it, a draft for a person. An older list nobody sent is replaced.
+4. `STOP SALES NOT CHECKED` (folder not readable, no OTA HAYA file, a file not dated today or older than 3 hours, a header or status I don't know) → no email, a Telegram line in 📊, the last list stands.

@@ -32,7 +32,7 @@ Read the whole thread and open every attachment (PDF vouchers, screenshots, Exce
 | Decline / thanks | "Not interested", "booked elsewhere", "thank you", "received" | A one- or two-line reply (`email-templates.md` section 9), plain thanks too: every email gets its reply (dev, 2026-11-13) |
 | Palma | Anything about Palma Resort | `draft-forward <id> booking@palmahotel.vn <note> --kind forward`, once (check Sent Items with `mail-find`; `draft-forward` refuses a second forward). No HAYA row, no reply. accountant@palmahotel.vn writing about a HAYA payment is not Palma |
 | Accountant's answer | accountant@ says a forwarded slip's money didn't arrive or is short | To Karen; nothing to the agency until she decides. Silence = the payment is fine, nothing to do (the thank-you went with the forward). Was: thank-you drafted only after silence (`email-templates.md` 4) |
-| Noise | Marketing, spam, SynXis one-time passcodes, machine or system alerts (Daikin maintenance), internal chatter | No reply: `done <id> "NO REPLY: spam"` / `"NO REPLY: OTP"` / `"NO REPLY: alert"` / `"NO REPLY: internal"` — the only emails without a reply (dev, 2026-11-13), with Palma (forwarded) |
+| Noise | Marketing, spam, SynXis one-time passcodes, machine or system alerts (Daikin maintenance), internal chatter, a colleague sending an Anex VAT invoice PDF (kept for `anex-recon`, dev 21/11: outcome "NO REPLY: internal — VAT Anex <ref>") | No reply: `done <id> "NO REPLY: spam"` / `"NO REPLY: OTP"` / `"NO REPLY: alert"` / `"NO REPLY: internal"` — the only emails without a reply (dev, 2026-11-13), with Palma (forwarded) |
 | Phishing | "New booking" from `care@mail.myjorney.com` or `vip@mail.voyageandco.com` | Never logged, drafted, clicked or reported. `inbox-new` already drops them. Never click a confirm or portal link in an unsolicited email |
 
 One email can be two types (a change request with a payment slip attached). Handle both.
@@ -46,7 +46,7 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
 - `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`), always with `--ref`. An agency's "please ignore this booking request" is a cancellation: CANCEL rows first, then this. Sent at once when the CANCEL rows are on the sheet (dev, 2026-11-21).
 - `booking_status` — a guest (OTA relay or direct) asking whether we received their booking, with `--ref` of the rows on the sheet: sent at once (dev, 2026-11-21). Not on the sheet → find it (`sheet-find` surname + arrival); an agency asking → the confirmation.
-- `stop_sales` — the daily stop-sell list to the B2B and OTA sites. Job 5 makes it, never job 1 (`inquiries-and-quotes.md`).
+- `stop_sales` — Long's stop-sale chart to the B2B and OTA sites. Job 5 sends it (09:00, 12:00, 17:00), never job 1 (`inquiries-and-quotes.md`).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
 
 **Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. The draft file is plain text, never HTML tags (`email-templates.md`).

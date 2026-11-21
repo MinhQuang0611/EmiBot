@@ -99,7 +99,10 @@ def same_guest(a, b):
 
 def match(notes, agency="", guests=(), arrival=None, departure=None):
     """The notes about this booking: the agency or a guest the same, and the stays overlapping when both have dates.
-    A note with no stay counts only on a guest's name (an agency alone has many bookings)."""
+    A note with no stay counts only on a guest's name (an agency alone has many bookings).
+    Matched on the agency alone, a note with exactly this stay wins over the rest (dev, 2026-11-21, Victoria Tour
+    NPKM00750000002 22–26/11: nine notes overlapped, six of them sold-outs for other requests; only N111's quote and
+    N124's block were this booking): the overlapping ones are shown only when no note has exactly these dates."""
     if isinstance(guests, str):
         guests = [g for g in re.split(r"[;\n]", guests) if g.strip()]
     hits = []
@@ -114,8 +117,11 @@ def match(notes, agency="", guests=(), arrival=None, departure=None):
                 continue
         elif not by_guest:
             continue  # no dates to put side by side: the agency's name alone isn't this booking
-        hits.append(n)
-    return hits
+        hits.append((n, by_guest))
+    exact = {id(n) for n, by_guest in hits if not by_guest and stay(n) == (arrival, departure)}
+    if exact:
+        return [n for n, by_guest in hits if by_guest or id(n) in exact]
+    return [n for n, _ in hits]
 
 
 def _money(text):

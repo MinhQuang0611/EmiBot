@@ -27,3 +27,22 @@ def download(call, fid):
                          f"the confirmation must be the exported PDF")
     data = call("GET", f"{DRIVE}/{fid}?alt=media&supportsAllDrives=true", raw=True)
     return meta.get("name") or f"{fid}.pdf", meta.get("mimeType", "application/octet-stream"), data
+
+
+def children(call, folder_id):
+    """[{id, name, mimeType}] directly inside a folder, not trashed, by name."""
+    q = urllib.parse.quote(f"'{folder_id}' in parents and trashed=false", safe="")
+    out, token = [], ""
+    while True:
+        r = call("GET", f"{DRIVE}?q={q}&fields=nextPageToken,files(id,name,mimeType,createdTime)&orderBy=name"
+                        f"&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true"
+                        + (f"&pageToken={token}" if token else ""))
+        out += r.get("files", [])
+        token = r.get("nextPageToken")
+        if not token:
+            return out
+
+
+def export_csv(call, fid):
+    """A Google Sheet's first tab as CSV text."""
+    return call("GET", f"{DRIVE}/{fid}/export?mimeType=text%2Fcsv", raw=True).decode("utf-8")

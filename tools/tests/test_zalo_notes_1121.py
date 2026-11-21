@@ -87,6 +87,49 @@ class RowsTest(unittest.TestCase):
         self.assertIn("cảnh báo người duyệt", lines[0])
 
 
+def _victoria(i, typ, stay, said):
+    return {"id": i, "at": "2026-11-13 14:11", "by": "sunny", "type": typ, "agency": "VICTORIA TOUR", "stay": stay,
+            "said": said}
+
+
+# draft #1565 (dev, 2026-11-21): Victoria Tour NPKM00750000002, 22–26/11, 1 Deluxe Seaview 2,000,000
+VICTORIA = [
+    _victoria("N35", "sold_out", "2026-11-15/2026-11-23", "Đã báo HAYA hết phòng"),
+    _victoria("N36", "sold_out", "2026-11-18/2026-11-26", "Đã báo HAYA hết phòng"),
+    _victoria("N73", "quote", "2026-11-16/2026-11-25", "01 Deluxe Double Seaview 2.000.000 VND/phòng/đêm"),
+    _victoria("N111", "quote", "2026-11-22/2026-11-26", "01 Deluxe Double Seaview 2.000.000 VND/phòng/đêm"),
+    _victoria("N124", "special_request", "2026-11-22/2026-11-26", "Đã báo sẽ block 01 Deluxe Double Seaview"),
+    _victoria("N191", "sold_out", "2026-11-22/2026-12-03", "Đã báo HAYA và PALMA đều hết phòng"),
+]
+VICTORIA_ROW = {"action": "NEW", "company": "Victoria Tour DMC", "guest_names": "PRABIN BHATTARAI",
+                "booking_ref": "NPKM00750000002", "arrival": "22/11/2026", "departure": "26/11/2026",
+                "rate_per_night_vnd": "2,000,000"}
+
+
+class ExactStayTest(unittest.TestCase):
+    def test_exact_stay_wins_over_the_agencys_other_requests(self):
+        hits = zalo_notes.match(VICTORIA, "Victoria Tour DMC", ["PRABIN BHATTARAI"], date(2026, 11, 22),
+                                date(2026, 11, 26))
+        self.assertEqual([n["id"] for n in hits], ["N111", "N124"])
+
+    def test_no_exact_stay_keeps_the_overlapping_ones(self):
+        hits = zalo_notes.match(VICTORIA, "Victoria Tour DMC", [], date(2026, 11, 20), date(2026, 11, 24))
+        self.assertEqual([n["id"] for n in hits], ["N35", "N36", "N73", "N111", "N124", "N191"])
+
+    def test_a_guest_note_stays_beside_the_exact_ones(self):
+        notes = VICTORIA + [dict(_victoria("N200", "sold_out", "2026-11-20/2026-11-24", "hết phòng"),
+                                 guest="PRABIN BHATTARAI")]
+        hits = zalo_notes.match(notes, "Victoria Tour DMC", ["PRABIN BHATTARAI"], date(2026, 11, 22),
+                                date(2026, 11, 26))
+        self.assertEqual([n["id"] for n in hits], ["N111", "N124", "N200"])
+
+    def test_built_booking_gets_no_zalo_lines_on_a_reply(self):
+        built = dict(VICTORIA_ROW, action="CHANGE", pdf_link="https://drive/31215.pdf")
+        self.assertFalse(emi.zalo_done([VICTORIA_ROW], "NPKM00750000002"))
+        self.assertTrue(emi.zalo_done([VICTORIA_ROW, built], "NPKM00750000002"))
+        self.assertFalse(emi.zalo_done([built], "OTHER123"))
+
+
 class FakeTg:
     def __init__(self):
         self.sent = []
