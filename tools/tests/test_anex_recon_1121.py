@@ -249,47 +249,70 @@ class RunTest(Base):
         self.assertNotIn("Đoàn 29301", waiting)
         self.assertEqual(self.st.data["anex_recon"]["2026-10-19"]["status"], "waiting")
 
-    def test_palma_move_left_out_and_said_on_telegram(self):
+    def test_palma_move_is_reconciled_by_haya_like_the_others(self):
         self.run_()
-        palma = [t for t in self.reports() if "Palma chuyển qua" in t][0]
-        self.assertIn("đoàn 29692 (ANEX 112876126, 8.010.000 VND)", palma)
-        self.assertNotIn("29692", "\n".join(t for t in self.reports() if "chưa gửi được" in t))
+        waiting = "\n".join(t for t in self.reports() if "chưa gửi được" in t)
+        self.assertIn("Đoàn 29692 (ANEX 112876126", waiting)  # its VAT is asked for like any other
+        self.assertFalse([t for t in self.reports() if "Palma" in t])
+        self.assertIn("PALMA MOVE, included", "\n".join(self.lines))
 
     def test_everything_there_one_draft_with_xlsx_vat_and_confirmations(self):
         self.vat_email("ANEX HAYA_25.10_112883549.pdf")
         self.vat_email("hoadon 28371.pdf", text=VAT_888.replace("888", "936").replace("18.283.500", "13.515.000"))
+        self.vat_email("VAT 112876126.pdf", text=VAT_888.replace("888", "901").replace("18.283.500", "8.010.000"))
         self.assertEqual(self.run_(), {"2026-10-19": "drafted"})
         d = self.drafts()[0]
         self.assertEqual((d["to"], d["cc"]), (list(ar.TO), list(ar.CC)))
         self.assertEqual(d["subject"], "HAYA HOTEL PQ ĐỐI CHIẾU CÔNG NỢ GIAI ĐOẠN 19/10 - 25/10/2026")
         self.assertEqual(d["attachments"], ["HAYA_ANEX_DOI_CHIEU_19.10-25.10.2026.xlsx",
+                                            "VAT 112876126.pdf", "Confirm_Reservation_HAYA_112876126_29692.pdf",
                                             "hoadon 28371.pdf", "Confirm_Reservation_HAYA_112797913_28371.pdf",
                                             "ANEX HAYA_25.10_112883549.pdf",
                                             "Confirm_Reservation_HAYA_112883549_29301.pdf"])
         self.assertIn("Booking ANEX 112883549: mã đoàn 29301 / số XN 25557, folio 65855", d["text"])
         self.assertIn("1 Quadruple, 10 đêm, 18.283.500 VND, hóa đơn VAT C26MPN số 888, ngày 26/10/2026", d["text"])
         self.assertIn("1 Standard Garden", d["text"])
-        self.assertIn("TỔNG GIÁ TRỊ ĐỀ NGHỊ ĐỐI CHIẾU (đã bao gồm VAT): 31.798.500 VND.", d["text"])
-        self.assertNotIn("MELNIK", d["text"])
-        self.assertEqual(self.st.data["anex_recon"]["2026-10-19"]["palma"], ["29692"])
+        self.assertIn("Booking ANEX 112876126: mã đoàn 29692", d["text"])
+        self.assertIn("TỔNG GIÁ TRỊ ĐỀ NGHỊ ĐỐI CHIẾU (đã bao gồm VAT): 39.808.500 VND.", d["text"])
+        self.assertEqual(self.st.data["anex_recon"]["2026-10-19"]["palma_moves"], ["29692"])
         self.assertEqual(self.run_(), {"2026-10-19": "drafted"})  # run again: nothing new
         self.assertEqual(len([d for d in self.drafts() if "19/10" in d["subject"]]), 1)
 
-    def test_xlsx_holds_folio_and_booked_type_in_anex_layout(self):
+    def test_xlsx_is_anex_s_own_file_filled_in(self):
         from openpyxl import load_workbook
         bookings, _ = ar.bookings_from_reports(ar.parse_departure(DEPARTURE), ar.parse_debts(DEBTS),
                                                emi.ROOM_NAMES_VI)
         b = ar.apply_contract(next(x for x in bookings if x["group"] == "29301"),
                               ar.contract_info(CONTRACTS["HOPDONG29301xxxxxxxxxxxx"]))
         vats = {"29301": {"vat": ar.parse_vat(VAT_888)}}
-        wb = load_workbook(io.BytesIO(ar.build_xlsx(date(2026, 10, 19), date(2026, 10, 25), [b], vats, TODAY)))
-        cells = [[c.value for c in r] for r in wb.active.iter_rows()]
-        line = next(r for r in cells if 112883549 in r)
-        self.assertEqual([line[2], line[3], line[4]] + line[7:12], [888, 112883549, 65855, "Quadruple", 1, 10,
-                                                                     1828350, 18283500])
-        self.assertIn(ar.BUYER, [v for r in cells for v in r])
-        total = next(r for r in cells if r[1] and str(r[1]).strip().startswith("Total grand amount"))
-        self.assertEqual(total[11], 18283500)
+        ws = load_workbook(io.BytesIO(ar.build_xlsx(date(2026, 10, 19), date(2026, 10, 25), [b], vats, TODAY))).active
+        row = [ws[f"{c}17"].value for c in "BCDEFGHIJKL"]
+        self.assertEqual(row[1:4] + row[6:9] + row[10:], [888, 112883549, 65855, "Quadruple", 1, 10, 18283500])
+        self.assertEqual([d.date() for d in (row[0], row[4], row[5])],
+                         [date(2026, 10, 26), date(2026, 10, 15), date(2026, 10, 25)])
+        self.assertEqual(row[9], "=L17/(I17*J17)")
+        self.assertEqual(ws["L18"].value, "=I18*J18*K18")  # unused lines stay as the template has them
+        self.assertEqual(ws["L27"].value, "=SUM(L17:L26)")
+        self.assertEqual(ws["G9"].value.date(), TODAY)
+        self.assertEqual(ws["G10"].value, ar.BUYER)
+        self.assertEqual((ws["H17"].font.name, ws["H17"].font.sz), ("Cambria", 8))
+        self.assertEqual(ws.title, "19.10-25.10.26")
+        self.assertIn("$B$2:$L$56", ws.print_area)
+
+    def test_more_than_ten_lines_push_the_total_down(self):
+        from openpyxl import load_workbook
+        lines = [{"folio": str(70000 + i), "room": "Standard Garden", "rooms": 1, "nights": 2, "price": 100,
+                  "total": 200, "checkin": date(2026, 10, 20), "checkout": date(2026, 10, 22)} for i in range(13)]
+        b = {"group": "1", "ref": "112000001", "lines": lines}
+        out = ar.build_xlsx(date(2026, 10, 19), date(2026, 10, 25), [b], {"1": {"vat": ar.parse_vat(VAT_888)}}, TODAY)
+        ws = load_workbook(io.BytesIO(out)).active
+        self.assertEqual(ws["E29"].value, 70012)
+        self.assertEqual(ws["L30"].value, "=SUM(L17:L29)")
+        self.assertTrue(str(ws["B30"].value).strip().startswith("Total grand amount"))
+        self.assertIn("B30:K30", [str(m) for m in ws.merged_cells.ranges])
+        self.assertIn("$B$2:$L$59", ws.print_area)
+        self.assertEqual(ws["D59"].value, None)
+        self.assertEqual(ws["B59"].value, "THANK YOU FOR YOUR BUSINESS!")
 
     def test_no_report_folder_yet_waits_and_says_so(self):
         self.assertEqual(self.run_(date(2026, 11, 23)), {"2026-11-16": "waiting"})
@@ -309,6 +332,8 @@ class RunTest(Base):
         self.vat_email("ANEX HAYA_25.10_112883549.pdf", received="2026-10-28T09:00:00Z")
         self.vat_email("VAT 28371.pdf", received="2026-10-28T09:00:00Z",
                        text=VAT_888.replace("18.283.500", "13.515.000"))
+        self.vat_email("VAT 29692.pdf", received="2026-10-28T09:00:00Z",
+                       text=VAT_888.replace("18.283.500", "8.010.000"))
         self.drive.weeks["2026-10-26_2026-11-01"] = (EMPTY_WEEK, None)
         self.assertEqual(self.run_(date(2026, 11, 2)), {"2026-10-19": "drafted", "2026-10-26": "drafted"})
 
@@ -319,6 +344,21 @@ class RunTest(Base):
         self.sheet = FakeSheet([{"ezfolio_group_code": "#29301", "booking_ref": "Anex 112883549"}])
         self.run_()
         self.assertNotIn("Đoàn 29301 (ANEX ?", "\n".join(self.reports()))
+
+    def test_redo_makes_the_week_again_and_drops_the_old_draft(self):
+        self.vat_email("ANEX HAYA_25.10_112883549.pdf")
+        self.vat_email("hoadon 28371.pdf", text=VAT_888.replace("888", "936").replace("18.283.500", "13.515.000"))
+        self.vat_email("VAT 112876126.pdf", text=VAT_888.replace("888", "901").replace("18.283.500", "8.010.000"))
+        self.run_()
+        old = str(self.st.data["anex_recon"]["2026-10-19"]["n"])
+        self.lines = []
+        got = emi.run_anex_recon(self.mail, self.sheet, self.st, self.tgs, today=TODAY, work_dir=self.dir,
+                                 out=self.lines.append, redo=True)
+        self.assertEqual(got, {"2026-10-19": "drafted"})
+        new = str(self.st.data["anex_recon"]["2026-10-19"]["n"])
+        self.assertNotEqual(new, old)
+        self.assertEqual(self.st.data["reviews"][old]["status"], "replaced")
+        self.assertEqual(self.st.data["reviews"][new]["status"], "pending")
 
     def test_preview_changes_nothing(self):
         self.lines = []

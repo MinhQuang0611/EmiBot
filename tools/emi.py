@@ -3597,10 +3597,12 @@ def _anex_tell(tg, text, out):
         out(f"Telegram: {type(e).__name__}")
 
 
-def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None, out=print, call=None):
+def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None, out=print, call=None, redo=False):
     """Monday 09:00 only (schedule.md job 7). Last week's reconciliation, and any earlier week still waiting:
     everything there → the draft, once; the week's EZFOLIO reports, a VAT invoice, a confirmation PDF or an Anex
-    number missing → a Telegram line, no draft. Bookings, folios and amounts: EZFOLIO's reports (tools/anex_recon.py)."""
+    number missing → a Telegram line, no draft. Bookings, folios and amounts: EZFOLIO's reports (tools/anex_recon.py).
+    redo: last week's email made again although it was drafted (anex-recon --week D --redo, dev 21/11: #1571 went out
+    with a sheet drawn from scratch); the old draft, still in Drafts, goes to Deleted Items."""
     today = today or _today_vn()
     call = call or sheet.call
     done = st.data.setdefault("anex_recon", {})
@@ -3608,6 +3610,16 @@ def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None
     weeks = {first.isoformat()} | {k for k, v in done.items() if v.get("status") == "waiting"}
     sheet_rows = None
     results = {}
+    older = []
+    redo_key = anex_recon.period(today)[0].isoformat() if redo else None
+    if redo_key and done.get(redo_key, {}).get("status") == "drafted":
+        n_old = str(done[redo_key].get("n") or "")
+        r_old = st.data["reviews"].get(n_old)
+        if r_old and r_old.get("status") in (REVIEW_OPEN, "approved") and still_in_drafts(mail, st, n_old, r_old):
+            older = [n_old]
+        else:
+            out(f"NOTE: #{n_old} is no longer in Drafts (sent or deleted): the new draft is a second email")
+        done[redo_key]["status"] = "redo"
     for key in sorted(weeks):
         first = datetime.strptime(key, "%Y-%m-%d").date()
         last = first + timedelta(days=6)
@@ -3648,13 +3660,11 @@ def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None
                         out(f"GAP: intake sheet not read: {str(e).splitlines()[0][:120]}")
                         sheet_rows = []
                 b["ref"] = _anex_ref_on_sheet(sheet_rows, b["group"])
+        # "Palma chuyển qua": an Anex booking of Palma's moved to HAYA. HAYA reconciles it like any other (dev, 21/11:
+        # "haya"; the 26/10 email had left 8 such groups out). Named in the output only.
         moved = [b for b in bookings if b.get("palma")]
-        bookings = [b for b in bookings if not b.get("palma")]
         for b in moved:
-            out(f"  PALMA MOVE, left out (Palma reconciles it): group {b['group']} ANEX {b['ref'] or '?'} "
-                f"{b['guests']} {b['total']:,} VND")
-        if moved and not preview:
-            _anex_tell(tg, anex_recon.palma_line(first, last, moved, esc=telegram.esc), out)
+            out(f"  PALMA MOVE, included (HAYA reconciles it): group {b['group']} ANEX {b['ref'] or '?'}")
         files = anex_vat_files(mail, first, work_dir=work_dir, out=out) if bookings else []
         vats = anex_recon.match_vats(bookings, files)
         out(f"ANEX RECON {span}: {len(bookings)} booking(s) billed to Anex, {sum(b['total'] for b in bookings):,} VND")
@@ -3687,8 +3697,10 @@ def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None
         text = anex_recon.body(first, last, bookings, vats)
         check_no_gaps(text)
         n = draft_anex_recon(mail, st, tg, key, anex_recon.subject(first, last), text, attached, out=out)
+        if key == redo_key and older:
+            close_replaced(mail, st, tg, older, n, out=out)
         done[key] = {"status": "drafted", "n": n, "at": stamp, "groups": [b["group"] for b in bookings],
-                     "palma": [b["group"] for b in moved]}
+                     "palma_moves": [b["group"] for b in moved]}
         results[key] = "drafted"
     return results
 
@@ -4385,6 +4397,8 @@ def parser():
     s.add_argument("--preview", action="store_true", help="print the week and what is missing: no draft, no "
                                                          "Telegram, nothing remembered")
     s.add_argument("--week", help="a date DD/MM/YYYY inside the week to reconcile (default: last week)")
+    s.add_argument("--redo", action="store_true", help="make that week's email again although it was drafted; the "
+                                                      "old draft, if still in Drafts, goes to Deleted Items")
     s = sub.add_parser("invoice-data", help="proforma invoice figures for a tour operator booking")
     s.add_argument("booking_ref")
     s = sub.add_parser("invoice-make", help="Odeon proforma: a new tab in the invoice workbook, saved as a PDF")
@@ -4595,7 +4609,7 @@ def main(argv=None):
         elif c == "anex-recon":
             today = quoting.parse_date(args.week) + timedelta(days=7) if args.week else None
             run_anex_recon(config.mail(), config.sheet(), st, None if args.preview else config.telegram(),
-                           today=today, preview=args.preview)
+                           today=today, preview=args.preview, redo=args.redo)
             if not args.preview:
                 st.save()
         elif c == "invoice-data":

@@ -50,7 +50,7 @@ Báo cáo EZFOLIO hằng tuần trên Drive, thư mục `1RJyGQzU_nQWZN5K09tAUo2
 | Hoá đơn VAT | nhân viên gửi PDF vào sales@ |
 | Bill (folio) | `FDR002 Bill — … — <đoàn> — <folio>.pdf` — bản cứng gửi bưu điện |
 
-Ghi chú "Palma chuyển qua" trong Hợp đồng = booking Anex của Palma chuyển sang HAYA: 8/9 đoàn tuần 19–25/10, thư 26/10 không đưa vào.
+Ghi chú "Palma chuyển qua" trong Hợp đồng = booking Anex của Palma chuyển sang HAYA: 8/9 đoàn tuần 19–25/10, thư 26/10 không đưa vào. HAYA đối chiếu các đoàn này (dev, 21/11), đưa vào thư như booking khác.
 
 ## Chưa thấy trong hộp thư
 - Thư Anex **xác nhận** công nợ (chỉ có thư 16/11 đòi làm lại theo mẫu).

@@ -21,6 +21,7 @@ Pure functions here; Drive, mailbox and sheet steps are in emi.run_anex_recon.
 """
 import csv
 import io
+import os
 import re
 from datetime import date, timedelta
 
@@ -32,21 +33,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 DEPARTURE = "FDR002 Departure"
 DEBTS = "CAR007C1 Báo cáo đặt phòng"
 
-SELLER = "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC – HAYA HOTEL PHU QUOC (TRADEMARK COLLECTION BY WYNDHAM)"
-SELLER_ADDRESS = "Tổ 5, đường Trần Hưng Đạo, khu phố 7 Dương Đông, Đặc khu Phú Quốc, Tỉnh An Giang, Việt Nam"
-SELLER_TEL = "MST: 1702051744   –   Khách sạn: 82 Trần Hưng Đạo, Dương Đông, Phú Quốc   –   Tel: (+84) 975 398 375"
-BUYER = "CÔNG TY TNHH THƯƠNG MẠI VÀ DU LỊCH ANEX VIỆT NAM"
-BUYER_ADDRESS = "Tầng 6 và 7, tòa nhà VNPT Khánh Hòa, 50 Lê Thánh Tôn, Phường Nha Trang, Tỉnh Khánh Hòa, Việt Nam"
-BANK = [("Bank name (Ngân Hàng):", "NGÂN HÀNG TMCP NGOẠI THƯƠNG VIỆT NAM (VIETCOMBANK) - CHI NHÁNH PHÚ QUỐC"),
-        ("Bank address (Địa chỉ ngân hàng):",
-         "Số 1A đường Hùng Vương, khu phố 1 Dương Đông, Đặc khu Phú Quốc, Tỉnh An Giang, Việt Nam"),
-        ("Account name (Tên TK):", "CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC"),
-        ("Account number in VND (Số TK VND):", "1020729617"),
-        ("SWIFT:", "")]
-HEADERS = ["Inv. Date\n(Ngày hóa đơn)", "Invoice No.\n(Số hóa đơn)", "RSVN No.\n(Số booking ANEX)",
-           "Folio No.\n(Số Folio)", "Check-in\n(Ngày bắt đầu)", "Check-out\n(Ngày kết thúc)",
-           "Room Type/ Service\n(Loại phòng/ Dịch vụ)", "Quan.\n(Số lượng)", "Nights\n(Số đêm)", "Price\n(Đơn giá)",
-           "Total\n(Tổng tiền)"]
+BUYER = "CÔNG TY TNHH THƯƠNG MẠI VÀ DU LỊCH ANEX VIỆT NAM"  # as the template prints it (G10)
 
 
 def period(today):
@@ -149,7 +136,7 @@ def contract_info(text):
     """What the group's Hợp đồng PDF (EZFOLIO's confirmation) says: {ref, palma, rooms}. The notes carry the Anex
     number in whatever form front office typed it ('No. 112876126', 'MÃ: 112886543', 'REV no: 112800648', 'Anex
     reference: 112883549'); 'Palma chuyển qua' marks an Anex booking of Palma's moved to HAYA (8 of the 9 groups of
-    19–25/10, which the 26/10 email left out). rooms = the booked types, as Anex knows them (the departure report
+    19–25/10, which the 26/10 email left out): HAYA reconciles them like the others (dev, 21/11). rooms = the booked types, as Anex knows them (the departure report
     has the room given: 28371 booked Standard Garden, stayed in a suite)."""
     notes = NOTES.search(text or "")
     notes = " ".join(notes.group(1).split()) if notes else ""
@@ -360,93 +347,76 @@ def reminder(first, last, gaps, esc=lambda s: s):
     return "\n".join([head] + rows + ask)
 
 
-def palma_line(first, last, moved, esc=lambda s: s):
-    """Telegram: the Palma bookings moved to HAYA, left out of the email (Palma reconciles them, as on 26/10)."""
-    names = "; ".join(f"đoàn {esc(b['group'])} (ANEX {esc(b['ref'] or '?')}, {money(b['total'])} VND)" for b in moved)
-    return (f"📑 Đối chiếu công nợ Anex {first:%d/%m} – {last:%d/%m/%Y}: {len(moved)} đoàn khách Palma chuyển qua "
-            f"không đưa vào thư (Palma đối chiếu): {names}.")
-
-
 def report_missing(first, last, why):
     return (f"📑 Đối chiếu công nợ Anex {first:%d/%m} – {last:%d/%m/%Y}: chưa làm được, báo cáo EZFOLIO của tuần "
             f"chưa đọc được ({why}).")
 
 
-# --- the .xlsx, in Anex's layout ---
+# --- the .xlsx: Anex's own file, filled in ---
 
-def build_xlsx(first, last, bookings, vats, made_on):
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, Side
+# HAYA's 18/11 resend in the layout Anex asked for on 16/11 ("làm công nợ theo file cũ năm trước"), its booking line
+# and date cleared, rebuilt cell by cell into a fresh workbook (dev, 21/11: "file excel đang sai định dạng", then "KO
+# MỞ DC FILE": the 18/11 file itself, an openpyxl save with a broken comment part and stale external links, does not
+# open in Excel). Cambria 8, merges, rows 17–26 for the lines, total in L27; printed B2:L56 on one page.
+TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "templates",
+                        "anex-doi-chieu-template.xlsx")
+FIRST_LINE, LINES, TOTAL_ROW = 17, 10, 27
 
-    wb = Workbook()
+
+def _grow(ws, extra):
+    """Room for more than 10 lines: `extra` rows before the total, styled like the last line row; everything under
+    them (merges, row heights, the total's SUM, the print area) moved down."""
+    from copy import copy
+    merges = [m for m in list(ws.merged_cells.ranges) if m.min_row >= TOTAL_ROW]
+    for m in merges:
+        ws.unmerge_cells(str(m))
+    heights = {r: d.height for r, d in list(ws.row_dimensions.items()) if r >= TOTAL_ROW and d.height}
+    ws.insert_rows(TOTAL_ROW, extra)
+    for m in merges:
+        ws.merge_cells(start_row=m.min_row + extra, start_column=m.min_col, end_row=m.max_row + extra,
+                       end_column=m.max_col)
+    for r in heights:
+        ws.row_dimensions[r].height = None
+    for r, h in heights.items():
+        ws.row_dimensions[r + extra].height = h
+    model = FIRST_LINE + LINES - 1
+    for r in range(TOTAL_ROW, TOTAL_ROW + extra):
+        for col in range(2, 13):
+            src, dst = ws.cell(row=model, column=col), ws.cell(row=r, column=col)
+            dst.font, dst.border, dst.alignment = copy(src.font), copy(src.border), copy(src.alignment)
+            dst.number_format = src.number_format
+        ws.cell(row=r, column=12, value=f"=I{r}*J{r}*K{r}")
+
+
+def build_xlsx(first, last, bookings, vats, made_on, template=None):
+    """The reconciliation in Anex's own file: G9 the date it is made, one row per folio line from row 17 (B invoice
+    date, C invoice no., D Anex number, E folio, F/G check-in/out, H booked room type, I rooms, J nights, K price as
+    L ÷ (I × J), L amount), the total in the template's SUM."""
+    from openpyxl import load_workbook
+
+    wb = load_workbook(template or TEMPLATE)
     ws = wb.active
-    ws.title = f"{first:%d.%m}-{last:%d.%m.%y}"
-    bold = Font(bold=True)
-    thin = Side(style="thin")
-    box = Border(left=thin, right=thin, top=thin, bottom=thin)
-    for col, width in zip("ABCDEFGHIJKL", (2, 13, 12, 16, 11, 13, 13, 26, 9, 8, 13, 15)):
-        ws.column_dimensions[col].width = width
-
-    ws["B1"], ws["C1"] = "HOTEL NAME:", SELLER
-    ws["B2"], ws["C2"] = "Address:", SELLER_ADDRESS
-    ws["B3"], ws["C3"] = "Tel/Fax:", SELLER_TEL
-    ws["C5"] = "PROFORMA INVOICE / HÓA ĐƠN TẠM TÍNH"
-    ws["C5"].font = Font(bold=True, size=14)
-    ws["C6"] = "INVOICE NO/ SỐ PHIẾU:"
-    ws["C7"], ws["G7"] = "INVOICED DATE/ NGÀY LẬP:", made_on
-    ws["G7"].number_format = "dd/mm/yyyy"
-    ws["C8"], ws["G8"] = "CUSTOME/ KHÁCH HÀNG:", BUYER
-    ws["C9"], ws["G9"] = "CONTACT PERSON/ NGƯỜI LIÊN HỆ:", TO[1]
-    ws["F10"], ws["G10"] = "TAX CODE/ MÃ SỐ THUẾ:", ANEX_TAX_CODE
-    ws["C11"], ws["G11"] = "ADDRESS/ ĐỊA CHỈ:", BUYER_ADDRESS
-    ws["C12"] = f"Giai đoạn trả phòng: {first:%d/%m/%Y} – {last:%d/%m/%Y}"
-
-    row = 14
-    for i, h in enumerate(HEADERS):
-        c = ws.cell(row=row, column=2 + i, value=h)
-        c.font, c.border = bold, box
-        c.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
-    ws.row_dimensions[row].height = 32
-    row += 1
-    ws.cell(row=row, column=2, value="Accommodation/ Tiền phòng").font = bold
-    row += 1
-    grand = 0
-    for b in bookings:
+    rows = [(b, x) for b in bookings for x in b["lines"]]
+    extra = max(0, len(rows) - LINES)
+    if extra:
+        _grow(ws, extra)
+    total_row = TOTAL_ROW + extra
+    ws[f"L{total_row}"] = f"=SUM(L{FIRST_LINE}:L{total_row - 1})"
+    ws["G9"] = made_on
+    for i, (b, x) in enumerate(rows):
+        r = FIRST_LINE + i
         vat = vats[b["group"]]["vat"]
-        for x in b["lines"]:
-            values = [vat.get("issued"), _int(vat.get("number")) or vat.get("number"), _int(b["ref"]) or b["ref"],
-                      _int(x["folio"]) or x["folio"], x["checkin"], x["checkout"], x["room"], x["rooms"], x["nights"],
-                      x["price"], x["total"]]
-            for i, v in enumerate(values):
-                c = ws.cell(row=row, column=2 + i, value=v)
-                c.border = box
-                if isinstance(v, date):
-                    c.number_format = "dd/mm/yyyy"
-                elif i >= 9:
-                    c.number_format = "#,##0"
-            grand += x["total"]
-            row += 1
-    ws.cell(row=row, column=2, value=" Total grand amount  INCLUSIVE VAT tax (Tổng tiền đã bao gồm thuế VAT):"
-            ).font = bold
-    c = ws.cell(row=row, column=12, value=grand)
-    c.font, c.number_format, c.border = bold, "#,##0", box
-    row += 2
-    ws.cell(row=row, column=3, value="Please settle payment before:")
-    ws.cell(row=row, column=8, value="to our bank account with below details:")
-    row += 1
-    ws.cell(row=row, column=3, value="Vui lòng thanh toán trước:")
-    ws.cell(row=row, column=8, value=" bằng hình thức chuyển khoản theo tài khoản ngân hàng ở dưới:")
-    row += 1
-    for label, value in BANK:
-        ws.cell(row=row, column=7, value=label)
-        ws.cell(row=row, column=8, value=value)
-        row += 1
-    row += 1
-    for col, a, b in ((3, "Prepared by", "Account Receivables"), (6, "Verified by", "Director Of Finance"),
-                      (9, "Acknowledged by", "General Manager")):
-        ws.cell(row=row, column=col, value=a).font = bold
-        ws.cell(row=row + 1, column=col, value=b)
-    ws.cell(row=row + 5, column=2, value="THANK YOU FOR YOUR BUSINESS!").font = bold
+        values = {"B": vat.get("issued"), "C": _int(vat.get("number")) or vat.get("number"),
+                  "D": _int(b["ref"]) or b["ref"], "E": _int(x["folio"]) or x["folio"], "F": x["checkin"],
+                  "G": x["checkout"], "H": x["room"], "I": x["rooms"], "J": x["nights"],
+                  "K": f"=L{r}/(I{r}*J{r})", "L": x["total"]}
+        for col, v in values.items():
+            ws[f"{col}{r}"] = v
+            if col in "BFG":
+                ws[f"{col}{r}"].number_format = "dd/mm/yyyy"  # the template's mm-dd-yy shows 10/22/2026
+    ws.title = f"{first:%d.%m}-{last:%d.%m.%y}"
+    ws.print_area = f"B2:L{56 + extra}"  # the template's C2:L56 cut off column B, the invoice date
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 1  # one page, however many lines
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
