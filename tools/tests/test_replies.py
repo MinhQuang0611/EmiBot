@@ -199,7 +199,7 @@ class GraphRecipientsTest(unittest.TestCase):
             with open(body, "w", encoding="utf-8") as f:
                 f.write("Dear Team,\n\nTrân trọng,\nReservations Team")
             with self.assertRaises(emi.Refused):
-                emi.draft_reply(mail, State(os.devnull + "-none"),
+                emi.draft_reply(mail, State(tempfile.mktemp(suffix="-state.json")),
                                 SimpleNamespace(message_id="m1", body=body, all=False, kind="reply", ref="", row=""),
                                 out=lambda *_: None)
         self.assertFalse(any(m == "POST" for m, u, b in http.calls))

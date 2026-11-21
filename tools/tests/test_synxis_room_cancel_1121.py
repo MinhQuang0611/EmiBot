@@ -6,6 +6,7 @@ in as a second CANCEL row 1082; the build tool ran on it (ez_processed_at 03/11 
 build-stuck called it "not picked up" every day until the stay.
 """
 import os
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -52,7 +53,7 @@ class BuildWatchTest(unittest.TestCase):
             def send(self, text, buttons=None, topic=None):
                 self.sent.append(text)
 
-        st, tg = State(os.devnull + "-none"), Tg()
+        st, tg = State(tempfile.mktemp(suffix="-state.json")), Tg()
         build_watch.alert(st, tg, None, [i], "sales@haya-hotels.com", out=lambda *_: None)
         self.assertIn("wrote no ez_status", tg.sent[0])
         self.assertNotIn("not picked up", tg.sent[0])

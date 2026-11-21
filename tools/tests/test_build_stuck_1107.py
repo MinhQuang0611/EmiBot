@@ -7,6 +7,7 @@
 - That name change carried a provisional TA-card rate, and the build tool wrote it into EZFOLIO.
 """
 import os
+import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
@@ -85,7 +86,7 @@ class AlertTest(unittest.TestCase):
     ROWS = [r(1624, ez_status="error", ez_error="TPL còn 0", ez_processed_at="2026-11-07T05:45:20")]
 
     def test_once_per_stop_as_a_question_on_the_agency_email(self):
-        st, tg = State(os.devnull + "-none"), FakeTg()
+        st, tg = State(tempfile.mktemp(suffix="-state.json")), FakeTg()
         items = build_watch.stuck(self.ROWS, emi.booking_state, NOW)
         self.assertEqual(len(build_watch.alert(st, tg, FakeMail(), items, MAILBOX, out=lambda *_: None)), 1)
         [(qid, q)] = st.open_questions().items()
@@ -96,7 +97,7 @@ class AlertTest(unittest.TestCase):
         self.assertEqual(len(tg.sent), 1)
 
     def test_the_build_tool_stopping_again_is_a_new_stop(self):
-        st, tg = State(os.devnull + "-none"), FakeTg()
+        st, tg = State(tempfile.mktemp(suffix="-state.json")), FakeTg()
         build_watch.alert(st, tg, FakeMail(), build_watch.stuck(self.ROWS, emi.booking_state, NOW), MAILBOX,
                           out=lambda *_: None)
         again = [dict(self.ROWS[0], ez_processed_at="2026-11-07T10:00:00")]
@@ -105,7 +106,7 @@ class AlertTest(unittest.TestCase):
 
     def test_no_second_question_when_one_is_open(self):
         # Footprint 06/11: E-297 was asked from job 1 when the agency chased
-        st, tg = State(os.devnull + "-none"), FakeTg()
+        st, tg = State(tempfile.mktemp(suffix="-state.json")), FakeTg()
         qid = st.ask("031P0127J", "đổi ngày dừng ở EZFOLIO", "m1")
         rows = [r(1177, booking_ref="031P0127J", ez_status="needs_review", ez_note="Hết phòng TPL đêm 13/01")]
         build_watch.alert(st, tg, FakeMail(), build_watch.stuck(rows, emi.booking_state, NOW), MAILBOX,
@@ -114,7 +115,7 @@ class AlertTest(unittest.TestCase):
         self.assertIn(f"{qid}</b> (asked, no answer yet", tg.sent[0])
 
     def test_telegram_off_records_nothing(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         items = build_watch.stuck(self.ROWS, emi.booking_state, NOW)
         self.assertEqual(build_watch.alert(st, None, FakeMail(), items, MAILBOX, out=lambda *_: None), [])
         self.assertEqual((st.data.get("build_alerts"), st.open_questions()), ({}, {}))
@@ -140,7 +141,7 @@ class NoMail:
 
 class NameChangeTest(unittest.TestCase):
     def due(self, rows):
-        return payments.needs_confirmation(rows, emi.booking_state, emi._parts, NoMail(), State(os.devnull + "-none"),
+        return payments.needs_confirmation(rows, emi.booking_state, emi._parts, NoMail(), State(tempfile.mktemp(suffix="-state.json")),
                                            MAILBOX, date(2026, 11, 7))
 
     def test_a_built_name_change_is_owed_its_confirmation(self):

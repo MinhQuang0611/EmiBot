@@ -7,6 +7,7 @@ Pegas 11131133: QPL on request declined (CANCEL row 1845, group 31000 cancelled 
 allotment under the same number. "phải build lại": NEW rows, a new group, a new confirmation; the CHANGE row 1864 got
 ez_status no_change and no PDF."""
 import os
+import tempfile
 import unittest
 from datetime import date, datetime
 from types import SimpleNamespace
@@ -52,7 +53,7 @@ class ExistingGroupTest(unittest.TestCase):
         self.assertTrue(emi._built(odeon()))
 
     def test_an_early_draft_is_finished_after_arrival(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         self.assertEqual(due([odeon()], st), [])  # in house, nothing drafted: no confirmation owed any more
         st.record_draft("d1", "V9SLHPMH5_11_1", 1738, "confirmation", awaiting_pdf=True)
         st.data["reviews"]["700"] = {"draft_id": "d1", "status": "open"}
@@ -68,7 +69,7 @@ class RebookTest(unittest.TestCase):
         self.assertEqual([r["_row"] for r in payments.since_rebook(pegas())], [1833, 1845, 1864])
 
     def test_the_cancelled_group_owes_nothing_the_rebuild_owes_its_confirmation(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d0", "Pegas 11131133", 1833, "confirmation")  # #740, the QPL confirmation
         self.assertEqual(due(pegas(), st), [])
         new = row(1900, channel_type="Tour operator", company="Pegas", booking_ref="Pegas 11131133",

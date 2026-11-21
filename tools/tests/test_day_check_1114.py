@@ -1,6 +1,7 @@
 """End-of-day check at 23:30 (dev, 2026-11-14): every email of the day against Emi's record and the intake sheet,
 so a booking or a cancellation that never reached the sheet is found the same day."""
 import os
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -19,7 +20,7 @@ def msg(sender, subject, received):
 
 class DayCheckTest(unittest.TestCase):
     def setUp(self):
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
         self.lines = []
 
     def run_check(self, messages, rows):

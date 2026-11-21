@@ -139,16 +139,24 @@ def _list(recipients):
 REMINDER_SUBJECT = re.compile(r"payment\s+reminder|nhắc\s+thanh\s+toán", re.I)
 
 
+def search_ours(mail, text, top=SEARCH_TOP):
+    """What sales@ itself sent that names text: Sent Items only, where the mailbox can search it alone. A search of
+    the whole mailbox for a group code is newest first, and mail that keeps naming the code (the hourly intake audit,
+    from 18/11) pushed a confirmation sent weeks before out of the first 25 (dev, 2026-11-21, #30487)."""
+    return (getattr(mail, "search_sent", None) or mail.search)(text, top=top)
+
+
 def find_confirmation(mail, code, mailbox, parts=()):
     """{id, sent_at, to, cc, slips} for the first mail sales@ sent with this group code, or None. slips = what the
     agency has sent since with an attachment, which may be a payment the sheet doesn't show yet. The code may be only
     in the PDF (Anex 112970549, 04/11: the mail search finds it there, the body doesn't have it): then the mail must
     have an attachment and name the booking (parts = its reference numbers)."""
-    hits = [m for m in mail.search(code, top=SEARCH_TOP)]
     when = lambda m: m.get("sentDateTime") or m.get("receivedDateTime") or ""
+    hits = None  # the agency's mail, searched only once a confirmation is found (the shell call stops at 30 s)
     # Greentours 0349-IN 1211 (15/11): its confirmation was never sent (held for the PDF's cancellation terms), but a
     # payment reminder carrying #31074 went on 14/11 and then counted as the confirmation, so a second one followed.
-    ours = sorted((m for m in hits if _addr(m) == mailbox.lower() and not REMINDER_SUBJECT.search(m.get("subject", ""))),
+    ours = sorted((m for m in search_ours(mail, code)
+                   if _addr(m) == mailbox.lower() and not REMINDER_SUBJECT.search(m.get("subject", ""))),
                   key=lambda m: (not m.get("hasAttachments"), when(m)))
     for m in ours:
         full = mail.get_message_bodies(m["id"])
@@ -156,6 +164,7 @@ def find_confirmation(mail, code, mailbox, parts=()):
         if code not in _text(full) and not (m.get("hasAttachments") and any(p in words for p in parts)):
             continue  # the number matched inside something else
         sent = _when(when(m))
+        hits = mail.search(code, top=SEARCH_TOP) if hits is None else hits
         slips = [x["id"] for x in hits if x.get("hasAttachments") and not is_internal(_addr(x))
                  and _addr(x) != mailbox.lower() and _when(when(x)) > sent]
         return {"id": m["id"], "sent_at": sent, "to": [a for a in _list(full.get("toRecipients")) if not is_internal(a)],
@@ -401,7 +410,7 @@ def _codes(r):
 def confirmed_since(mail, code, mailbox, since):
     """A mail from sales@ to the agency with an attachment since the change was built: Emi's draft sent, or a person's.
     Slips forwarded to accounting carry the code and a file too, so only mail to outside counts."""
-    for m in mail.search(code, top=SEARCH_TOP):
+    for m in search_ours(mail, code):
         when = m.get("sentDateTime") or m.get("receivedDateTime") or ""
         if _addr(m) != mailbox.lower() or not m.get("hasAttachments") or _when(when) < since:
             continue

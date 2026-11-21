@@ -5,7 +5,9 @@ bổ sung vào intake sheet rồi. Chị thấy rất nhiều New booking hoặc
 OTA confirmation with the PDF, to the email printed in the booking). The note is written only after the rows, so a
 notice with no note in its thread is one that isn't on the sheet; ota-audit lists the notices that have no rows."""
 import os
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest import mock
 
@@ -59,7 +61,7 @@ class Base(unittest.TestCase):
         p = mock.patch.dict(os.environ, {"EMI_DRAFT_MODE": "outlook"})
         p.start()
         self.addCleanup(p.stop)
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
         self.lines = []
 
     def note(self, mail, rows, mid="m1", ref="SynXis 92777EF003350 (Trip.com 1653718335673330)"):
@@ -199,7 +201,8 @@ class OtaAuditTest(Base):
         rows = [row(1937), row(1950, ref="Agoda 1783017402 / SynXis 92777EF003300"),
                 row(1960, ref="Trip.com 999999999 / SynXis 92777EF003399", guest_names="TRAN VAN A",
                     arrival="20/11/2026")]
-        counts = emi.ota_audit(mail, self.st, rows, days=7, out=self.lines.append)
+        counts = emi.ota_audit(mail, self.st, rows, days=7, out=self.lines.append,
+                               now=datetime(2026, 11, 14, 0, 0, tzinfo=timezone.utc))
         text = "\n".join(self.lines)
         self.assertEqual(counts, {"OK": 1, "CHECK": 2, "MISSING": 2})
         self.assertIn("OTA notices in the inbox", text)

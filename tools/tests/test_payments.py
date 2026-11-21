@@ -50,7 +50,7 @@ class FakeMail:
 
 
 def due(rows, mail, st=None, now=None):
-    st = st or State(os.devnull + "-none")
+    st = st or State(tempfile.mktemp(suffix="-state.json"))
     return payments.due(rows, emi.booking_state, emi._parts, mail, st, MAILBOX,
                         now or datetime(2026, 11, 3, 20, 0, tzinfo=VN))
 
@@ -68,7 +68,7 @@ class NotYetConfirmedTest(unittest.TestCase):
     def test_held_or_waiting_for_the_pdf_is_not_chased(self):
         for setup in (lambda st: st.data["confirmation_holds"].update({"31-130127": {"reason": "terms"}}),
                       lambda st: st.record_draft("d", "31-130127", 5, "confirmation", awaiting_pdf=True)):
-            st = State(os.devnull + "-none")
+            st = State(tempfile.mktemp(suffix="-state.json"))
             setup(st)
             r = due([row(5)], FakeMail(), st=st, now=datetime(2026, 11, 4, 3, 0, tzinfo=VN))
             self.assertEqual((r["remind"], len(r["no_confirmation"])), ([], 1))
@@ -76,7 +76,7 @@ class NotYetConfirmedTest(unittest.TestCase):
 
 class OrphanDraftTest(unittest.TestCase):  # Karen 15/11, Happy Vivu's DO NOT SEND draft left behind
     def test_untracked_emi_drafts_are_listed(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.data["reviews"]["975"] = {"draft_id": "sent-one", "status": "gone"}
         st.data["reviews"]["976"] = {"draft_id": "live", "status": "pending"}
         mail = SimpleNamespace(list_drafts=lambda only_emi=False: [
@@ -124,7 +124,7 @@ class DepositTest(unittest.TestCase):
         self.assertEqual(due(rows, FakeMail(), now=datetime(2026, 11, 6, 9, 0, tzinfo=VN))["remind"], [])
 
     def test_one_reminder_then_overdue(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d1", "31-130127", 5, "deposit_reminder")
         r = due([row(5)], FakeMail(), st=st, now=datetime(2026, 11, 5, 9, 0, tzinfo=VN))
         self.assertEqual(r["remind"], [])
@@ -183,7 +183,7 @@ class BalanceTest(unittest.TestCase):
         self.assertEqual(mail.searches, 0)
 
     def test_paid_since_flags_the_unsent_reminder(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d1", "31-130127", 5, "deposit_reminder")
         st.data["reviews"]["44"] = {"draft_id": "d1"}
         r = due([row(5, **self.PAID)], FakeMail(), st=st, now=datetime(2026, 11, 5, 9, 0, tzinfo=VN))
@@ -194,7 +194,7 @@ class BalanceTest(unittest.TestCase):
 class ConfirmationsDueTest(unittest.TestCase):
     def run_it(self, rows, mail, st=None):
         return payments.needs_confirmation(rows, emi.booking_state, emi._parts, mail,
-                                           st or State(os.devnull + "-none"), MAILBOX, date(2026, 11, 4))
+                                           st or State(tempfile.mktemp(suffix="-state.json")), MAILBOX, date(2026, 11, 4))
 
     def test_built_and_never_confirmed(self):
         anex = row(1110, channel_type="Tour operator", company="Anex", booking_ref="112970549", ezfolio_group_code="30800")
@@ -211,7 +211,7 @@ class ConfirmationsDueTest(unittest.TestCase):
         self.assertEqual(self.run_it([row(5)], FakeMail()), [])
 
     def test_already_drafted(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d1", "31-130127", 5, "confirmation")
         self.assertEqual(self.run_it([row(5)], FakeMail(code="other"), st), [])
 
@@ -233,7 +233,7 @@ class ChangeConfirmationTest(unittest.TestCase):
 
     def run_it(self, rows, mail, st=None):
         return payments.needs_confirmation(rows, emi.booking_state, emi._parts, mail,
-                                           st or State(os.devnull + "-none"), MAILBOX, date(2026, 11, 5))
+                                           st or State(tempfile.mktemp(suffix="-state.json")), MAILBOX, date(2026, 11, 5))
 
     def test_built_change_is_due_on_its_own_rows(self):
         items = self.run_it(self.rows(), FakeMail(sent_at="2026-11-02T03:00:00Z"))
@@ -267,12 +267,12 @@ class ChangeConfirmationTest(unittest.TestCase):
         self.assertEqual(len(self.run_it(self.rows(), mail)), 1)
 
     def test_already_drafted_on_the_change_row(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d1", "31-130127", 9, "confirmation")
         self.assertEqual(self.run_it(self.rows(), FakeMail(code="other"), st), [])
 
     def test_a_first_confirmation_draft_does_not_cover_the_change(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.record_draft("d1", "31-130127", 5, "confirmation")
         self.assertEqual(len(self.run_it(self.rows(), FakeMail(code="other"), st)), 1)
 
@@ -281,7 +281,7 @@ class ChangeConfirmationTest(unittest.TestCase):
         self.assertEqual(self.run_it(rows, FakeMail(code="other")), [])
 
     def test_held_until_the_pdf_is_remade_under_the_same_link(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         rows = self.rows()
         args = SimpleNamespace(ref="31-130127", row=9, reason=["PDF", "13", "rooms"], clear=False)
         with mock.patch.object(emi, "_row", return_value=rows[1]):
@@ -313,7 +313,7 @@ class ConfirmationInThePdfTest(unittest.TestCase):
 
 class HoldTest(unittest.TestCase):
     def setUp(self):
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
         self.rows = [row(5)]
         self.sheet = SimpleNamespace(rows=lambda: self.rows)
 
@@ -394,7 +394,7 @@ class ReminderDraftTest(unittest.TestCase):
         self.mail = mock.Mock()
         self.mail.reply_draft_with_text.return_value = {"id": "d9"}
         self.mail.get_draft.return_value = {"id": "d9", "subject": "RE: x", "toRecipients": [], "ccRecipients": []}
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
 
     def test_suffix_reaches_the_mailbox_and_the_record(self):
         emi.draft_reply(self.mail, self.st, self.args(self.path), out=lambda *_: None)

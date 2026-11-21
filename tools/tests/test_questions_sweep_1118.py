@@ -3,7 +3,7 @@ asked 30/10–18/11). questions-sweep closes what the sheet or the state shows s
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 
 from tools import emi, karen_memory
 from tools.state import State
@@ -22,6 +22,7 @@ def row(ref, action="NEW", dep="25/11/2026", at="01/11/2026 10:00", **k):
 
 
 TODAY = date(2026, 11, 18)
+NOW = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
 
 
 class SweepTest(unittest.TestCase):
@@ -35,7 +36,7 @@ class SweepTest(unittest.TestCase):
         return qid
 
     def sweep(self, rows, apply=True):
-        return emi.sweep_questions(Sheet(rows), self.st, apply=apply, out=self.lines.append, today=TODAY)
+        return emi.sweep_questions(Sheet(rows), self.st, apply=apply, out=self.lines.append, today=TODAY, now=NOW)
 
     def test_stay_over_cancelled_and_built_are_closed(self):
         over = self.ask("TA111", "Late check-out fee?")

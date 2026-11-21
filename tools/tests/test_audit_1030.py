@@ -210,7 +210,7 @@ class QuietPrecheckTest(unittest.TestCase):
     """F-15: 48 safety-net runs shown as 'Bash failed' because quiet exits 1."""
 
     def run_main(self, argv):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.mark_scanned("2026-10-30T00:00:00Z")
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": []})])
         out = io.StringIO()

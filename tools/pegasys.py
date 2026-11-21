@@ -299,8 +299,8 @@ def notices(mail, st, now, days=DAYS):
 
 def sent_confirmation(mail, booking_id, mailbox, after_iso, search_top=25):
     """The first mail from sales@ to an outside address, with a file, naming the booking, sent after the notice."""
-    from .payments import REMINDER_SUBJECT, _addr, _list
-    for m in sorted(mail.search(booking_id, top=search_top), key=lambda m: m.get("sentDateTime") or ""):
+    from .payments import REMINDER_SUBJECT, _addr, _list, search_ours
+    for m in sorted(search_ours(mail, booking_id, top=search_top), key=lambda m: m.get("sentDateTime") or ""):
         sent = m.get("sentDateTime") or m.get("receivedDateTime") or ""
         if (_addr(m) != mailbox.lower() or not m.get("hasAttachments") or sent <= after_iso
                 or REMINDER_SUBJECT.search(m.get("subject", ""))):

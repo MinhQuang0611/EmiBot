@@ -2,6 +2,7 @@
 line, no Karen in drafts, phishing senders dropped, forwards made once, reply all, the stop-sales list, and a
 sheet without tracy_status whose EZFOLIO columns Emi never writes."""
 import os
+import tempfile
 import shutil
 import unittest
 from datetime import date
@@ -48,7 +49,7 @@ class CheckLineTest(unittest.TestCase):
 
 class PhishingTest(unittest.TestCase):
     def test_fake_booking_senders_are_not_listed(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.mark_scanned("2026-10-29T00:00:00Z")
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
             {"id": "p1", "receivedDateTime": "2026-10-29T01:00:00Z", "subject": "New booking",

@@ -6,6 +6,7 @@ went to Karen as E-377/378/379 "không nêu quốc tịch; cần xác nhận qu�
 "TẤT CẢ CÁC EMAIL ĐỀU PHẢI CÓ REPLY HẾT NHÉ. Ghi noreply thì vẫn phải reply" — to the email printed in the booking,
 the confirmation with the PDF; no reply only for spam, OTP, machine alerts, internal and Palma mail."""
 import os
+import tempfile
 import unittest
 from datetime import date
 from types import SimpleNamespace
@@ -81,7 +82,7 @@ class NoReplySenderTest(unittest.TestCase):
 
 class NationalityIsNoQuestionTest(unittest.TestCase):
     def ask(self, q):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         return emi.ask_karen(st, None, "m1", q, ref="SynXis 92777EF003350 (Trip.com)", out=lambda *_: None)
 
     def test_the_10_11_question_is_refused(self):
@@ -134,7 +135,7 @@ class MissingGoesToColumnAJTest(unittest.TestCase):
 
 class DoneNeedsAReplyTest(unittest.TestCase):
     def setUp(self):
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
         self.lines = []
 
     def check(self, outcome, sender=SYNXIS, subject=SUBJECT, mid="m1"):
@@ -262,7 +263,7 @@ def ota(n, received, **kw):
 
 
 def owed(rows, st=None):
-    st = st or State(os.devnull + "-none")
+    st = st or State(tempfile.mktemp(suffix="-state.json"))
     return payments.needs_confirmation(rows, emi.booking_state, emi._parts, FakeMail(code="none"), st, MAILBOX,
                                        date(2026, 11, 13))
 

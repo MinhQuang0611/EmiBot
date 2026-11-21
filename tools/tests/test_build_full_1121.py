@@ -4,6 +4,7 @@ asked Karen every 45 minutes. A new booking with no room at all is declined at o
 no question, and an open question about it is closed. A partial fit or a change still goes to Karen.
 """
 import os
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -66,7 +67,7 @@ class NoRoomTest(unittest.TestCase):
         self.assertEqual(i["kind"], "stuck")
 
     def test_declined_once_no_question_and_the_open_one_closed(self):
-        st, tg = State(os.devnull + "-none"), FakeTg()
+        st, tg = State(tempfile.mktemp(suffix="-state.json")), FakeTg()
         qid = st.ask("MG AGIN0116572611657606 / HB2611488385", "build tool stopped", "mg-mail")  # E-638
         items = build_watch.stuck([r(2516)], emi.booking_state, NOW)
         self.assertEqual(len(build_watch.alert(st, tg, FakeMail(), items, MAILBOX, out=lambda *_: None)), 1)
@@ -87,7 +88,7 @@ class NoRoomTest(unittest.TestCase):
             def rows(self):
                 return [r(2516)]
 
-        emi.run_build_stuck(Sheet(), State(os.devnull + "-none"), out=lines.append)
+        emi.run_build_stuck(Sheet(), State(tempfile.mktemp(suffix="-state.json")), out=lines.append)
         text = "\n".join(lines)
         self.assertIn("DECLINE |", text)
         self.assertIn("no question to Karen", text)

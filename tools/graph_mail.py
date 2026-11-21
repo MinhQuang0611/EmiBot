@@ -448,6 +448,18 @@ def _no_quote(address):
     return any(a.endswith("@" + d) or a.endswith("." + d) for d in NO_QUOTE_DOMAINS)
 
 
+# Mail that only repeats refs and group codes. The hourly "HAYA intake audit" (Tracy's check of Emi's work, sent into
+# sales@ since 18/11) names every open booking, so a search for a group code came back as 25 audits and never reached
+# the confirmation sent weeks before (dev, 2026-11-21: Travel Concierge 2793131 #30487, balance 3,300,000 short,
+# stayed "NO CONFIRMATION FOUND" and got no reminder). Left out of searches for a booking; the inbox scan still reads
+# every audit, and a search for the audit itself still finds it.
+SEARCH_NOISE = re.compile(r"^\s*(?:(?:re|fw|fwd)\s*:\s*)*HAYA intake audit\b", re.I)
+
+
+def is_search_noise(message):
+    return bool(SEARCH_NOISE.search(message.get("subject") or ""))
+
+
 def is_internal(address):
     a = (address or "").strip().lower()
     return any(a.endswith("@" + d) or a.endswith("." + d) for d in INTERNAL_DOMAINS)
@@ -522,10 +534,22 @@ class GraphMail:
         return self.list_folder_since("sentitems", since_iso, field="sentDateTime")
 
     def search(self, text, top=10):
-        """Messages anywhere in the mailbox matching text (subject, body, sender), newest first."""
+        """Messages anywhere in the mailbox matching text (subject, body, sender), newest first, reports that only
+        repeat refs (SEARCH_NOISE) left out."""
+        return self._search("/messages", text, top)
+
+    def search_sent(self, text, top=10):
+        """Only what sales@ sent (Sent Items): confirmations, reminders, forwards. Whatever floods the inbox can't
+        push them out of the results."""
+        return self._search("/mailFolders/sentitems/messages", text, top)
+
+    def _search(self, path, text, top):
+        # Graph is asked for more than `top`: the noise is dropped after it answers.
         q = self._query(search=f'"{text.replace(chr(34), "")}"', select="id,subject,from,receivedDateTime,sentDateTime,"
-                                                                         "hasAttachments,isDraft", top=str(top))
-        return [m for m in self._call("GET", f"/messages?{q}").get("value", []) if not m.get("isDraft")]
+                                                                         "hasAttachments,isDraft", top=str(max(top * 2, 50)))
+        wanted = is_search_noise({"subject": text}) or "intake audit" in text.lower()  # looking for the audit itself
+        return [m for m in self._call("GET", f"{path}?{q}").get("value", [])
+                if not m.get("isDraft") and (wanted or not is_search_noise(m))][:top]
 
     def list_from_since(self, address, since_iso):
         """Messages from one sender, any folder, received at or after since_iso (the Pegas robot, tools/pegasys.py)."""

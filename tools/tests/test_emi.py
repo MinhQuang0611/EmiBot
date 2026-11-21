@@ -39,7 +39,7 @@ class InboxNewTest(unittest.TestCase):
         os.environ.pop("EMI_TEST_ONLY_FROM", None)
 
     def test_skips_processed_and_reports_scan_start(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.mark_scanned("2026-10-15T00:00:00Z")
         st.mark_processed("m1", "intake NEW SB-1")
         mail, http = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
@@ -57,7 +57,7 @@ class InboxNewTest(unittest.TestCase):
         self.assertIn("receivedDateTime ge 2026-10-12T00:00:00Z", http.calls[0][1])
 
     def test_an_email_before_the_clock_never_done_is_listed_again(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.mark_scanned("2026-10-15T00:00:00Z")
         st.mark_processed("m0", "done")
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
@@ -72,7 +72,7 @@ class InboxNewTest(unittest.TestCase):
         self.assertEqual(text.count("MISSED EARLIER"), 1)
 
     def test_test_mode_reads_only_the_test_sender(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.mark_scanned("2026-10-15T07:00:00Z")
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": [
             {"id": "real", "receivedDateTime": "2026-10-15T07:01:00Z", "from": {"emailAddress": {"address": "ops@agency.vn"}}},
@@ -97,7 +97,7 @@ class InboxNewTest(unittest.TestCase):
     def test_first_scan_looks_back_24_hours(self):
         mail, http = mail_with([("GET", "/mailFolders/inbox/messages", {"value": []})])
         lines = []
-        emi.inbox_new(mail, State(os.devnull + "-none"), out=lines.append)
+        emi.inbox_new(mail, State(tempfile.mktemp(suffix="-state.json")), out=lines.append)
         self.assertIn("first scan", lines[0])
         self.assertIn("receivedDateTime ge ", http.calls[0][1])
 
@@ -550,14 +550,14 @@ class ConfirmationPdfTest(unittest.TestCase):
         mail, http = mail_with()
         empty = {"sheets": [{"data": [{"rowData": [{}]}]}]}
         with self.assertRaises(emi.Refused):
-            emi.draft_confirmation(mail, self.sheet(empty), State(os.devnull + "-none"), self.args(), out=lambda *_: None)
+            emi.draft_confirmation(mail, self.sheet(empty), State(tempfile.mktemp(suffix="-state.json")), self.args(), out=lambda *_: None)
         self.assertEqual(http.calls, [])
 
     def test_not_a_pdf_no_draft(self):
         mail, http = mail_with()
         with mock.patch.object(emi, "WORK_DIR", self.dir.name), self.assertRaises(emi.Refused) as e:
             emi.draft_confirmation(mail, self.sheet(chip(self.URL), mime="image/png", data=b"\x89PNG"),
-                                   State(os.devnull + "-none"), self.args(), out=lambda *_: None)
+                                   State(tempfile.mktemp(suffix="-state.json")), self.args(), out=lambda *_: None)
         self.assertIn("not a PDF", str(e.exception))
         self.assertEqual(http.calls, [])
 
@@ -672,13 +672,13 @@ class DraftCommandsTest(unittest.TestCase):
         mail, http = mail_with()
         args = SimpleNamespace(message_id="m1", body=self.body, all=False, kind="confirmation", ref="SB-2", row="")
         with self.assertRaises(emi.Refused):
-            emi.draft_reply(mail, State(os.devnull + "-none"), args, out=lambda *_: None)
+            emi.draft_reply(mail, State(tempfile.mktemp(suffix="-state.json")), args, out=lambda *_: None)
         self.assertEqual(http.calls, [])
 
 
 class StateProcessedTest(unittest.TestCase):
     def test_mark_scanned_forgets_week_old_ids(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         st.data["processed"] = {"old": {"at": "2026-10-01T00:00:00Z", "outcome": "x"},
                                 "new": {"at": "2026-10-14T00:00:00Z", "outcome": "y"}}
         st.mark_scanned("2026-10-15T00:00:00Z")

@@ -239,7 +239,7 @@ class StateTest(unittest.TestCase):
 
 class PrecheckTest(unittest.TestCase):
     def test_inbox(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         mail, _ = mail_with([("GET", "/mailFolders/inbox/messages", {"value": []})])
         self.assertTrue(precheck.inbox_has_work(mail, st))  # never scanned
         st.mark_scanned("2026-10-08T00:00:00Z")

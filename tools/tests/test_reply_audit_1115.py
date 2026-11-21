@@ -1,6 +1,7 @@
 """reply-audit (dev, 2026-11-15): "CÁC EMAIL 13/11 - CHO EMI CHẠY REPLY HẾT NHÉ, thấy sót nhiều lắm". Every inbox
 email since a day against Sent Items and Emi's drafts: SENT, DRAFTED, DELETED, NO REPLY; noise not listed."""
 import os
+import tempfile
 import unittest
 
 from tools import emi
@@ -24,7 +25,7 @@ class Mail:
 
 class ReplyAuditTest(unittest.TestCase):
     def setUp(self):
-        self.st = State(os.devnull + "-none")
+        self.st = State(tempfile.mktemp(suffix="-state.json"))
         self.lines = []
 
     def review(self, n, source, status, kind="reply"):

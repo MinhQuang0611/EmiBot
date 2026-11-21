@@ -3,6 +3,7 @@ no COD, no payment columns) put 58 bookings into job 3: a deposit reminder to Oh
 (V26062610072H01, draft #613), reminders to MG and Mytour (OTAs written as "TA"), and ~40 "no confirmation found"
 lines. Same run: RHK BG15963 shown unpaid after a 19,400,000 deposit, Threeland 31-130127's extension not read."""
 import os
+import tempfile
 import unittest
 from datetime import datetime
 
@@ -89,7 +90,7 @@ class OldExtensionTest(unittest.TestCase):
         self.assertEqual(payments.fixed_deadline(cod), datetime(2026, 11, 12, 23, 59, tzinfo=VN))
 
     def test_threeland_is_not_overdue_before_its_new_deadline(self):
-        st = State(os.devnull + "-none")
+        st = State(tempfile.mktemp(suffix="-state.json"))
         cod = "Deposit deadline extended to 12/11/2026 (agency request)"
         r = due([row(1328, COD=cod)], FakeMail(), st=st, now=NOW)
         self.assertEqual((r["remind"], r["overdue"]), ([], []))

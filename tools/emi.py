@@ -303,9 +303,12 @@ def check_vouchers_handled(message_id, outcome, load_rows, work_dir=None, out=pr
 # Dev, 2026-11-13: "TẤT CẢ CÁC EMAIL ĐỀU PHẢI CÓ REPLY HẾT NHÉ. Ghi noreply thì vẫn phải reply". done refuses an email
 # that has no draft of its own, unless the outcome says why there is none in one of the dev's four exceptions, or a
 # person at HAYA already answered it. The Trip.com notices of 10/11 were closed with "waits on Karen … no row written".
-NO_REPLY_OK = re.compile(r"^\s*NO REPLY:\s*(?:spam|marketing|newsletter|quảng cáo|phishing|otp|passcode|mã otp|alert|"
-                         r"cảnh báo|maintenance|bảo trì|system|hệ thống|internal|nội bộ|palma)\b", re.I)
-ANSWERED_BY_STAFF = re.compile(r"^\s*ANSWERED BY STAFF\b", re.I)
+# Job 6 closes what it looked at with an outcome beginning "DAY CHECK:" (schedule.md), so the same reasons may follow
+# it: on 20/11 23:30 "DAY CHECK: NO REPLY: alert" was refused and four emails stayed on the day check.
+_DAY_CHECK = r"^\s*(?:DAY CHECK:\s*)?"
+NO_REPLY_OK = re.compile(_DAY_CHECK + r"NO REPLY:\s*(?:spam|marketing|newsletter|quảng cáo|phishing|otp|passcode|mã otp|"
+                         r"alert|cảnh báo|maintenance|bảo trì|system|hệ thống|internal|nội bộ|palma)\b", re.I)
+ANSWERED_BY_STAFF = re.compile(_DAY_CHECK + r"ANSWERED BY STAFF\b", re.I)
 OTA_NOTICE_DOMAINS = ("synxis.com", "agoda.com", "booking.com", "expedia.com", "expediapartnercentral.com", "trip.com",
                       "ctrip.com", "traveloka.com", "ohmyhotel.com", "mytour.vn", "vntrip.vn", "didatravel.com",
                       "makemytrip.com", "hotelbeds.com", "webbeds.com", "dotw.com")
@@ -501,12 +504,13 @@ def notice_rows(mail, m, rows):
     return [], "no match"
 
 
-def ota_audit(mail, st, rows, days=7, out=print):
+def ota_audit(mail, st, rows, days=7, out=print, now=None):
     """ota-audit [--days N], read only (Karen, 14/11: "rất nhiều New booking hoặc cancel bị miss"): every OTA or
     SynXis booking notice in the inbox of the last N days against the intake sheet and Emi's own record. One line per
     notice: OK, CHECK (on the sheet, something to look at) or MISSING (not on the sheet as it should be). Done-ness is
     known for 7 days (processed ids are kept that long)."""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = now or datetime.now(timezone.utc)
+    since = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     notices = [m for m in mail.list_inbox_since(since) if is_ota_notice(_sender(m), m.get("subject", ""))]
     rows = _dedupe(rows)
     drafts = {}
@@ -527,7 +531,7 @@ def ota_audit(mail, st, rows, days=7, out=print):
             missing.append("cancelled, but no CANCEL row")
         elif action == "CHANGE" and not any(r.get("action") == "CHANGE" for r in hits):
             check.append("modification: no CHANGE row (fine only if the NEW row was updated before the build)")
-        recent = m["receivedDateTime"][:19] >= (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+        recent = m["receivedDateTime"][:19] >= (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
         if done is None and recent:  # done-ness is only kept 7 days (State.mark_scanned)
             (missing if not hits else check).append("never marked done by Emi")
         mark = "MISSING" if missing else "CHECK" if check else "OK"
@@ -3812,12 +3816,12 @@ def _why_settled(qid, q, rows, st, today):
     return None
 
 
-def sweep_questions(sheet, st, apply=False, out=print, today=None):
+def sweep_questions(sheet, st, apply=False, out=print, today=None, now=None):
     """Every open question at least SWEEP_MIN_DAYS old: CLOSE with the reason, or KEEP. --apply closes them.
     A booking with a held confirmation is always kept (its hold waits on the answer)."""
     today = today or _today_vn()
     rows = sheet.rows()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=SWEEP_MIN_DAYS)
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=SWEEP_MIN_DAYS)
     close, keep, young = [], [], 0
     for qid, q in sorted(st.open_questions().items(), key=lambda kv: _qnum(kv[0])):
         asked = datetime.fromisoformat((q.get("asked_at") or now_iso()).replace("Z", "+00:00"))
