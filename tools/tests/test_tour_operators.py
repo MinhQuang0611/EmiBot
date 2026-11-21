@@ -41,10 +41,12 @@ class OnRequestTest(unittest.TestCase):
         self.assertEqual(v, "REJECT")
         self.assertIn("11/12 (61%)", why[0])
 
-    def test_over_60_but_close_accepts(self):
+    def test_over_60_close_rejects_too(self):
+        # dev 21/11: high occupancy in the coming days -> decline suggestion (Karen decides), no longer accept
         v, why = operators.on_request(occupancy([70], start=date(2026, 11, 20)), [], date(2026, 11, 20), self.TODAY)
-        self.assertEqual(v, "ACCEPT")
-        self.assertIn("within 30 days", why[1])
+        self.assertEqual(v, "REJECT")
+        self.assertIn("20/11 (70%)", why[0])
+        self.assertIn("within 30", why[0])
 
     def test_free_and_quiet_accepts(self):
         # dev 07/11, Anex 112976780 on 05/11: STD free, occupancy 24-44%, 36 days away -> accept, not ask Karen
@@ -56,9 +58,9 @@ class OnRequestTest(unittest.TestCase):
         self.assertEqual(v, "ASK KAREN")
         self.assertIn("11/12", why[0])
 
-    def test_missing_occupancy_close_accepts(self):
+    def test_missing_occupancy_close_asks_karen(self):
         v, _ = operators.on_request(occupancy([None], start=date(2026, 11, 20)), [], date(2026, 11, 20), self.TODAY)
-        self.assertEqual(v, "ACCEPT")  # within 30 days occupancy doesn't decide
+        self.assertEqual(v, "ASK KAREN")  # dev 21/11: near check-in occupancy decides too
 
 
 class OnRequestGateTest(unittest.TestCase):
