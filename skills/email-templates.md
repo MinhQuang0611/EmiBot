@@ -292,7 +292,8 @@ sales@haya-hotels.com
 English: same blocks in the order of section 1 English; opening `Thank you for your email. Please find the revised booking confirmation below[; the group has been rebuilt under a new group code, and the old group code #[old] has been cancelled]:`; `Room: [new] (instead of [old])`; block A/B as in Vietnamese; `Please see the revised PDF attached. It replaces the earlier confirmation.`
 - **A quote that replaces an earlier one** says so: `Báo giá này thay thế báo giá phòng [hạng] gửi lúc [HH:MM] ngày [DD/MM/YYYY].`
 
-## 3. Cancellation confirmed (`draft-reply --kind cancellation`) — as soon as the CANCEL row is written for a clear cancellation; Karen first only when the fee or the booking is unclear (AGENTS.md rule 7)
+## 3. Cancellation confirmed (`draft-reply --kind cancellation --ref <ref>`) — as soon as the CANCEL row is written for a clear cancellation; Karen first only when the fee or the booking is unclear (AGENTS.md rule 7)
+**Sent at once (dev, 2026-11-21)** when `cancellation` is in `EMI_AUTO_SEND` and the ref's current rows are CANCEL rows; any open confirmation draft of that booking goes to Deleted Items. No `--ref`, no CANCEL row, a CHECK line (fee unclear) or a no-reply recipient → a normal draft. "Please ignore this booking request, booking was cancelled" (Travel Concierge 2817840, 21/11) is a cancellation: CANCEL rows, then this form, never a `--kind reply`.
 Sources: Anex 112887487 (14/10), Anex 112885099 (15/10).
 
 English (tour operators and most agencies):
@@ -665,7 +666,7 @@ Cancellation of an operator booking: section 3.
 
 ## 7. Airport transfer asked for (`--kind pickup`, sent at once on FREE / PAID, Karen 2026-11-19)
 Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
-- **The guest gets one answer: free or paid (dev, 05/11, Ms. Ip's draft).** Never the rule on its own ("applies when the amount paid is above USD 250", "if the booking does not qualify") and never both outcomes in one draft.
+- **The guest gets one answer: free or paid (dev, 05/11, Ms. Ip's draft).** `draft-reply --kind pickup` refuses a text that gives both or puts the rule as a condition ("if the booking is below…", "please confirm the paid amount"; Utegelova #1550, 21/11). Never the rule on its own ("applies when the amount paid is above USD 250", "if the booking does not qualify") and never both outcomes in one draft.
 - **The answer comes from `pickup`, never from one row (dev, 06/11).** `py -m tools.emi pickup <booking_ref> --ota-rooms <N>`, N = the room count the OTA itself gives: the Booking.com message's `Tổng số phòng` / `Total rooms`, the voucher, or the SynXis notices. It adds up **every room of the booking**: an OTA booking reaches SynXis one room per number, so a 2-room Booking.com booking is two SynXis numbers and two NEW rows, and the guest's messages land on one of them. On 06/11 Emi priced two such bookings on one room and told both guests the pick-up was paid (Erkinbek Uzakbaev 6907944253: 003193 + 003194 = 11,520,000; Adrian Sequeira 5337759531: Booking.com says 2 rooms, the sheet had 003205 only). The figure the guest paid, when the email or voucher gives it, goes in with `--paid-vnd` / `--paid-usd` (an Agoda voucher's `Reference sell rate`, not `Total Cost with Tax`, which is the net). `PICK-UP: FREE` → the free form below; `PAID` → the paid form; `CHECK` → its `why` says what to read or pass; still nothing → the CHECK case at the end of this section. A note that a room is missing from the sheet → find its email (`mail-find <surname>`) and write the row before the reply.
 - **One answer per booking, kept.** Before drafting, read what sales@ already told this guest about the pick-up (`show` the thread). A new draft never contradicts it: a guest told the driver will contact him is not later told the pick-up is paid and unconfirmed.
 - **Qualifies for the free one-way transfer** (the amount **the guest paid** is above USD 250, never the hotel's net: `hotel-info.md`, Karen 04/11 and 12/11). This applies to every OTA, including Trip.com, Agoda, Booking.com and Expedia. Confirm it outright, no CHECK BEFORE SENDING line and no "being verified":
@@ -685,7 +686,8 @@ Sources: Agoda 2058164209 (19/10), Klook KOK (16/10), Tushar Malik (25/10).
   Our driver will meet you in the arrival hall after you have cleared immigration and collected your baggage.
   ```
 - **Doesn't qualify:** `Complimentary one-way airport pick-up applies when the amount paid for the booking is above USD 250. Your booking is below that amount, so pick-up is available as a paid transfer at [price] VND one way.` Price from `hotel-info.md` (200.000 VND, 4-seat car); a larger car's price → Karen until it's in `hotel-info.md`. Then `If you would like us to arrange it, please reply to confirm and send your flight number and landing time.`
-- **`pickup` says CHECK and the booking email has no figure, or it falls between the two marks in `hotel-info.md`:** still one form, with `[CHECK BEFORE SENDING: guest paid <figure or "not shown">, confirm free or paid]` on top and `ask-karen`. Above the upper mark on the net alone → the free form, no check line. Otherwise the paid form.
+- **One rate, 26,000 VND/USD (dev, 2026-11-21): USD 250 = 6,500,000 VND.** A guest figure above it → free, at or below → paid; no in-between CHECK any more.
+- **`pickup` says CHECK (the sheet holds only the hotel's net, below 6,500,000, and the booking email has no guest figure):** still one form, with `[CHECK BEFORE SENDING: guest paid <figure or "not shown">, confirm free or paid]` on top and `ask-karen`. Net above 6,500,000 alone → the free form, no check line. Otherwise the paid form.
 - Asking for the flight here is fine: they asked for the transfer.
 - **`--kind pickup --ref <the ref given to pickup>` (Karen, 2026-11-19, auto-send list).** `draft-reply` refuses it before `pickup <ref>` has run. With `pickup` in `EMI_AUTO_SEND` the reply goes out at once when `pickup` said FREE or PAID and the text matches: the paid form names 200,000 VND, the free form doesn't. CHECK, TA, a CHECK line or a mismatch → a normal draft with the reason on Telegram.
 
@@ -715,7 +717,7 @@ Reservations Team
 HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
 sales@haya-hotels.com
 ```
-A guest asking the same (via a booking platform's relay address): `Dear Guest,` / `Thank you for your email. We confirm that your reservation at HAYA Hotel Phu Quoc, Trademark Collection by Wyndham is held in our system as Definite:` + the lines.
+A guest asking the same, or just "have you received my booking?" (via a booking platform's relay address or direct): `--kind booking_status --ref <ref on the sheet>`, sent at once (dev, 2026-11-21; refused when the ref is not on the sheet or is cancelled). `Dear [Name],` / `Thank you for your email. We confirm that your reservation at HAYA Hotel Phu Quoc, Trademark Collection by Wyndham is held in our system:` + booking reference, guest name, stay, room(s) + `We look forward to welcoming you.` No CHECK line unless something on the sheet differs from what the guest wrote (that holds it for a person).
 
 ## 9. Short replies — decline, "thank you", fully booked (`--kind reply`)
 - **They decline our offer:** `Thank you for letting us know.` + `We look forward to welcoming you on [DD/MM/YYYY].` (they still have a booking) or `We hope to welcome you on another occasion.` Don't try to win them back with a price (Karen's).

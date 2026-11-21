@@ -84,7 +84,7 @@ class AutoSendTest(unittest.TestCase):
         self.assertEqual(self.last()["status"], emi.REVIEW_OPEN)
 
     def test_kinds_outside_the_list_are_never_sent(self):
-        self.env(ALL + ",reply,confirmation,cancellation,request")
+        self.env(ALL + ",reply,confirmation,request,decline")
         self.assertEqual(emi.auto_send_kinds(), set(ALL.split(",")))
         d = self.reply("reply", "Dear Sir,\n\nThank you.\n\nBest regards,\nReservations Team")
         self.assertFalse(self.mail._meta(d["id"]).get("sent"))

@@ -8,9 +8,11 @@ every room of the booking, adds them up and gives one outcome.
 """
 import re
 
-FREE_FROM_VND = 6_750_000      # above USD 250 at any rate up to 27,000 (hotel-info.md)
-PAID_BELOW_VND = 6_000_000     # below USD 250 at any rate down to 24,000
 THRESHOLD_USD = 250
+# dev, 2026-11-21 ("cứ set giá là 26000 đi"): one fixed rate, no "depends on the exchange rate" band. Before, a figure
+# between 6,000,000 and 6,750,000 was CHECK (Utegelova/Gelnara Trip.com 1539369445053786 sat in Drafts as #1550).
+USD_RATE_VND = 26_000
+FREE_ABOVE_VND = THRESHOLD_USD * USD_RATE_VND   # 6,500,000: above it = above USD 250
 PAID_PRICE = "200,000 VND one way (4-seat car, hotel-info.md)"
 
 FREE, PAID, CHECK, TA = "FREE", "PAID", "CHECK", "TA"
@@ -128,7 +130,7 @@ def check(rows, ref, parts, ota_rooms=None, paid_vnd=None, paid_usd=None):
     if short:
         notes.append(f"the OTA says {ota_rooms} rooms, the sheet has {rooms}: a room is missing from the sheet. "
                      "Find its SynXis/OTA email (mail-find <surname>), write the row, then run pickup again")
-    if total >= FREE_FROM_VND and kind in ("guest", "net"):
+    if total > FREE_ABOVE_VND and kind in ("guest", "net"):
         # what the guest paid is never below the net, and the missing rooms only add to it
         return dict(res, outcome=FREE, why=f"{_vnd(total)} for {rooms} room(s) "
                                             f"({'guest total' if kind == 'guest' else 'net: the guest paid more'})")
@@ -153,12 +155,10 @@ def check(rows, ref, parts, ota_rooms=None, paid_vnd=None, paid_usd=None):
 
 
 def _by_vnd(amount, what):
-    if amount >= FREE_FROM_VND:
-        return {"outcome": FREE, "why": f"{_vnd(amount)} {what}"}
-    if amount < PAID_BELOW_VND:
-        return {"outcome": PAID, "why": f"{_vnd(amount)} {what}"}
-    return {"outcome": CHECK, "why": f"{_vnd(amount)} {what}: between 6,000,000 and 6,750,000, depends on the "
-                                     "exchange rate -> ask-karen"}
+    rate = f"USD 250 = {_vnd(FREE_ABOVE_VND)} at {USD_RATE_VND:,}"
+    if amount > FREE_ABOVE_VND:
+        return {"outcome": FREE, "why": f"{_vnd(amount)} {what}, above {rate}"}
+    return {"outcome": PAID, "why": f"{_vnd(amount)} {what}, not above {rate}"}
 
 
 def _vnd(n):

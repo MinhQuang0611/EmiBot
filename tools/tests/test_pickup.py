@@ -60,7 +60,12 @@ class PickupTest(unittest.TestCase):
         self.assertEqual(check(agoda, "1794048417", paid_vnd=7387200)["outcome"], pickup.FREE)
         self.assertEqual(check(agoda, "1794048417", paid_usd=250)["outcome"], pickup.PAID)
         self.assertEqual(check(agoda, "1794048417", paid_usd=275)["outcome"], pickup.FREE)
-        self.assertEqual(check(agoda, "1794048417", paid_vnd=6300000)["outcome"], pickup.CHECK)  # between marks
+        # one rate, 26,000 (dev 21/11): no "between the marks" CHECK any more
+        self.assertEqual(check(agoda, "1794048417", paid_vnd=6300000)["outcome"], pickup.PAID)
+        self.assertEqual(check(agoda, "1794048417", paid_vnd=6500000)["outcome"], pickup.PAID)  # = USD 250, not above
+        self.assertEqual(check(agoda, "1794048417", paid_vnd=6500001)["outcome"], pickup.FREE)
+        mid_net = [dict(agoda[0], total_vnd="6600000")]
+        self.assertEqual(check(mid_net, "1794048417")["outcome"], pickup.FREE)      # net above 6,500,000
         big_net = [dict(agoda[0], total_vnd="6900000")]
         self.assertEqual(check(big_net, "1794048417")["outcome"], pickup.FREE)       # guest paid at least the net
 

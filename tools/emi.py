@@ -1831,7 +1831,8 @@ def booking_email(text):
 
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
-GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup")
+GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup",
+               "booking_status")
 REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
@@ -2017,9 +2018,13 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     check_not_stop_sales(args.kind)
     text = read_text(args.body) if text is None else text
     check_no_gaps(text, args.message_id)
+    if args.kind == "pickup":
+        check_pickup_one_answer(text)
     if rows is not None:
         rows = functools.lru_cache(maxsize=None)(rows)  # read the sheet once
         check_bank_details_booked(text, args.kind, args.ref, rows)
+    if args.kind == "booking_status":
+        check_booking_status(rows, args.ref)
     zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
             if rows is not None and args.ref and args.kind in ZALO_KINDS else [])
     to, cc = reply_recipients(mail, args, args.kind)
@@ -2042,8 +2047,10 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
                       row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to),
                       notice=not auto, zalo=zalo)
     close_replaced(mail, st, tg, older, n, out=out)
+    if args.kind == "cancellation":
+        close_confirmations_of_cancelled(mail, st, tg, rows, args.ref, n, out=out)
     if auto:
-        return auto_send(mail, st, tg, n, d, args, text, out=out)
+        return auto_send(mail, st, tg, n, d, args, text, out=out, rows=rows)
     out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
     return d
 
@@ -2070,10 +2077,19 @@ def check_pickup_decided(st, ref):
                       f"(email-templates.md 7). No draft made.")
 
 
-def auto_hold(st, args, text):
+def auto_hold(st, args, text, rows=None):
     """Why this auto-send draft must wait for a person, or '' to send it. Unsure = hold, as for the slips."""
     if CHECK_MARK.lower() in text.lower():
         return "còn dòng [CHECK BEFORE SENDING], một người phải xem trước"
+    if args.kind == "cancellation":
+        # AGENTS rule 7: a clear cancellation is answered once its CANCEL rows are written; anything else waits
+        now = booking_state(rows(), args.ref) if rows is not None and args.ref else []
+        if not args.ref:
+            return "thư huỷ không có --ref: không đối chiếu được với intake sheet"
+        if not now or any(r.get("action") != "CANCEL" for r in now):
+            return f"{args.ref} chưa có dòng CANCEL trên intake sheet"
+    if args.kind == "booking_status" and rows is None:
+        return "không đọc được intake sheet"
     if args.kind == "pickup":
         outcome = (st.data.get("pickups", {}).get(args.ref) or {}).get("outcome")
         if outcome not in (pickups.FREE, pickups.PAID):
@@ -2086,10 +2102,10 @@ def auto_hold(st, args, text):
     return ""
 
 
-def auto_send(mail, st, tg, n, d, args, text, out=print):
+def auto_send(mail, st, tg, n, d, args, text, out=print, rows=None):
     """Send an auto-send draft just made in Outlook (Karen 19/11). Anything that stops it leaves the normal draft
     with the reason on Telegram, so nothing is lost and nothing unsure goes out."""
-    held = auto_hold(st, args, text)
+    held = auto_hold(st, args, text, rows)
     st.save()  # before the send: a run that stops after it must not send again
     if not held:
         try:
@@ -2103,6 +2119,53 @@ def auto_send(mail, st, tg, n, d, args, text, out=print):
     review.notify(tg, n, st.data["reviews"][n], held=held)
     out(f"draft #{n} saved in Drafts: {d['id']}, NOT sent: {held}")
     return d
+
+
+# email-templates.md 7: one answer, free or paid. Utegelova/Gelnara (Trip.com 1539369445053786, #1550, 21/11) got
+# both: "applies when the amount paid is above USD 250 … If the booking is below that amount, … VND 200,000".
+PICKUP_BOTH = re.compile(r"if (?:the|your) (?:booking|amount|total|stay)[^.]{0,60}(?:below|above|under|over|qualif)"
+                         r"|confirm the (?:paid|total) amount|before sending this|whether (?:the|your) booking qualifies",
+                         re.I)
+
+
+def check_pickup_one_answer(text):
+    if PICKUP_BOTH.search(text):
+        raise Refused("a pick-up reply gives one answer, free or paid, never both and never the rule as a condition "
+                      "(email-templates.md 7). pickup said CHECK → still one form, with the CHECK BEFORE SENDING "
+                      "line on top for the person. No draft made.")
+
+
+def check_booking_status(rows, ref):
+    """dev 21/11: a guest asking whether HAYA has their booking is answered at once, sent by Emi, when the booking
+    is on the intake sheet. Not on it → no such answer (find it, write the row, or --kind reply for a person)."""
+    if not ref:
+        raise Refused("a booking_status reply needs --ref: the booking_ref on the intake sheet")
+    now = booking_state(rows(), ref) if rows is not None else []
+    if not now:
+        raise Refused(f"{ref} is not on the intake sheet: a booking_status answer only says what the sheet holds. "
+                      "sheet-find the surname and arrival first; still nothing → --kind reply (a person sends it)")
+    if all(r.get("action") == "CANCEL" for r in now):
+        raise Refused(f"{ref} is cancelled on the sheet: not a booking_status answer, --kind reply for a person")
+    channel = (now[0].get("channel_type") or "").strip()
+    if channel not in ("OTA", "Direct"):
+        raise Refused(f"{ref} is a {channel or '?'} booking: an agency asking whether HAYA has it gets the "
+                      "confirmation (draft-confirmation), not a booking_status note")
+
+
+def close_confirmations_of_cancelled(mail, st, tg, rows, ref, n, out=print):
+    """Travel Concierge 2817840 (21/11): the agency wrote "please IGNORE this booking request, booking was
+    cancelled" and confirmation #1547 stayed in Drafts beside the cancellation reply. Once the CANCEL rows are on
+    the sheet, every open confirmation draft of that booking goes to Deleted Items."""
+    if not ref or rows is None:
+        return
+    now = booking_state(rows(), ref)
+    if not now or any(r.get("action") != "CANCEL" for r in now):
+        return
+    mine = _parts(ref)
+    for old, r in list(st.data["reviews"].items()):
+        if (r.get("kind") == "confirmation" and r.get("status") in (REVIEW_OPEN, "approved")
+                and mine & _parts(r.get("ref"))):
+            review.replaced(mail, st, tg, old, n, out=out)
 
 
 FRONT_OFFICE = "haya@haya-hotels.com"
@@ -3950,7 +4013,8 @@ def parser():
                                                                 "'- PAYMENT REMINDER #30742'")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
-                            "inquiry, request, pickup (airport pick-up answer, after 'pickup <ref>')")
+                            "inquiry, request, pickup (airport pick-up answer, after 'pickup <ref>'), booking_status (a guest "
+                            "asking whether HAYA has their booking, when it is on the sheet)")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")

@@ -37,8 +37,12 @@ ACCOUNTING = "accountant@palmahotel.vn"
 FRONT_OFFICE = "haya@haya-hotels.com"
 # Drafts Emi may send itself (Karen, 2026-11-19: "Các email được auto send, không cần phải chị Karen duyệt"), each only
 # when named in EMI_AUTO_SEND. The OTA intake note goes to front office alone; the others to the guest or agency.
-AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup")
+# dev, 2026-11-21: "Email của khách - họ hỏi booking của mình đã nhận được chưa thì cũng cho auto gửi nếu đã có trong
+# intake sheet rồi" (booking_status) and the cancellation reply once its CANCEL rows are on the sheet (cancellation).
+AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup", "booking_status", "cancellation")
 OWN_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
+# A send to a no-reply robot bounces (Karen, 15/11, SynXis): such a draft waits for a person to readdress it.
+NO_REPLY_ADDRESS = re.compile(r"(?:^|[._-])(?:no-?reply|do-?not-?reply|donotreply)[^@]*@", re.I)
 
 
 def auto_send_refusal(kind, to, cc, bcc, text):
@@ -58,6 +62,9 @@ def auto_send_refusal(kind, to, cc, bcc, text):
     ours = [a for a in to if a.split("@")[-1] in OWN_DOMAINS]
     if ours:
         return f"it is addressed to our own {', '.join(ours)}, not the guest or agency"
+    robots = [a for a in to + list(cc or []) if NO_REPLY_ADDRESS.search(a)]
+    if robots:
+        return f"{', '.join(robots)} is a no-reply address: the send would bounce"
     return ""
 
 # Graph actions that send mail immediately. The create* versions only make drafts.

@@ -44,7 +44,8 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `pickup` — the answer to an airport pick-up or transfer question, after `pickup <ref>` (`email-templates.md` 7).
 - `forward` — every forward: accounting, the VAT address, Palma. Never front office (dev, 2026-10-30).
 - `decline` — a tour operator's on-request booking the hotel can't take (`tour-operators.md` step 5).
-- `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`).
+- `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`), always with `--ref`. An agency's "please ignore this booking request" is a cancellation: CANCEL rows first, then this. Sent at once when the CANCEL rows are on the sheet (dev, 2026-11-21).
+- `booking_status` — a guest (OTA relay or direct) asking whether we received their booking, with `--ref` of the rows on the sheet: sent at once (dev, 2026-11-21). Not on the sheet → find it (`sheet-find` surname + arrival); an agency asking → the confirmation.
 - `stop_sales` — the daily stop-sell list to the B2B and OTA sites. Job 5 makes it, never job 1 (`inquiries-and-quotes.md`).
 - `reply` — anything else (a decline, a greeting, a colleague's question).
 
