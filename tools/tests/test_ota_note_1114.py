@@ -58,7 +58,8 @@ class Mail:
 
 class Base(unittest.TestCase):
     def setUp(self):
-        p = mock.patch.dict(os.environ, {"EMI_DRAFT_MODE": "outlook"})
+        # EMI_AUTO_SEND off: the host's .env names ota_note, and these notes are about the draft, not the send
+        p = mock.patch.dict(os.environ, {"EMI_DRAFT_MODE": "outlook", "EMI_AUTO_SEND": ""})
         p.start()
         self.addCleanup(p.stop)
         self.st = State(tempfile.mktemp(suffix="-state.json"))
