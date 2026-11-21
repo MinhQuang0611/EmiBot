@@ -3258,9 +3258,29 @@ def _monday_last_week(today):
     return today - timedelta(days=today.weekday() + 7)
 
 
-def run_payments_due(mail, sheet, st, out=print, now=None):
+CONFIRMATIONS_FOUND = "confirmations-found.json"
+
+
+def run_payments_due(mail, sheet, st, out=print, now=None, work_dir=None):
+    """The confirmations found are kept in emi-work (CONFIRMATIONS_FOUND) and saved as each one is found: a run cut at
+    the shell call's 30 s still leaves them for the next (dev, 2026-11-21: 36 s on the host)."""
     now = now or datetime.now(VN)
-    result = payments.due(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, now)
+    path = os.path.join(work_dir or WORK_DIR, CONFIRMATIONS_FOUND)
+    try:
+        with open(path, encoding="utf-8") as f:
+            known = json.load(f)
+    except (OSError, ValueError):
+        known = {}
+
+    class Saving(dict):
+        def __setitem__(self, key, value):
+            super().__setitem__(key, value)
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(self, f, ensure_ascii=False, indent=1)
+            os.replace(path + ".tmp", path)
+
+    result = payments.due(sheet.rows(), booking_state, _parts, mail, st, config.MAILBOX, now, cache=Saving(known))
     out(payments.render(result, now))
     return result
 

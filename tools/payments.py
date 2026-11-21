@@ -146,30 +146,51 @@ def search_ours(mail, text, top=SEARCH_TOP):
     return (getattr(mail, "search_sent", None) or mail.search)(text, top=top)
 
 
-def find_confirmation(mail, code, mailbox, parts=()):
+def _sent_time(m):
+    return m.get("sentDateTime") or m.get("receivedDateTime") or ""
+
+
+def find_confirmation(mail, code, mailbox, parts=(), cache=None, slips=True):
     """{id, sent_at, to, cc, slips} for the first mail sales@ sent with this group code, or None. slips = what the
-    agency has sent since with an attachment, which may be a payment the sheet doesn't show yet. The code may be only
-    in the PDF (Anex 112970549, 04/11: the mail search finds it there, the body doesn't have it): then the mail must
-    have an attachment and name the booking (parts = its reference numbers)."""
-    when = lambda m: m.get("sentDateTime") or m.get("receivedDateTime") or ""
-    hits = None  # the agency's mail, searched only once a confirmation is found (the shell call stops at 30 s)
+    agency has sent since with an attachment, which may be a payment the sheet doesn't show yet (slips=False: not
+    looked for, the key is left out). The code may be only in the PDF (Anex 112970549, 04/11: the mail search finds it
+    there, the body doesn't have it): then the mail must have an attachment and name the booking (parts = its
+    reference numbers). cache: {group code: what was found}. The first confirmation never changes, so a code found
+    once costs no mail call again (dev, 2026-11-21: payments-due took 36 s on the host, its shell call stops at 30 s)."""
+    found = (cache or {}).get(code)
+    if found is None:
+        found = _first_confirmation(mail, code, mailbox, parts)
+        if found is None:
+            return None
+        if cache is not None:
+            cache[code] = found
+    hit = dict(found, sent_at=_when(found["sent_at"]))
+    if slips:
+        hit["slips"] = slips_since(mail, code, mailbox, hit["sent_at"])
+    return hit
+
+
+def _first_confirmation(mail, code, mailbox, parts):
     # Greentours 0349-IN 1211 (15/11): its confirmation was never sent (held for the PDF's cancellation terms), but a
     # payment reminder carrying #31074 went on 14/11 and then counted as the confirmation, so a second one followed.
     ours = sorted((m for m in search_ours(mail, code)
                    if _addr(m) == mailbox.lower() and not REMINDER_SUBJECT.search(m.get("subject", ""))),
-                  key=lambda m: (not m.get("hasAttachments"), when(m)))
+                  key=lambda m: (not m.get("hasAttachments"), _sent_time(m)))
     for m in ours:
         full = mail.get_message_bodies(m["id"])
         words = f"{m.get('subject', '')} {_text(full)}".lower()
         if code not in _text(full) and not (m.get("hasAttachments") and any(p in words for p in parts)):
             continue  # the number matched inside something else
-        sent = _when(when(m))
-        hits = mail.search(code, top=SEARCH_TOP) if hits is None else hits
-        slips = [x["id"] for x in hits if x.get("hasAttachments") and not is_internal(_addr(x))
-                 and _addr(x) != mailbox.lower() and _when(when(x)) > sent]
-        return {"id": m["id"], "sent_at": sent, "to": [a for a in _list(full.get("toRecipients")) if not is_internal(a)],
-                "cc": _list(full.get("ccRecipients")), "slips": slips}
+        return {"id": m["id"], "sent_at": _sent_time(m),
+                "to": [a for a in _list(full.get("toRecipients")) if not is_internal(a)],
+                "cc": _list(full.get("ccRecipients"))}
     return None
+
+
+def slips_since(mail, code, mailbox, sent):
+    """Mail from outside with a file naming the group code, after the confirmation: maybe the payment."""
+    return [x["id"] for x in mail.search(code, top=SEARCH_TOP) if x.get("hasAttachments")
+            and not is_internal(_addr(x)) and _addr(x) != mailbox.lower() and _when(_sent_time(x)) > sent]
 
 
 BACKFILL = "EXISTING BOOKING"
@@ -212,11 +233,12 @@ def own_state(rows, ref, parts_of):
     return state
 
 
-def due(rows, state_of, parts_of, mail, st, mailbox, now):
+def due(rows, state_of, parts_of, mail, st, mailbox, now, cache=None):
     """Sorted by arrival. remind: reminders to draft now. slip: looks paid, read it first. no_confirmation: built, but
     no mail with the group code. overdue: deadline passed and its one reminder already went. short_notice: booked
     inside the 7 days, Karen sets the date. paid_unsent: a reminder in Drafts for a booking paid since. backfill: a
-    TA booking known only from the EZFOLIO backfill, not chased (no payment record on the sheet)."""
+    TA booking known only from the EZFOLIO backfill, not chased (no payment record on the sheet). cache: the
+    confirmations already found (find_confirmation)."""
     out = {"remind": [], "slip": [], "no_confirmation": [], "overdue": [], "short_notice": [], "paid_unsent": [],
            "backfill": []}
     soon = now + lookahead(now)
@@ -273,7 +295,7 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now):
         if ref in st.data["confirmation_holds"] or any(r == ref for r, _ in st.awaiting_pdf()):
             out["no_confirmation"].append(item)  # its confirmation is held or still waits for the PDF: not sent
             continue
-        sent = find_confirmation(mail, code, mailbox, mine)
+        sent = find_confirmation(mail, code, mailbox, mine, cache=cache, slips=False)
         if sent is None:
             out["no_confirmation"].append(item)
             continue
@@ -293,6 +315,7 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now):
             if passed:
                 out["overdue"].append(item)
             continue
+        sent["slips"] = slips_since(mail, code, mailbox, sent["sent_at"])  # only for a reminder about to go
         out["slip" if sent["slips"] else "remind"].append(item)
     for bucket in out.values():
         bucket.sort(key=lambda i: i["arrival"])

@@ -4,6 +4,7 @@ From 18/11 an audit lands in sales@ every hour, naming every open booking's ref 
 newest first, so the first 25 hits for "30487" were all audits: the confirmation sent on 28/10 never came back,
 payments-due put the booking on "NO CONFIRMATION FOUND", and its 3,300,000 balance (due 18/11) got no reminder.
 """
+import json
 import os
 import tempfile
 import unittest
@@ -111,3 +112,63 @@ class DayCheckOutcomeTest(unittest.TestCase):
             emi.check_email_answered(st, "m1", outcome, lambda: {})  # no Refused
         with self.assertRaises(emi.Refused):
             emi.check_email_answered(st, "m1", "DAY CHECK: looked at it", lambda: {})
+
+
+class CountingMail(FloodedMail):
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def search(self, text, top=10):
+        self.calls += 1
+        return super().search(text, top)
+
+    def search_sent(self, text, top=10):
+        self.calls += 1
+        return super().search_sent(text, top)
+
+    def get_message_bodies(self, message_id):
+        self.calls += 1
+        return super().get_message_bodies(message_id)
+
+
+class ConfirmationCacheTest(unittest.TestCase):
+    """dev, 2026-11-21: payments-due took 36 s on the host; the agent's shell call stops at 30 s."""
+
+    ROWS = [concierge(2321)]
+    NOW = datetime(2026, 11, 21, 15, 0, tzinfo=VN)
+
+    def test_a_known_confirmation_costs_no_mail_call(self):
+        cache, mail = {}, CountingMail()
+        first = payments.find_confirmation(mail, "30487", MAILBOX, {"2793131"}, cache=cache, slips=False)
+        used = mail.calls
+        again = payments.find_confirmation(mail, "30487", MAILBOX, {"2793131"}, cache=cache, slips=False)
+        self.assertEqual(mail.calls, used)
+        self.assertEqual((again["id"], again["sent_at"]), (first["id"], first["sent_at"]))
+        self.assertNotIn("slips", again)
+
+    def test_an_overdue_booking_is_not_searched_for_slips(self):
+        st = State(tempfile.mktemp(suffix="-state.json"))
+        st.record_draft("d1", "2793131", 2321, "balance_reminder")
+        cache = {}
+        payments.due(self.ROWS, emi.booking_state, emi._parts, CountingMail(), st, MAILBOX, self.NOW, cache=cache)
+        mail = CountingMail()
+        out = payments.due(self.ROWS, emi.booking_state, emi._parts, mail, st, MAILBOX, self.NOW, cache=cache)
+        self.assertEqual([i["ref"] for i in out["overdue"]], ["2793131"])
+        self.assertEqual(mail.calls, 0)
+
+    def test_payments_due_keeps_what_it_found(self):
+        work = tempfile.mkdtemp()
+
+        class Sheet:
+            def rows(self):
+                return ConfirmationCacheTest.ROWS
+
+        st = State(tempfile.mktemp(suffix="-state.json"))
+        emi.run_payments_due(CountingMail(), Sheet(), st, out=lambda *_: None, now=self.NOW, work_dir=work)
+        with open(os.path.join(work, emi.CONFIRMATIONS_FOUND), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["30487"]["id"], "conf")
+        mail = CountingMail()
+        out = emi.run_payments_due(mail, Sheet(), st, out=lambda *_: None, now=self.NOW, work_dir=work)
+        self.assertEqual(mail.calls, 1)  # only the slips search of the reminder about to go
+        self.assertEqual([i["ref"] for i in out["remind"]], ["2793131"])
