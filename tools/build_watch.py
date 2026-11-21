@@ -16,11 +16,20 @@ whole stay) is no question: Emi declines it at once, CANCEL rows + the decline d
 on-request bookings with no availability. Kind 'full'; an open question already asked about it is closed. Room for
 only part of it is declined too, the whole booking (dev, same day: "cũng từ chối luôn"). A type free the whole stay or
 a change on a built booking still goes to Karen.
+
+21/11 (dev, on SynXis 92777EE002243 (Agoda), live row 1082, "not picked up for 444 hours"): Agoda 698918623 is two
+rooms, one SynXis number each (2243, 2244). Its cancellation came as Agoda's notice (row 1081, ref Agoda 698918623 /
+SynXis 2244) and as SynXis's notice for 2243 (row 1082). The build tool cancelled group 28281 from row 1081 and touched
+row 1082 a minute before (ez_processed_at 03/11 10:10) without writing a status. Two things here:
+- a CANCEL whose booking another CANCEL row already cancelled in EZFOLIO (same company, guest and stay, ez_status
+  done) is covered: nothing to wait for (`covered`);
+- rows the build tool ran on but left without a status are not "not picked up": kind 'silent', told once, for a
+  person to look at in EZFOLIO.
 """
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import operators
+from . import operators, payments
 
 VN = timezone(timedelta(hours=7))
 STUCK = ("needs_review", "error")
@@ -72,10 +81,31 @@ def on_cancelled_group(r):
     return r.get("action") == "CHANGE" and _status(r) == "no_change" and bool(CANCELLED_GROUP.search(r.get("ez_note") or ""))
 
 
+def _same_stay(a, b):
+    return all((a.get(k) or "").strip() == (b.get(k) or "").strip() for k in ("arrival", "departure"))
+
+
+def covered(state, rows):
+    """The CANCEL row of the same booking under another number that the build tool has already done (dev 21/11,
+    Agoda 698918623: rows 1081 done, group 28281 cancelled; row 1082 the second room's SynXis number). Same company,
+    same stay, a guest name in common. None when the state isn't a cancellation or nothing covers it."""
+    if not all(r.get("action") == "CANCEL" for r in state):
+        return None
+    mine = {r["_row"] for r in state}
+    head = state[0]
+    company, names = payments._plain(head.get("company")).strip(), payments._names(state)
+    if not company or not names:
+        return None
+    return next((r for r in rows if r["_row"] not in mine and r.get("action") == "CANCEL"
+                 and _status(r) in payments.BUILT_STATUSES and _same_stay(r, head)
+                 and payments._plain(r.get("company")).strip() == company and payments._names([r]) & names), None)
+
+
 def stuck(rows, state_of, now):
-    """One item per booking whose latest email's rows the build tool stopped on ('stuck'), or hasn't touched for
-    more than WAIT ('waiting'). A later email's rows replace the earlier ones (the build tool marks those
-    out_of_scope), so only the latest rows count. Bookings already past their arrival are left out."""
+    """One item per booking whose latest email's rows the build tool stopped on ('stuck'), hasn't touched for
+    more than WAIT ('waiting'), or ran on and left without a status ('silent'). A later email's rows replace the
+    earlier ones (the build tool marks those out_of_scope), so only the latest rows count. Bookings already past
+    their arrival, and cancellations another row has already cancelled in EZFOLIO (`covered`), are left out."""
     items = []
     for state in operators.bookings(rows, state_of):
         head = state[0]
@@ -83,6 +113,8 @@ def stuck(rows, state_of, now):
             continue
         arrival = operators._date(head.get("arrival"))
         if arrival and arrival < now.date():
+            continue
+        if covered(state, rows):
             continue
         bad = [r for r in state if (_status(r) in STUCK or (not _status(r) and (r.get("ez_error") or "").strip())
                                     or on_cancelled_group(r))
@@ -97,7 +129,11 @@ def stuck(rows, state_of, now):
             got = _received(head)
             if not got or got < WATCH_FROM or now - got < WAIT:
                 continue
-            kind, note, stamp = "waiting", "", head.get("received_at", "")
+            ran = max((r.get("ez_processed_at") or "").strip() for r in state)
+            if ran:  # the build tool ran on it and wrote nothing (row 1082, 03/11 10:10): not "not picked up"
+                kind, note, stamp = "silent", f"build tool ran {ran}, wrote no ez_status", ran
+            else:
+                kind, note, stamp = "waiting", "", head.get("received_at", "")
         else:
             continue
         ref = (head.get("booking_ref") or "").strip()
@@ -119,7 +155,8 @@ def _hours(head, now):
 def render(items):
     out = [f"BUILD STUCK: {sum(i['kind'] == 'stuck' for i in items)} booking(s) the build tool stopped on, "
            f"{sum(i['kind'] == 'full' for i in items)} with no room to decline, "
-           f"{sum(i['kind'] == 'waiting' for i in items)} not picked up after {int(WAIT.total_seconds() // 3600)} h"]
+           f"{sum(i['kind'] == 'waiting' for i in items)} not picked up after {int(WAIT.total_seconds() // 3600)} h, "
+           f"{sum(i['kind'] == 'silent' for i in items)} run with no result"]
     for i in items:
         waited = f", email {i['hours']} h ago" if i["hours"] is not None else ""
         out.append(f"{LABEL[i['kind']]} | {i['channel']} | {i['company']} | ref {i['ref']} | "
@@ -128,7 +165,7 @@ def render(items):
     return "\n".join(out)
 
 
-LABEL = {"stuck": "STUCK", "full": "DECLINE", "waiting": "WAITING"}
+LABEL = {"stuck": "STUCK", "full": "DECLINE", "waiting": "WAITING", "silent": "NO RESULT"}
 
 
 def decline_steps(i):
@@ -215,6 +252,11 @@ def alert(st, tg, mail, items, mailbox, out=print):
             lines.append(f"❓ <b>{qid}</b> · {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (row "
                          f"{', '.join(map(str, i['rows']))}, email {_esc(i['received'])})\n"
                          f"{_esc(i['note'][:NOTE_CHARS]) or 'no reason given'}")
+        elif i["kind"] == "silent":
+            qid = None
+            lines.append(f"🔍 {_esc(i['company'])} <b>{_esc(i['ref'])}</b> ({i['action']} row "
+                         f"{', '.join(map(str, i['rows']))}, email {_esc(i['received'])}): EZFOLIO {_esc(i['note'])}. "
+                         f"Someone checks the booking in EZFOLIO and fills ez_status")
         else:
             qid = None
             lines.append(f"⏳ {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (row {', '.join(map(str, i['rows']))}): "

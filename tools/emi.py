@@ -1543,6 +1543,33 @@ def cancelled_in_ezfolio(rows, ref):
     return mine[cancels[-1]]
 
 
+SYNXIS_NO = re.compile(r"\d{5}E[A-Z]\d{6}X?", re.I)
+
+
+def ota_whole_cancel(rec, rows):
+    """Dev 21/11, Agoda 698918623 (live rows 1081 / 1082): one Agoda booking of two rooms reaches SynXis as two
+    numbers (92777EE002243, 92777EE002244). Agoda's own cancellation (ref Agoda 698918623 / SynXis 2244) cancels the
+    whole booking; SynXis's notice for 2243 then became a second CANCEL row that the build tool never closed, and job 2
+    reported it 'not picked up' for 444 hours. The CANCEL row already written from the OTA's own notice (it carries
+    the OTA's number, not only SynXis's) for the same company, stay and guest; None when there is none."""
+    if rec.get("action") != "CANCEL":
+        return None
+    nums = schema.ref_numbers(rec.get("booking_ref") or "")
+    if not nums or not all(SYNXIS_NO.fullmatch(n) for n in nums):
+        return None  # the OTA's own notice, or no SynXis number: not this case
+    company = payments._plain(rec.get("company")).strip()
+    names = payments._names([rec])
+    if not company or not names:
+        return None
+    for r in rows:
+        if (r.get("action") == "CANCEL" and payments._plain(r.get("company")).strip() == company
+                and all((r.get(k) or "").strip() == (rec.get(k) or "").strip() for k in ("arrival", "departure"))
+                and payments._names([r]) & names
+                and any(not SYNXIS_NO.fullmatch(n) for n in schema.ref_numbers(r.get("booking_ref") or ""))):
+            return r
+    return None
+
+
 def sheet_append(sheet, data, out=print, live=None):
     data = split_payments(data, out)
     records = expand_booking(data)
@@ -1600,6 +1627,14 @@ def sheet_append(sheet, data, out=print, live=None):
                               f"copied from the old rows. The build tool copies only the latest CHANGE row's notes "
                               f"into the Notice: notes 1-8 in full, rate fields as the booking now stands "
                               f"(tour operator: to-price)")
+        whole = None if state else ota_whole_cancel(rec, rows + elsewhere)
+        if whole:
+            raise Refused(f"SAME BOOKING: {ref!r} is one room of {whole.get('company', '')} {whole['booking_ref']!r}, "
+                          f"cancelled whole by the OTA's own notice on {_where(whole)} ({whole.get('received_at', '')}"
+                          f", same guest and stay). One OTA booking, one set of rows: no second CANCEL row (the build "
+                          f"tool can't match a SynXis number alone and leaves it open). This notice's reply: ota-note "
+                          f"<id> --ref \"{whole['booking_ref']}\", or done <id> \"same booking as #<that note>, CANCEL "
+                          f"{_where(whole)}\"")
         if (rec.get("action") == "CANCEL" and state and state[0].get("action") == "CANCEL"
                 and rooms_still_booked(rows if booking_state(rows, ref) else elsewhere, ref) <= 0):
             # 2026-10-27: operators' cancel notices for bookings already closed as declined on request.
