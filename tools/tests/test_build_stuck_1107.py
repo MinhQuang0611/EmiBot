@@ -34,8 +34,13 @@ class StuckTest(unittest.TestCase):
         rows = [r(1623, room_code="SUP-DBL", ez_status="error", ez_error="không đủ 2 phòng (TPL còn 0, QPL còn 0)",
                   ez_processed_at="2026-11-07T05:45:17"), r(1624, ez_status="error", ez_error="không đủ 2 phòng")]
         [i] = self.stuck(rows)
-        self.assertEqual((i["kind"], i["rows"]), ("stuck", [1623, 1624]))
+        # dev 21/11: no room in the type nor the one above = declined at once (test_build_full_1121)
+        self.assertEqual((i["kind"], i["rows"]), ("full", [1623, 1624]))
         self.assertIn("QPL còn 0", i["note"])
+        self.assertIn("DECLINE | TA | The Church Travels | ref BKK 10/1", build_watch.render([i]))
+        rows[0]["ez_error"] = "voucher thiếu tên khách"
+        rows[1]["ez_error"] = "voucher thiếu tên khách"
+        [i] = self.stuck(rows)
         self.assertIn("STUCK | TA | The Church Travels | ref BKK 10/1", build_watch.render([i]))
 
     def test_a_later_built_email_replaces_the_stop(self):

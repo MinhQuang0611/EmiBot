@@ -70,9 +70,10 @@ class SimMail:
     def _public(self, m):
         return {k: v for k, v in m.items() if not k.startswith("_")}
 
-    def list_inbox_since(self, since_iso):
+    def list_inbox_since(self, since_iso, with_files=False):
         # Every test email, oldest first; the run state's processed list keeps re-runs from repeating them.
-        return sorted((self._public(m) for m in self._load().values()), key=lambda m: m["receivedDateTime"])
+        return sorted((self._public(m) for m in self._load().values() if m["hasAttachments"] or not with_files),
+                      key=lambda m: m["receivedDateTime"])
 
     def has_new_inbox_mail(self, since_iso):
         return bool(self._load())

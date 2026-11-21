@@ -72,6 +72,15 @@ class GraphMailTest(unittest.TestCase):
         mail, http = mail_with()
         mail.list_inbox_since("2026-10-08T01:00:00Z")
         self.assertIn("$filter=receivedDateTime ge 2026-10-08T01:00:00Z", http.calls[0][1])
+        self.assertNotIn("hasAttachments eq", http.calls[0][1])
+
+    def test_inbox_with_files_filtered_by_graph(self):
+        # dev, 2026-11-21: mail-find paged the whole 14-day inbox (~55 s); Graph now returns only emails with files
+        mail, http = mail_with()
+        mail.list_inbox_since("2026-10-08T01:00:00Z", with_files=True)
+        url = urllib.parse.unquote(http.calls[0][1])
+        self.assertIn("$filter=receivedDateTime ge 2026-10-08T01:00:00Z and hasAttachments eq true", url)
+        self.assertIn("$top=200", url)
 
     def test_update_draft_only_on_emi_drafts(self):
         mail, _ = mail_with([("GET", "/messages/d9", {"isDraft": True, "categories": []})])

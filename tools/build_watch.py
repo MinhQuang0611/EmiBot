@@ -9,6 +9,13 @@ blank). The build tool wrote why it stopped in ez_status / ez_note / ez_error an
 never drafted, and the agencies chased. What to do there (overbook, another room type, decline, fix the group) is not
 Emi's call, it is Karen's or Long's. So each stop goes to Karen on Telegram once, as a question E-nnn on the booking's
 email; her answer is what Emi then drafts to the agency (karen-answer), or Long fixes it and job 2 confirms the PDF.
+
+21/11 (dev, on E-638, MG AGIN0116572611657606: "với các case mà hết phòng thì từ chối luôn chứ"): a new booking the
+build tool could not place because EZFOLIO has no room for it (the type and the type above both 0, nothing free the
+whole stay) is no question: Emi declines it at once, CANCEL rows + the decline draft, like Karen's 20/11 rule for
+on-request bookings with no availability. Kind 'full'; an open question already asked about it is closed. Room for
+only part of it is declined too, the whole booking (dev, same day: "cũng từ chối luôn"). A type free the whole stay or
+a change on a built booking still goes to Karen.
 """
 import re
 from datetime import datetime, timedelta, timezone
@@ -41,6 +48,26 @@ def _status(r):
 CANCELLED_GROUP = re.compile(r"đã hu[ỷỳ]|\(CX\)", re.I)
 
 
+# The build tool's own words when EZFOLIO has no room (E-638, 21/11; Church Travels 06/11): "không đủ 2 phòng cho
+# 21/12/2026 - 27/12/2026 (DLX-SV còn 0, SUITE-SV còn 0). Trống trọn cả kỳ: không phòng nào. Hết DLX-SV đêm …"
+# Only these two say the build tool looked past the booked type: a bare "Hết phòng TPL đêm 13/01" (Footprint
+# 031P0127J, 06/11) doesn't, and stays Karen's.
+NO_ROOM = re.compile(r"không đủ\s+\d+\s+phòng|Trống trọn cả kỳ:\s*không phòng nào", re.I)
+WHOLE_STAY = re.compile(r"Trống trọn cả kỳ:\s*([^.;]*)", re.I)
+DECLINE_REASON = "No availability: booking cannot be accommodated"
+
+
+def no_room(note):
+    """True when the build tool says EZFOLIO can't hold the whole booking (dev 21/11: declined at once). Room for only
+    part of it ("không đủ 2 phòng (DLX-SV còn 1 …)") is declined too, the whole booking (dev, same day: "cũng từ
+    chối luôn"). A type free the whole stay is still Karen's: another room type could take it."""
+    note = " ".join((note or "").split())
+    if not NO_ROOM.search(note):
+        return False
+    whole = WHOLE_STAY.search(note)
+    return not whole or "không phòng nào" in whole.group(1).lower()
+
+
 def on_cancelled_group(r):
     return r.get("action") == "CHANGE" and _status(r) == "no_change" and bool(CANCELLED_GROUP.search(r.get("ez_note") or ""))
 
@@ -64,7 +91,8 @@ def stuck(rows, state_of, now):
             note = next((x for r in bad for x in ((r.get("ez_error") or "").strip(), (r.get("ez_note") or "").strip())
                          if x), "")
             stamp = max((r.get("ez_processed_at") or "") for r in bad) or head.get("received_at", "")
-            kind = "stuck"
+            # dev 21/11: a new booking with no room in EZFOLIO is declined at once, not asked
+            kind = "full" if all(r.get("action") == "NEW" for r in state) and no_room(note) else "stuck"
         elif all(not _status(r) for r in state):
             got = _received(head)
             if not got or got < WATCH_FROM or now - got < WAIT:
@@ -77,7 +105,9 @@ def stuck(rows, state_of, now):
                       "action": head.get("action", ""), "rows": [r["_row"] for r in state],
                       "received": head.get("received_at", ""), "subject": head.get("source_email", ""),
                       "status": ", ".join(sorted({_status(r) or "blank" for r in state})), "note": " ".join(note.split()),
-                      "key": f"{ref}|{kind}|{stamp}", "hours": _hours(head, now)})
+                      # 'full' once per booking: the build tool retries and rewrites ez_processed_at every ~45 min
+                      # (E-638 came back 09:15, 10:00 on 21/11)
+                      "key": f"{ref}|full" if kind == "full" else f"{ref}|{kind}|{stamp}", "hours": _hours(head, now)})
     return items
 
 
@@ -88,13 +118,29 @@ def _hours(head, now):
 
 def render(items):
     out = [f"BUILD STUCK: {sum(i['kind'] == 'stuck' for i in items)} booking(s) the build tool stopped on, "
+           f"{sum(i['kind'] == 'full' for i in items)} with no room to decline, "
            f"{sum(i['kind'] == 'waiting' for i in items)} not picked up after {int(WAIT.total_seconds() // 3600)} h"]
     for i in items:
         waited = f", email {i['hours']} h ago" if i["hours"] is not None else ""
-        out.append(f"{'STUCK' if i['kind'] == 'stuck' else 'WAITING'} | {i['channel']} | {i['company']} | ref {i['ref']} | "
+        out.append(f"{LABEL[i['kind']]} | {i['channel']} | {i['company']} | ref {i['ref']} | "
                    f"{i['action']} rows {', '.join(map(str, i['rows']))} | ez_status {i['status']}{waited} | "
                    f"email: {i['subject']}" + (f" | build tool: {i['note'][:NOTE_CHARS]}" if i["note"] else ""))
     return "\n".join(out)
+
+
+LABEL = {"stuck": "STUCK", "full": "DECLINE", "waiting": "WAITING"}
+
+
+def decline_steps(i):
+    """What job 2 does for a 'full' item (dev 21/11). Printed under its DECLINE line by build-stuck."""
+    return (f"Next: decline now, no question to Karen (dev 21/11: no room = decline). CANCEL rows for ref {i['ref']} "
+            f"(status Cancelled, what_changed \"{DECLINE_REASON}\", Cancellation Amount 0, Cancellation Reason "
+            f"\"No availability in EZFOLIO, declined <DD/MM>\", internal_notes \"Build tool: no room (rows "
+            f"{', '.join(map(str, i['rows']))}); declined at once (dev 21/11)\"), then the decline draft on the "
+            f"booking's email (mail-find {i['ref'].split(' / ')[0]}): draft-reply <id> <body> --kind decline --ref "
+            f"<ref> (email-templates.md 9b; tour operator: section 6's decline). An OTA notice from SynXis: "
+            f"ota-note instead, and the report says a person cancels it with the OTA. Then done <id> \"no room, "
+            f"declined: CANCEL rows …, decline #n\".")
 
 
 def _esc(s):
@@ -140,7 +186,8 @@ def question(i):
 
 def alert(st, tg, mail, items, mailbox, out=print):
     """Telegram, once per stop (key = ref + kind + when the build tool wrote it): a stuck booking becomes a question
-    E-nnn (st.ask, answered with karen-answer like any other); rows not picked up become one line in a notice.
+    E-nnn (st.ask, answered with karen-answer like any other); a booking with no room ('full', dev 21/11) is told as
+    declined, no question, and an open one about it is closed; rows not picked up become one line in a notice.
     Nothing is recorded while Telegram is off, so the next run tries again. Returns the items sent."""
     seen = st.data.setdefault("build_alerts", {})
     new = [i for i in items if i["key"] not in seen]
@@ -150,8 +197,16 @@ def alert(st, tg, mail, items, mailbox, out=print):
         return []
     lines = []
     for i in new:
-        asked = _open_question(st, i["ref"]) if i["kind"] == "stuck" else None
-        if asked:
+        asked = _open_question(st, i["ref"]) if i["kind"] in ("stuck", "full") else None
+        if i["kind"] == "full":
+            if asked:  # E-638 (21/11): asked before the rule; no answer is needed now
+                st.close_question(asked, "no room in EZFOLIO: declined at once (dev 21/11)")
+            qid = None
+            lines.append(f"🚫 {_esc(i['company'])} <b>{_esc(i['ref'])}</b> (row {', '.join(map(str, i['rows']))}, "
+                         f"email {_esc(i['received'])}): no room in EZFOLIO — "
+                         f"{_esc(i['note'][:NOTE_CHARS]) or 'no reason given'}\nEmi declines it: CANCEL rows + the "
+                         f"decline draft for review" + (f" ({asked} closed, no answer needed)" if asked else ""))
+        elif asked:
             qid = asked
             lines.append(f"↩️ <b>{qid}</b> (asked, no answer yet) · {_esc(i['company'])} <b>{_esc(i['ref'])}</b>: "
                          f"{_esc(i['note'][:NOTE_CHARS]) or 'no reason given'}")

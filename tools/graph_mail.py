@@ -491,13 +491,15 @@ class GraphMail:
 
     # --- reading ---
 
-    def list_folder_since(self, folder, since_iso, field="receivedDateTime"):
-        """Messages in a well-known folder (inbox, drafts, sentitems) at or after since_iso (UTC, ...Z)."""
+    def list_folder_since(self, folder, since_iso, field="receivedDateTime", with_files=False):
+        """Messages in a well-known folder (inbox, drafts, sentitems) at or after since_iso (UTC, ...Z).
+        with_files: only those with attached files, filtered by Graph. 200 a page (dev, 2026-11-21: mail-find paged
+        14 days of inbox 50 at a time, ~55 s, past the agent's 30 s shell call, so job 2 never saw its END)."""
         q = self._query(
-            filter=f"{field} ge {since_iso}",
+            filter=f"{field} ge {since_iso}" + (" and hasAttachments eq true" if with_files else ""),
             orderby=f"{field} asc",
             select="id,subject,from,toRecipients,receivedDateTime,sentDateTime,conversationId,hasAttachments,categories",
-            top="50",
+            top="200",
         )
         return list(self._pages(f"/mailFolders/{folder}/messages?{q}"))
 
@@ -506,8 +508,8 @@ class GraphMail:
         q = self._query(select="id,subject,from,toRecipients,ccRecipients,sentDateTime,categories,body,uniqueBody")
         return self._call("GET", f"/messages/{message_id}?{q}", headers={"Prefer": 'outlook.body-content-type="text"'})
 
-    def list_inbox_since(self, since_iso):
-        return self.list_folder_since("inbox", since_iso)
+    def list_inbox_since(self, since_iso, with_files=False):
+        return self.list_folder_since("inbox", since_iso, with_files=with_files)
 
     def list_sent_since(self, since_iso):
         return self.list_folder_since("sentitems", since_iso, field="sentDateTime")
@@ -533,7 +535,7 @@ class GraphMail:
         return bool(self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value"))
 
     def list_drafts(self, only_emi=False):
-        q = self._query(select="id,subject,toRecipients,createdDateTime,lastModifiedDateTime,categories,conversationId", top="50")
+        q = self._query(select="id,subject,toRecipients,createdDateTime,lastModifiedDateTime,categories,conversationId", top="200")
         drafts = list(self._pages(f"/mailFolders/drafts/messages?{q}"))
         if only_emi:
             drafts = [d for d in drafts if EMI_CATEGORY in d.get("categories", [])]

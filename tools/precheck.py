@@ -61,8 +61,12 @@ def alert_build_stuck(mail, sheet):
                                  out=lambda s: print(s, file=sys.stderr))
         if sent:
             st.save()
+        # dev 21/11: a booking with no room in EZFOLIO is declined by job 2 (CANCEL rows + decline draft); it stays
+        # on the list, and wakes job 2, until its CANCEL rows are on the sheet
+        return any(i["kind"] == "full" for i in items)
     except Exception as e:
         print(f"build-stuck alert failed: {e}", file=sys.stderr)
+        return False
 
 
 def pegas_confirm(mail, sheet):
@@ -106,7 +110,7 @@ def main(argv):
         elif argv[0] == "confirmations":
             mail, sheet = config.mail(), config.sheet()
             work = confirmations_have_work(mail, sheet, st)
-            alert_build_stuck(mail, sheet)
+            work = alert_build_stuck(mail, sheet) or work
             pegas_confirm(mail, sheet)
         else:
             work = payments_have_work(config.mail(), config.sheet(), st)

@@ -722,6 +722,29 @@ A guest asking the same (via a booking platform's relay address): `Dear Guest,` 
 - **The hotel is full for their dates** (availability sheet: nothing free on some night): `Thank you for your email and your interest in HAYA Hotel Phu Quoc. Unfortunately, the hotel is fully booked for [dates], so we are unable to offer a room for these dates.` / `We hope to welcome your guests on another occasion.` Only when no type is free every night; otherwise offer the type that is (`inquiries-and-quotes.md`).
 - **A plain "thank you", "received", "ok"** → a one-line reply all the same (dev, 2026-11-13: every email gets its reply): `Thank you for your email. We look forward to welcoming your guests.` / `Khách sạn đã nhận được, xin cảm ơn anh/chị.` + the sign-off.
 
+## 9b. Booking declined — no room in EZFOLIO (`--kind decline`)
+Dev, 2026-11-21 (E-638, MG): a new booking the build tool could not place because nothing is free (`build-stuck` prints `DECLINE`). After its CANCEL rows; reply on the booking's email, in the sender's language. No reason beyond "fully booked", no offer of another type (there is none), no overbooking talk.
+```
+Dear [Name / MG Reservations Team],
+
+Thank you for choosing HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.
+
+Unfortunately, the hotel is fully booked for these dates, so we are unable to accept the following booking:
+
+Booking no.: [ref]
+Guests: [names]
+Room: [n] [room type]
+Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+
+Kindly cancel this booking in your system. We apologise for the inconvenience and hope to welcome your guests on another occasion.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+Vietnamese: `Rất tiếc khách sạn đã hết phòng trong thời gian này, nên khách sạn không thể nhận booking sau:` … `Chị/Anh vui lòng huỷ booking này trên hệ thống giúp khách sạn. Khách sạn xin lỗi vì sự bất tiện và rất mong được đón tiếp khách của Quý Đối tác vào dịp khác.`
+
 ---
 
 ## 10. Front office sent a voucher as a link — ask for the PDF (`draft-reply <id> <body> --kind reply --internal`)

@@ -88,6 +88,10 @@ def availability():
     return load(google_service_account_transport(_need("EMI_GOOGLE_KEYFILE")), AVAILABILITY_FOLDER_ID)
 
 
+# Sunny's notes of what she told agencies on Zalo (sold out, quotes), one JSON line each (dev, 2026-11-21). Read only.
+ZALO_NOTES = os.environ.get("EMI_ZALO_NOTES", "/data/shared/haya-notes.jsonl")
+
+
 # "HAYA Odeon Invoices 2026 - 2027" (1SLeLZnkl4IJX5AinK8V2a1k9yLjEoMrfkMpvBnTdULc): one tab per Odeon proforma.
 # Unset = Emi makes no invoice and the confirmation waits with DO NOT SEND UNTIL INVOICE IS ATTACHED (dev, 2026-11-09).
 ODEON_INVOICE_BOOK = os.environ.get("EMI_ODEON_INVOICE_BOOK", "")

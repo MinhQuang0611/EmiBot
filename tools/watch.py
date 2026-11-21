@@ -61,6 +61,11 @@ def check(mail, st, job_id, run=subprocess.run, now=time.time, lock_path=None, o
         out("NO_REPLY")
         return "quiet"
     res = run([exe, "automations", "run", job_id], capture_output=True, text=True, timeout=90)
+    if res.returncode != 0 and '"already-running"' in f"{res.stdout or ''}{res.stderr or ''}":
+        # A job 1 run started elsewhere (its 3-hourly run, job 6, a person) is working: it or the next minute's
+        # check takes the new mail. Not a failure (dev, 2026-11-21: five false "watch failed" on 20/11).
+        out("NO_REPLY")
+        return "running"
     if res.returncode != 0:
         raise RuntimeError(f"could not start job 1: {(res.stderr or res.stdout).strip()[-300:]}")
     os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)

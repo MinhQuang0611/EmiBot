@@ -156,6 +156,26 @@ class ReviewTest(unittest.TestCase):
         with self.assertRaises(review.ReviewError):
             review.accept(self.mail, self.st, self.tg, "1")
 
+    def test_listing_reads_drafts_once_not_one_call_per_review(self):
+        # dev, 2026-11-21: review-list took ~57 s on the host, one Graph call per open review, under the state lock
+        st = State(os.path.join(self.dir, "s2.json"))
+        for i in range(5):
+            st.open_review(f"d{i}", how="reply", to=["a@b.c"], kind="reply", subject=f"s{i}")
+
+        class Stub:
+            asked = []
+
+            def list_drafts(self, only_emi=False):
+                return [{"id": f"d{i}"} for i in range(4)]  # d4 is not in Drafts any more
+
+            def get_draft(self, draft_id):
+                Stub.asked.append(draft_id)
+                return None
+        review.listing(Stub(), st, out=lambda *_: None)
+        self.assertEqual(Stub.asked, ["d4"])
+        self.assertEqual(st.data["reviews"]["5"]["status"], "gone")
+        self.assertEqual([st.data["reviews"][str(i)]["status"] for i in range(1, 5)], ["pending"] * 4)
+
     def test_info_shows_source_and_full_text(self):
         self.reply()
         review.info(self.mail, self.st, "1", out=self.lines.append)

@@ -53,6 +53,24 @@ class WatchTest(unittest.TestCase):
         self.assertEqual(self.check(True), "started")
         self.assertEqual(len(self.calls), 3)
 
+    def test_already_running_elsewhere_is_not_a_failure(self):
+        # dev, 2026-11-21: on 20/11 the watcher failed five times while the 3-hourly job 1 run was working
+        def run(argv, **kw):
+            self.calls.append(argv)
+            return SimpleNamespace(returncode=1, stderr="", stdout='{\n  "ok": true,\n  "ran": false,\n  '
+                                                                  '"reason": "already-running"\n}')
+        res = watch.check(FakeMail(True), self.st, "job-1", run=run, now=lambda: self.clock[0],
+                          lock_path=self.lock, out=lambda *_: None)
+        self.assertEqual(res, "running")
+        self.assertFalse(os.path.exists(self.lock))  # not ours: the next minute checks again
+
+    def test_other_start_failures_still_fail(self):
+        def run(argv, **kw):
+            return SimpleNamespace(returncode=1, stderr="gateway unreachable", stdout="")
+        with self.assertRaises(RuntimeError):
+            watch.check(FakeMail(True), self.st, "job-1", run=run, now=lambda: self.clock[0],
+                        lock_path=self.lock, out=lambda *_: None)
+
     def with_runs(self, entries):
         def run(argv, **kw):
             self.calls.append(argv)

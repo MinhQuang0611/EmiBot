@@ -29,7 +29,7 @@ PENDING = "pending-"  # draft id of a draft that exists only on Telegram so far
 KIND_LABEL = {
     "confirmation": "Xác nhận booking", "reply": "Trả lời", "forward": "Chuyển tiếp",
     "inquiry": "Báo giá / tư vấn", "request": "Yêu cầu của khách", "deposit_reminder": "Nhắc đặt cọc",
-    "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking on request",
+    "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking",
     "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
     "pickup": "Trả lời đón sân bay",
 }
@@ -99,6 +99,8 @@ def notify(tg, n, r, note="", in_place=False, held=""):
         lines.append(f"<b>Đã sửa theo:</b> {esc(note)}")
     if held:
         lines.append(f"<b>Chưa tự gửi:</b> {esc(held)}")
+    for z in r.get("zalo") or ():  # dev 21/11: what Sunny already told them on Zalo, for the reviewer to compare
+        lines.append(f"⚠️ <b>Zalo:</b> {esc(z)}")
     where = ("Đã nằm trong Outlook Drafts. Accept = duyệt (vẫn phải bấm Send trong Outlook)." if in_outlook(r) else
              "Chưa có trong Outlook. Accept = lưu vào Outlook Drafts (vẫn phải bấm Send).")
     lines += ["", "<b>Nội dung email:</b>", f"<blockquote>{as_email(text)}</blockquote>",
@@ -130,7 +132,7 @@ def _mark(tg, r, note):
 # --- a new draft ---
 
 def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-           cc=None, bcc=(), override=False, attachments=(), notice=True):
+           cc=None, bcc=(), override=False, attachments=(), notice=True, zalo=()):
     """Outlook mode: called right after the draft is saved in Outlook. Returns the review number.
     override=True: a reply whose recipients were set by --to (the draft is rebuilt with them on rewrite).
     notice=False: forward-slip tells Telegram itself, once it knows whether the forward went."""
@@ -140,6 +142,8 @@ def opened(mail, st, tg, draft_id, *, how, source, kind, ref="", row=0, text, re
                        cc=_addresses(d.get("ccRecipients")) or list(cc or []), bcc=list(bcc),
                        to_override=bool(override),
                        subject=d.get("subject", ""), text=text, attachments=list(attachments), files=[])
+    if zalo:
+        st.data["reviews"][n]["zalo"] = list(zalo)
     if notice:
         notify(tg, n, st.data["reviews"][n])
     return n
@@ -165,7 +169,7 @@ def sent(st, tg, n, by="forward-slip"):
 
 
 def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, reply_all=False, to=None,
-            cc=None, bcc=(), files=(), mailbox="", new_subject=""):
+            cc=None, bcc=(), files=(), mailbox="", new_subject="", zalo=()):
     """Telegram mode: nothing goes to Outlook. The draft (text + files under store/<n>/) waits for Accept.
     files = [(name, bytes, content_type)]. Returns the review number; the draft id is 'pending-<n>'.
     A reply with to=[...] goes to exactly to / cc (the real sender of a mail our staff forwarded in), and its
@@ -190,6 +194,8 @@ def propose(mail, st, tg, store, *, how, source, kind, ref="", row=0, text, repl
                        subject=subject, text=text, attachments=[], files=[])
     r = st.data["reviews"][n]
     r["draft_id"] = PENDING + n
+    if zalo:
+        r["zalo"] = list(zalo)
     for name, data, ctype in files:
         _keep_file(r, store, n, name, data, ctype)
     notify(tg, n, r)
@@ -401,9 +407,24 @@ def rewrite(mail, st, tg, n, text, feedback="", check=None, out=print):
     return d
 
 
-def _check_gone(mail, st, n, r):
-    if r["status"] == REVIEW_OPEN and in_outlook(r) and mail.get_draft(r["draft_id"]) is None:
+def _check_gone(mail, st, n, r, in_drafts=None):
+    """in_drafts: the Drafts folder's ids, read once by the caller. A draft found there is not asked about again;
+    one not found is still asked by its own id (it may sit in another folder)."""
+    if r["status"] != REVIEW_OPEN or not in_outlook(r):
+        return
+    if in_drafts is not None and r["draft_id"] in in_drafts:
+        return
+    if mail.get_draft(r["draft_id"]) is None:
         st.close_review(n, "gone", "no longer in Drafts: sent or deleted in Outlook")
+
+
+def _draft_ids(mail):
+    """Every id in the Drafts folder, in a few pages; None when it can't be read (each draft is then asked alone).
+    dev, 2026-11-21: review-list asked Graph once per open review, ~57 s, holding the state lock all that time."""
+    try:
+        return {d["id"] for d in mail.list_drafts()}
+    except Exception:
+        return None
 
 
 def info(mail, st, n, out=print):
@@ -440,8 +461,9 @@ def info(mail, st, n, out=print):
 
 def listing(mail, st, everything=False, out=print):
     shown = 0
+    in_drafts = _draft_ids(mail)
     for n, r in sorted(st.data["reviews"].items(), key=lambda kv: int(kv[0])):
-        _check_gone(mail, st, n, r)
+        _check_gone(mail, st, n, r, in_drafts)
         if r["status"] != REVIEW_OPEN and not everything:
             continue
         shown += 1

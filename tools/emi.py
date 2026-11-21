@@ -15,6 +15,8 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
     python -m tools.emi sheet-find <text>                 # rows by ref, guest name, confirmation no., or arrival DD/MM/YYYY
                                                           #   (Emi's sheet + the live sheet, read only)
+    python -m tools.emi zalo-notes --agency <name> [--guest <name>] [--arrival DD/MM/YYYY --departure DD/MM/YYYY]
+                                                          # what Sunny told them on Zalo (sold out, quote); --text <words>
     python -m tools.emi direct-ref                        # next booking_ref for a direct guest, HAYA-D + number
     python -m tools.emi sheet-rows <first> [<last>]       # rows as they are on the sheet, filled cells only
     python -m tools.emi sheet-audit [--from-row N]        # rows already on the sheet that break the sheet-check rules
@@ -110,6 +112,7 @@ from . import review, sim
 from . import inbox_notices
 from . import karen_memory
 from . import intake_schema as schema
+from . import zalo_notes
 from .state import REVIEW_OPEN, now_iso
 
 VN = timezone(timedelta(hours=7))
@@ -741,7 +744,7 @@ def mail_find(mail, text, out=print, work_dir=None, days=ATTACHMENT_LOOKBACK_DAY
         return hits
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        with_files = [m for m in mail.list_inbox_since(since) if m.get("hasAttachments")]
+        with_files = [m for m in mail.list_inbox_since(since, with_files=True) if m.get("hasAttachments")]
     except Exception as e:  # network or permission: the subject/body search above still stands, and the gap is said
         out(f"\nGAP: attached files not searched ({str(e).splitlines()[0][:120]}) — read front office's emails "
             f"with files by hand")
@@ -1633,6 +1636,8 @@ def sheet_append(sheet, data, out=print, live=None):
         for r in sheet.find_by_ref(ref):
             out(f"row {r['_row']}: " + json.dumps({k: v for k, v in r.items() if v and k != "_row"},
                                                   ensure_ascii=False))
+    if any(rec.get("action") == "NEW" for rec in records):
+        zalo_lines([rec for rec in records if rec.get("action") == "NEW"], out=out)
 
 
 def check_row_is(current, ref, group_cols):
@@ -1905,6 +1910,54 @@ def check_bank_details_booked(text, kind, ref, rows):
         "the deposit deadline. A booking already on the sheet: give its --ref. No draft made.")
 
 
+# dev, 2026-11-21: "các thông tin booking cần checking thêm cái thông tin khách hàng đã req trước qua Zalo chưa".
+# Sunny notes on the host what she told an agency on Zalo (sold out, a quote); a booking email that follows is put
+# against it, and the reviewer sees the note on the draft's Telegram notice.
+ZALO_KINDS = ("reply", "request", "inquiry", "confirmation", "decline")
+
+
+def zalo_lines(rows, out=print):
+    """The Zalo notes about the booking on these intake rows, one line each, printed as ZALO: lines. No file: a GAP
+    line when the shared folder is there (Sunny's file missing or unreadable), nothing where there is no such folder."""
+    notes, gap = zalo_notes.load(config.ZALO_NOTES)
+    if gap:
+        if os.path.isdir(os.path.dirname(config.ZALO_NOTES) or "."):
+            out(f"GAP: {gap}")
+        return []
+    lines = zalo_notes.for_rows(notes, rows)
+    for line in lines:
+        out(f"ZALO: {line}")
+    if lines:
+        out("ZALO: what Sunny told them on Zalo is above. Sold out on Zalo, or a price/room type other than Zalo's: "
+            "the reply gets a CHECK line naming it ('[CHECK BEFORE SENDING: Zalo N… đã báo …]'); the reviewer sees "
+            "the note on the draft's Telegram notice")
+    return lines
+
+
+def run_zalo_notes(args, out=print):
+    notes, gap = zalo_notes.load(config.ZALO_NOTES)
+    if gap:
+        out(f"GAP: {gap}")
+        return []
+    arr, dep = zalo_notes.parse_dmy(args.arrival), zalo_notes.parse_dmy(args.departure)
+    if args.text:
+        want = zalo_notes.fold(args.text)
+        hits = [n for n in notes if want in zalo_notes.fold(" ".join(str(v) for v in n.values()))]
+        if arr and dep:
+            hits = [n for n in hits if not zalo_notes.stay(n)
+                    or (zalo_notes.stay(n)[0] < dep and arr < zalo_notes.stay(n)[1])]
+    else:
+        if not (args.agency or args.guest):
+            raise Refused("give --agency and/or --guest (with --arrival/--departure DD/MM/YYYY), or --text <words>")
+        hits = zalo_notes.match(notes, args.agency or "", args.guest or "", arr, dep)
+    out(f"{len(notes)} Zalo note(s) in {config.ZALO_NOTES}; {len(hits)} about this:")
+    for n in hits:
+        out(f"  {zalo_notes.describe(n)}")
+    if not hits:
+        out("  NO ZALO NOTE: nothing on Zalo about this agency/guest for these dates")
+    return hits
+
+
 def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     """text: the body made by the command itself (ota-note); otherwise read from args.body.
     rows: callable giving the intake rows (the command passes it), for the bank-details check."""
@@ -1922,7 +1975,10 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     text = read_text(args.body) if text is None else text
     check_no_gaps(text, args.message_id)
     if rows is not None:
+        rows = functools.lru_cache(maxsize=None)(rows)  # read the sheet once
         check_bank_details_booked(text, args.kind, args.ref, rows)
+    zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
+            if rows is not None and args.ref and args.kind in ZALO_KINDS else [])
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
     older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
@@ -1930,7 +1986,7 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     if telegram_first(tg) and not auto:
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
-                           to=to, cc=cc, mailbox=config.MAILBOX)
+                           to=to, cc=cc, mailbox=config.MAILBOX, zalo=zalo)
         st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
         out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
             + _to_line(to, cc))
@@ -1941,7 +1997,7 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     _record(st, d, args)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to),
-                      notice=not auto)
+                      notice=not auto, zalo=zalo)
     close_replaced(mail, st, tg, older, n, out=out)
     if auto:
         return auto_send(mail, st, tg, n, d, args, text, out=out)
@@ -2752,6 +2808,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     if before:
         check_before_pdf(r, body)
     confirmation_check(r)(body)
+    zalo = zalo_lines([r], out=out)
     if company == "Odeon" and not before and not attach:
         made = _auto_invoice(sheet, ref, out=out)  # dev, 2026-11-09: Emi makes the proforma itself
         attach = [made] if made else []
@@ -2801,7 +2858,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
     if telegram_first(tg):
         n = review.propose(mail, st, tg, pending_store(), how=how, source=args.message_id, kind="confirmation",
                            ref=ref, row=int(args.row), text=body, reply_all=args.all, mailbox=config.MAILBOX,
-                           to=to, cc=cc, files=files, new_subject=subject or "")
+                           to=to, cc=cc, files=files, new_subject=subject or "", zalo=zalo)
         st.data["reviews"][n].update(meta)
         st.record_draft(review.PENDING + n, ref, int(args.row), "confirmation", awaiting_pdf=before)
         out(f"confirmation draft #{n} sent to Telegram for review with {len(files)} PDF(s), not in Outlook until "
@@ -2822,7 +2879,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
             f"{x.get('createdDateTime', '')}) moved to Deleted Items: this confirmation replaces it")
     n = review.opened(mail, st, tg, d["id"], how=how, source=args.message_id, kind="confirmation", ref=ref,
                       row=int(args.row), text=body, reply_all=args.all, to=to, cc=cc, override=bool(to),
-                      attachments=[f[0] for f in files], notice=False)
+                      attachments=[f[0] for f in files], notice=False, zalo=zalo)
     st.data["reviews"][n].update(meta)
     review.notify(tg, n, st.data["reviews"][n])
     out(f"confirmation draft #{n} saved in Drafts with {len(files)} PDF(s) attached: {d['id']}" + _to_line(to, cc)
@@ -3143,6 +3200,9 @@ def run_build_stuck(sheet, st, out=print):
     out(build_watch.render(items))
     alerts = st.data.get("build_alerts", {})
     for i in items:
+        if i["kind"] == "full":  # dev 21/11: no room in EZFOLIO = declined at once, no question to Karen
+            out(f"  {i['ref']}: {build_watch.decline_steps(i)}")
+            continue
         qid = (alerts.get(i["key"]) or {}).get("question")
         if qid:
             q = st.data["questions"].get(qid, {})
@@ -3812,6 +3872,10 @@ def parser():
     s = sub.add_parser("sheet-template"); s.add_argument("action"); s.add_argument("file")
     s = sub.add_parser("sheet-check"); s.add_argument("file")
     s = sub.add_parser("sheet-find"); s.add_argument("text")
+    s = sub.add_parser("zalo-notes", help="what Sunny already told this agency/guest on Zalo (sold out, quotes)")
+    s.add_argument("--agency", default=""); s.add_argument("--guest", default="")
+    s.add_argument("--arrival", default="", help="DD/MM/YYYY"); s.add_argument("--departure", default="", help="DD/MM/YYYY")
+    s.add_argument("--text", default="", help="any words instead (agency, guest, Zalo group)")
     sub.add_parser("direct-ref", help="next booking_ref for a direct guest: HAYA-D + number")
     s = sub.add_parser("sheet-rows", help="rows FIRST..LAST as they are on the sheet (read-only)")
     s.add_argument("first", type=int); s.add_argument("last", type=int, nargs="?")
@@ -3994,7 +4058,7 @@ def parser():
 
 
 # These only read, and some take half a minute: they don't wait for the state lock or hold it up.
-READ_ONLY = ("show", "mail-find", "inbox-new", "status", "ota-audit", "day-check", "sheet-find", "change-replay", "quote", "availability", "payments-due",
+READ_ONLY = ("show", "mail-find", "inbox-new", "status", "ota-audit", "day-check", "sheet-find", "zalo-notes", "change-replay", "quote", "availability", "payments-due",
              "confirmations-due", "build-stuck", "deposit-extension", "pegas-booking")  # pickup keeps its outcome (19/11): not read-only
 
 
@@ -4041,6 +4105,8 @@ def main(argv=None):
             sheet_check(config.sheet(), read_json(args.file))
         elif c == "sheet-find":
             sheet_find(config.sheet(), args.text, live=config.live_sheet())
+        elif c == "zalo-notes":
+            run_zalo_notes(args)
         elif c == "direct-ref":
             direct_ref(config.sheet(), live=config.live_sheet())
         elif c == "sheet-rows":
