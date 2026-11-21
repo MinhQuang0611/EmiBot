@@ -1012,6 +1012,19 @@ def check_rows(sheet, records, fresh=True):
                      f"back. If the thread shows HAYA already has this booking (its confirmation, a confirmation "
                      f"number or group code, a modification, a payment, the guest in house), it is in EZFOLIO: "
                      f"CHANGE rows with 'original booking not on the sheet', not NEW (booking-intake.md)")
+        if (fresh and rec.get("action") == "CHANGE" and str(rec.get("channel_type") or "").strip() in ("TA", "Direct")
+                and re.search(r"original booking not on the sheet", str(rec.get("missing_info") or ""), re.I)
+                and not str(rec.get("ezfolio_group_code") or "").strip()
+                and not str(rec.get("confirmation_no") or "").strip()
+                and not re.search(r"HAYA confirmed", str(rec.get("internal_notes") or ""), re.I)):
+            # dev 21/11, row 2521 (Turtle Adventure TA-08Jan2027-GGT06): a deposit on a booking HAYA had only quoted
+            # went in as CHANGE; the build tool found no group anywhere and stopped. A payment slip alone doesn't
+            # show HAYA has the booking: its confirmation (group code, confirmation no.) does.
+            e = e + ["action: CHANGE 'original booking not on the sheet' for a travel agency or direct guest with "
+                     "no group code and no confirmation number: if HAYA only quoted and the sender accepted or "
+                     "paid, the booking was never entered — NEW rows (booking-intake.md, 'Quote accepted'). If "
+                     "the thread does show HAYA's own confirmation, put its group code or confirmation no. on the "
+                     "row, or write 'HAYA confirmed on DD/MM (<how>)' in internal_notes"]
         if fresh and rec.get("action") == "NEW" and str(rec.get("channel_type") or "").strip() == "Tour operator":
             gate = operators.on_request_gate(rec, sheet.header)
             if gate:
@@ -1872,8 +1885,29 @@ def reply_all_default(args, to):
     return not to and not getattr(args, "sender_only", False)
 
 
-def draft_reply(mail, st, args, tg=None, out=print, text=None):
-    """text: the body made by the command itself (ota-note); otherwise read from args.body."""
+BANK_ACCOUNT = "1020729617"
+
+
+def check_bank_details_booked(text, kind, ref, rows):
+    """dev 21/11 (Turtle Adventure TA-08Jan2027-GGT06): on 13/11 the agency answered HAYA's quote "cung cấp số tài
+    khoản để kế toán bên em cọc cho booking này"; the reply gave the bank account and asked for names, and no NEW row
+    was written, so the deposit of 21/11 found no booking (row 2521). An agency asking how to pay has booked: the
+    NEW rows come first, and the bank details go to a booking on the sheet. rows: callable, the sheet's rows."""
+    if BANK_ACCOUNT not in (text or "") or kind not in ("reply", "inquiry", "request"):
+        return
+    if ref and booking_state(rows(), ref):
+        return
+    raise Refused(
+        f"the reply gives HAYA's bank account but {'--ref ' + ref + ' is on no intake row' if ref else 'has no --ref'}"
+        ". An agency asking for the account to pay a deposit has accepted the quote: that is a booking — write its "
+        "NEW rows first (booking-intake.md, 'Quote accepted'; a missing guest name goes in transfer 'THIẾU: Name'), "
+        "then the reply is the confirmation (draft-confirmation --before-pdf), which carries the bank account and "
+        "the deposit deadline. A booking already on the sheet: give its --ref. No draft made.")
+
+
+def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
+    """text: the body made by the command itself (ota-note); otherwise read from args.body.
+    rows: callable giving the intake rows (the command passes it), for the bank-details check."""
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     if args.kind in REMINDERS:
@@ -1887,6 +1921,8 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None):
     check_not_stop_sales(args.kind)
     text = read_text(args.body) if text is None else text
     check_no_gaps(text, args.message_id)
+    if rows is not None:
+        check_bank_details_booked(text, args.kind, args.ref, rows)
     to, cc = reply_recipients(mail, args, args.kind)
     args.all = reply_all_default(args, to)
     older = check_one_open_draft(mail, st, "reply", args.kind, args.ref, to, args.message_id, _replaces(args))
@@ -4018,7 +4054,8 @@ def main(argv=None):
         elif c == "sheet-update":
             sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR, ref=args.ref)
         elif c == "draft-reply":
-            draft_reply(config.mail(), st, args, tg=config.telegram())
+            draft_reply(config.mail(), st, args, tg=config.telegram(),
+                        rows=lambda: config.sheet().rows() + live_rows(config.live_sheet()))
             st.save()
         elif c == "ota-note":
             ota_note(config.mail(), config.sheet(), st, args, tg=config.telegram(), live=config.live_sheet())

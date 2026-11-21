@@ -188,7 +188,7 @@ After giving availability and price, state that to hold the booking the client n
 
 Payment terms to state: 50% deposit within 48 hours of receiving the confirmation, remaining 50% 7 days before check-in.
 
-When those details arrive, the email becomes a NEW booking → `booking-intake.md`.
+When those details arrive, the email becomes a NEW booking → `booking-intake.md`. So does an answer that takes the quote without them ("ok book", "cho em số tài khoản để cọc"): NEW rows with the gaps in `transfer`, reply = the confirmation before the PDF (`booking-intake.md`, "Quote accepted"; dev, 2026-11-21).
 
 ## Money asks
 A paid sea-view upgrade on a booking: `email-templates.md` 5b. Discount, free upgrade, waived fee, free extra: acknowledge, give the real reason it isn't offered on this rate, offer what is available at its price. Never yes, never "let me see what I can do." If it's something Karen might grant, it goes to her as a request.

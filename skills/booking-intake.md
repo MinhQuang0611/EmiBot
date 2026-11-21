@@ -181,11 +181,18 @@ If the email doesn't make clear whether the sender is a travel company or a priv
 | A forward of a booking that already reached sales@ (a colleague's Fw:) | no row; the original email is the record (`inbox-triage.md` §1) |
 
 A follow-up on a booking that isn't on the sheet yet (audit 30/10, rows 67, 74, 80, 88, 96, 157, 161, 168, 196, 329: NEW rows dated back to the original email for bookings EZFOLIO already had; the build tool would make them twice):
-- **The thread shows HAYA already has the booking** — HAYA's own confirmation, a confirmation number or group code, a modification or amendment notice, a payment slip, the guest in house or the stay over → **CHANGE** rows from this email, `missing_info` "original booking not on the sheet" (step 3). Never a NEW dated back to the original email.
+- **The thread shows HAYA already has the booking** — HAYA's own confirmation, a confirmation number or group code, a modification or amendment notice, the guest in house or the stay over → **CHANGE** rows from this email, `missing_info` "original booking not on the sheet" (step 3). Never a NEW dated back to the original email. **A payment slip on its own is not this** (dev, 2026-11-21, live row 2521): an agency pays on HAYA's quote too. For a TA or direct guest with no group code and no confirmation number, `sheet-check` refuses the CHANGE unless `internal_notes` says `HAYA confirmed on DD/MM (<how>)`.
+- **HAYA only quoted, and the sender accepted or paid** → the booking was never entered: **NEW** rows (see "Quote accepted" below), the payment on the first room row. Turtle Adventure TA-08Jan2027-GGT06: quote 07/11, "cung cấp số tài khoản để cọc" 13/11 (no row written), deposit 21/11 as a CHANGE the build tool couldn't place.
 - **The thread shows HAYA never handled it** — an agency chasing a request nobody answered (`inbox-triage.md`, "Chaser"), an OTA asking for the hotel confirmation number on a voucher that has none → the NEW rows from the original request in the thread. `received_at` and `source_email` are that email's, not the follow-up's; then the follow-up's own CHANGE rows if it adds something.
 - Can't tell → CHANGE with "original booking not on the sheet", and a line for Karen in the report. `sheet-check` warns on any NEW dated more than 2 days back.
 
 `received_at` is always the time `show` prints for that email (Vietnam time), never a time written inside a quoted or forwarded header or a PDF's "Reservation date" (2789404: received 15:39, PDF 13:06).
+
+## Quote accepted (dev, 2026-11-21)
+A travel agency or guest answering HAYA's quote so that it goes ahead has booked: "ok book", "confirm giúp em", "đặt giúp", the guest names for the quoted stay, **"cho em số tài khoản để cọc"**, a deposit slip. That email gets the **NEW** rows at once, from the quote it accepts (room, dates, pax, the rate HAYA quoted).
+- Nothing waits for the guest's full name, nationality or flight: they go in `transfer` as `THIẾU: Name; …` (dev 13/11). Only a rate problem goes in `missing_info`, e.g. Indian guests quoted without the +20%: `rate: Indian +20% not in the quoted rate` for Karen (AGENTS rule 4).
+- The reply is the confirmation, drafted before the PDF (`draft-confirmation --before-pdf`): it carries the bank account and the deposit deadline. Never a reply that only gives the bank account: `draft-reply` refuses HAYA's account number in a reply whose `--ref` is on no intake row.
+- A deposit slip after the NEW rows is its CHANGE row as usual (`inbox-triage.md`, Payment slip). A slip that is itself the acceptance (no earlier answer from the agency): the NEW rows carry the payment on the first room row, then `forward-slip` and the confirmation.
 
 ## Follow-ups asking for the confirmation number
 An OTA writing "Could you please reconfirm and share the hotel confirmation number for this booking?" under its voucher adds nothing to the booking: no row (above).
