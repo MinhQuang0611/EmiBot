@@ -201,3 +201,27 @@ class GroupCodeAsRefTest(unittest.TestCase):
         out = payments.due(rows, emi.booking_state, emi._parts, FloodedMail(), State(tempfile.mktemp()), MAILBOX,
                            datetime(2026, 11, 21, 15, 0, tzinfo=VN))
         self.assertEqual([i["ref"] for i in out["no_confirmation"] + out["remind"]], ["28318"])
+
+
+class NoConfirmationReasonTest(unittest.TestCase):
+    """AMARA 14-16/12 (#30124), 21/11: 'no mail from sales@ has the group code' while its confirmation went 21/10."""
+
+    def lines(self, st):
+        out = payments.due([concierge(2321)], emi.booking_state, emi._parts, FloodedMail(), st, MAILBOX,
+                           datetime(2026, 11, 21, 15, 0, tzinfo=VN))
+        return [l for l in payments.render(out, datetime(2026, 11, 21, 15, 0, tzinfo=VN)).splitlines()
+                if l.startswith("NO CONFIRMATION")]
+
+    def test_a_held_confirmation_says_so(self):
+        st = State(tempfile.mktemp(suffix="-state.json"))
+        st.data["confirmation_holds"]["2793131"] = {"reason": "PDF terms differ"}
+        [line] = self.lines(st)
+        self.assertIn("confirmation held (PDF terms differ)", line)
+        self.assertNotIn("no mail from sales@", line)
+
+    def test_a_draft_waiting_for_its_pdf_says_so(self):
+        st = State(tempfile.mktemp(suffix="-state.json"))
+        st.data["confirmations"]["2793131|2321"] = {"draft_id": "d7", "awaiting_pdf": True}
+        st.data["reviews"]["1570"] = {"draft_id": "d7", "status": "pending", "history": []}
+        [line] = self.lines(st)
+        self.assertIn("confirmation draft #1570 still waits for its PDF", line)

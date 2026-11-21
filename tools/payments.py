@@ -306,8 +306,15 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now, cache=None):
             which = "deposit"
         else:
             continue
-        if ref in st.data["confirmation_holds"] or any(r == ref for r, _ in st.awaiting_pdf()):
-            out["no_confirmation"].append(item)  # its confirmation is held or still waits for the PDF: not sent
+        # its confirmation is held or still waits for the PDF: not sent. Said so: the report read "no mail from sales@
+        # has the group code" for AMARA 14-16/12 (#30124), whose confirmation went on 21/10 (dev, 2026-11-21)
+        if ref in st.data["confirmation_holds"]:
+            out["no_confirmation"].append(dict(item, why=f"confirmation held ({st.data['confirmation_holds'][ref].get('reason', 'no reason kept')}): job 2 and Karen settle it"))
+            continue
+        waiting = [d for (r, _), d in st.awaiting_pdf().items() if r == ref]
+        if waiting:
+            n = st.review_by_draft(waiting[0])
+            out["no_confirmation"].append(dict(item, why=f"confirmation draft #{n} still waits for its PDF (job 2 attaches it)"))
             continue
         sent = find_confirmation(mail, code, mailbox, mine, cache=cache, slips=False)
         if sent is None:
@@ -614,7 +621,8 @@ def render(result, now):
                    f"Karen sets the deadline. Report line")
     for i in r["no_confirmation"]:
         out.append(f"NO CONFIRMATION FOUND | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']}: "
-                   f"built, unpaid, and no mail from sales@ has the group code, so the deposit clock hasn't started")
+                   + (i.get("why") or "built, unpaid, and no mail from sales@ has the group code")
+                   + ", so the deposit clock hasn't started")
     for i in r["paid_unsent"]:
         out.append(f"PAID, REMINDER STILL IN DRAFTS | ref {i['ref']} | {i['which']} | draft #{i['review']}: report "
                    f"line 'deny #{i['review']}', so it isn't sent by mistake")
