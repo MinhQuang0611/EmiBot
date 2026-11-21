@@ -179,7 +179,8 @@ def _first_confirmation(mail, code, mailbox, parts):
     for m in ours:
         full = mail.get_message_bodies(m["id"])
         words = f"{m.get('subject', '')} {_text(full)}".lower()
-        if code not in _text(full) and not (m.get("hasAttachments") and any(p in words for p in parts)):
+        # code in the subject with the PDF on: AMARA 14-16/12 (#30124), whose ref has no number to match on (21/11)
+        if code not in _text(full) and not (m.get("hasAttachments") and any(p in words for p in (*parts, code))):
             continue  # the number matched inside something else
         return {"id": m["id"], "sent_at": _sent_time(m),
                 "to": [a for a in _list(full.get("toRecipients")) if not is_internal(a)],
@@ -242,7 +243,20 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now, cache=None):
     out = {"remind": [], "slip": [], "no_confirmation": [], "overdue": [], "short_notice": [], "paid_unsent": [],
            "backfill": []}
     soon = now + lookahead(now)
+    # A CHANGE written with the group code as its ref (06–07/11, before sheet-append rewrote it) split a booking in
+    # two: "30124" (row 1662, 07/11 14:15, deposit 800,000 open) is the older half of "AMARA 14-16/12" (row 1671,
+    # 07/11 18:02, deposit paid, balance due 07/12), and was reported OVERDUE (dev, 2026-11-21). The booking under its
+    # own ref is the one chased.
+    named_refs = {}
+    for r in rows:
+        ref = (r.get("booking_ref") or "").strip()
+        for c in _codes(r):
+            if ref and ref != c:
+                named_refs.setdefault(c, set()).add(ref)
     for state in operators.bookings(rows, state_of):
+        ref = (state[0].get("booking_ref") or "").strip()
+        if ref in named_refs and any(ref in _codes(r) for r in state):
+            continue  # the group code as a ref: the same booking is chased under its own ref
         if any(r.get("action") == BACKFILL for r in state):
             backfill = state
             state = own_state(rows, (state[0].get("booking_ref") or "").strip(), parts_of)

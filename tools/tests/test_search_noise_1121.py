@@ -172,3 +172,32 @@ class ConfirmationCacheTest(unittest.TestCase):
         out = emi.run_payments_due(mail, Sheet(), st, out=lambda *_: None, now=self.NOW, work_dir=work)
         self.assertEqual(mail.calls, 1)  # only the slips search of the reminder about to go
         self.assertEqual([i["ref"] for i in out["remind"]], ["2793131"])
+
+
+def amara(n, ref, received, cod, **kw):
+    """Live rows 1662 (ref '30124', the group code) and 1671 (ref 'AMARA 14-16/12'): one booking, group 30124."""
+    base = {"_row": n, "action": "CHANGE", "received_at": received, "channel_type": "TA", "company": "Amara Tour",
+            "booking_ref": ref, "ezfolio_group_code": "30124", "Group code": "30124", "arrival": "14/12/2026",
+            "departure": "16/12/2026", "total_vnd": "40200000", "status": "Definite", "pdf_link": "https://drive/x",
+            "COD": cod}
+    return {**base, **kw}
+
+
+class GroupCodeAsRefTest(unittest.TestCase):
+    def test_the_older_half_under_the_group_code_is_not_chased(self):
+        rows = [amara(1662, "30124", "07/11/2026 14:15", "48h from revised confirmation",
+                      **{"Payment 1": "19300000", "Remaining amount": "20900000"}),
+                amara(1671, "AMARA 14-16/12 (no agency code)", "07/11/2026 18:02",
+                      "Balance 20,100,000 due 07/12/2026 (7 days before arrival)",
+                      **{"Payment 1": "20100000", "Remaining amount": "20100000"})]
+        st = State(tempfile.mktemp(suffix="-state.json"))
+        st.record_draft("d1", "30124", 1662, "deposit_reminder")
+        out = payments.due(rows, emi.booking_state, emi._parts, FloodedMail(), st, MAILBOX,
+                           datetime(2026, 11, 21, 15, 0, tzinfo=VN))
+        self.assertEqual([i["ref"] for v in out.values() for i in v], [])  # deposit paid, balance not due yet
+
+    def test_a_ref_that_only_looks_like_a_code_is_still_chased(self):
+        rows = [concierge(2321, booking_ref="28318", ezfolio_group_code="28318")]  # CTY VICTORIA: ref = group code
+        out = payments.due(rows, emi.booking_state, emi._parts, FloodedMail(), State(tempfile.mktemp()), MAILBOX,
+                           datetime(2026, 11, 21, 15, 0, tzinfo=VN))
+        self.assertEqual([i["ref"] for i in out["no_confirmation"] + out["remind"]], ["28318"])
