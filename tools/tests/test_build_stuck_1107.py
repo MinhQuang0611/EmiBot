@@ -215,6 +215,19 @@ class PdfPriceTest(unittest.TestCase):
         self.assertIn("TAKE THE PDF'S PRICE", str(e.exception))
         self.assertIn("pdf-fetch 1427", str(e.exception))
 
+    def test_a_provisional_price_carried_forward_unchanged_is_allowed(self):
+        # dev 21/11, Trip.com 1539369423489374 (row 2471): NEW row provisional (SynXis, no Ebooking) and built; the
+        # pick-up CHANGE copies the same price and must say "provisional" for sheet-check's Trip.com rule
+        new = {"_row": 2471, "action": "NEW", "booking_ref": "SynXis 92777EF003560 (Trip.com)", "Group code": "31352",
+               "room_code": "TPL-SV", "rate_per_night_vnd": "3086978", "pdf_link": "https://drive/31352.pdf",
+               "notes": "6. SynXis total, provisional, no Trip.com Ebooking yet: 3,086,978 × 8 nights"}
+        rec = {"action": "CHANGE", "booking_ref": "SynXis 92777EF003560 (Trip.com)", "ezfolio_group_code": "31352",
+               "room_code": "TPL-SV", "rate_per_night_vnd": "3086978",
+               "notes": "6. SynXis total, provisional, no Trip.com Ebooking yet: 3,086,978 × 8 nights"}
+        emi.keep_known_rate([rec], [new], GROUP_COLS)
+        with self.assertRaises(emi.Refused):  # another provisional figure on the same built booking still refused
+            emi.keep_known_rate([dict(rec, rate_per_night_vnd="3500000")], [new], GROUP_COLS)
+
     def test_the_amounts_in_the_pdf(self):
         text = ("Room 1,487,500 x 5 nights  Total: 7,437,500.00 VND  Deposit 7.437.500  Conf 24654  "
                 "26/11/2026  Tel 0909123456  1487500")

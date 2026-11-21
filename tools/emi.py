@@ -1366,6 +1366,14 @@ def keep_known_rate(records, rows, group_cols):
         if not PROVISIONAL.search(" ".join(str(rec.get(k) or "") for k in ("notes", "missing_info", "rate_source"))):
             continue
         mine, code = _parts(rec.get("booking_ref")), codes(rec)
+        rate = operators._amount(rec.get("rate_per_night_vnd"))
+        if rate and any((mine & _parts(r.get("booking_ref")) or code & codes(r) or mine & codes(r))
+                        and r.get("room_code") == rec.get("room_code") and r.get("action") != "CANCEL"
+                        and operators._amount(r.get("rate_per_night_vnd")) == rate for r in rows):
+            # dev 21/11, Trip.com 1539369423489374 (row 2471): the booking's own price carried forward replaces
+            # nothing. Its NEW row was provisional (SynXis figure, no Ebooking), so the pick-up CHANGE had to say
+            # "provisional" for sheet-check and was refused here for it, three runs in a row.
+            continue
         known = [r for r in rows
                  if (mine & _parts(r.get("booking_ref")) or code & codes(r) or mine & codes(r))
                  and r.get("room_code") == rec.get("room_code") and operators._amount(r.get("rate_per_night_vnd"))
