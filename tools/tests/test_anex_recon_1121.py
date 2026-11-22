@@ -273,6 +273,8 @@ class RunTest(Base):
         self.assertIn("1 Quadruple, 10 đêm, 18.283.500 VND, hóa đơn VAT C26MPN số 888, ngày 26/10/2026", d["text"])
         self.assertIn("1 Standard Garden", d["text"])
         self.assertIn("Booking ANEX 112876126: mã đoàn 29692", d["text"])
+        self.assertIn("HAYA Hotel Phu Quoc xin gửi bảng đối chiếu công nợ giai đoạn 19/10/2026 – 25/10/2026 kèm hóa đơn "
+                      "VAT và xác nhận đặt phòng.", d["text"])
         self.assertIn("TỔNG GIÁ TRỊ ĐỀ NGHỊ ĐỐI CHIẾU (đã bao gồm VAT): 39.808.500 VND.", d["text"])
         self.assertEqual(self.st.data["anex_recon"]["2026-10-19"]["palma_moves"], ["29692"])
         self.assertEqual(self.run_(), {"2026-10-19": "drafted"})  # run again: nothing new

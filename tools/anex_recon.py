@@ -300,8 +300,8 @@ def body(first, last, bookings, vats):
     groups = ", ".join(b["group"] for b in bookings)
     return "\n\n".join([
         "Dear Team,",
-        f"HAYA Hotel Phu Quoc xin gửi bảng đối chiếu công nợ giai đoạn {span} theo mẫu file năm trước, kèm hóa đơn "
-        f"VAT và xác nhận đặt phòng.",
+        f"HAYA Hotel Phu Quoc xin gửi bảng đối chiếu công nợ giai đoạn {span} kèm hóa đơn VAT và xác nhận đặt "
+        f"phòng.",  # dev 21/11, on #1575
         "\n".join(lines),
         f"TỔNG GIÁ TRỊ ĐỀ NGHỊ ĐỐI CHIẾU (đã bao gồm VAT): {money(total)} VND.",
         "Theo Điều 8.3 Hợp đồng, sau khi công nợ được xác nhận, khách sạn gửi bản cứng Hóa đơn – Folio – Đơn đặt "

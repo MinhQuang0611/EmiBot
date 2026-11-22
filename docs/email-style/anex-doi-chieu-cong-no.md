@@ -21,7 +21,7 @@ Không thấy thư cho tuần 09/11 – 15/11 (báo cáo EZFOLIO: đoàn 29512 +
 
 ## Nội dung thư (tiếng Việt)
 1. `Dear Team,`
-2. `HAYA Hotel Phu Quoc xin gửi bảng đối chiếu công nợ giai đoạn DD/MM/YYYY – DD/MM/YYYY và hóa đơn đã được xuất.`
+2. `HAYA Hotel Phu Quoc xin gửi bảng đối chiếu công nợ giai đoạn DD/MM/YYYY – DD/MM/YYYY kèm hóa đơn VAT và xác nhận đặt phòng.` (dev, 21/11, after #1575; not "theo mẫu file năm trước")
 3. Bảng tóm tắt, một dòng mỗi booking: Số booking ANEX | Mã đoàn / Số XN | Khách (số khách) | Nhận – Trả phòng | Phòng | Số đêm | Thành tiền (VND) | Hóa đơn VAT (`C26MPN số NNN, ngày DD/MM/YYYY`). Dòng cuối: `TỔNG CÔNG NỢ (đã bao gồm VAT)`.
    Tuần không có booking: `Trong giai đoạn này, khách sạn không có booking ANEX trả phòng tại HAYA Hotel Phu Quoc (đã đối chiếu báo cáo departure).` + `TỔNG GIÁ TRỊ ĐỀ NGHỊ ĐỐI CHIẾU (đã bao gồm VAT): 0 VND.`
 4. Điều 8.3: sau khi Anex xác nhận, khách sạn gửi bản cứng Hóa đơn – Folio – Đơn đặt phòng; Anex trả số đã xác nhận của hai tuần liền kề vào thứ Sáu tuần thứ 3 → `dự kiến được thanh toán vào thứ Sáu, ngày DD/MM/YYYY` (thư 26/10: tuần 19–25/10 → 06/11).
