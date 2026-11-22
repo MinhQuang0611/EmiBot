@@ -32,13 +32,14 @@ KIND_LABEL = {
     "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking",
     "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
     "pickup": "Trả lời đón sân bay", "booking_status": "Trả lời khách: đã nhận booking",
-    "cancellation": "Xác nhận huỷ booking",
+    "cancellation": "Xác nhận huỷ booking", "thanks": "Thư cảm ơn",
 }
 # The headline of a draft Emi sent itself (forward-slip; Karen's auto-send list, 19/11)
 SENT_LABEL = {"forward": "Đã chuyển kế toán", "deposit_reminder": "Đã gửi nhắc đặt cọc",
               "balance_reminder": "Đã gửi nhắc thanh toán", "ota_note": "Đã gửi ghi nhận cho lễ tân",
               "pickup": "Đã gửi trả lời đón sân bay", "booking_status": "Đã trả lời khách: đã nhận booking",
-              "cancellation": "Đã gửi xác nhận huỷ", "stop_sales": "Đã gửi stop sale cho đối tác"}
+              "cancellation": "Đã gửi xác nhận huỷ", "stop_sales": "Đã gửi stop sale cho đối tác",
+              "thanks": "Đã gửi thư cảm ơn"}
 PREVIEW = 2800  # characters of the draft shown in the notice; review-info shows all of it
 
 

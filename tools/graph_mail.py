@@ -40,8 +40,43 @@ FRONT_OFFICE = "haya@haya-hotels.com"
 # dev, 2026-11-21: "Email của khách - họ hỏi booking của mình đã nhận được chưa thì cũng cho auto gửi nếu đã có trong
 # intake sheet rồi" (booking_status) and the cancellation reply once its CANCEL rows are on the sheet (cancellation).
 # dev, 2026-11-21: Long's stop-sale chart to the partners (Karen's list item 2), Bcc to stop_sales.RECIPIENTS only.
+# dev, 2026-11-22 (reply to Trip.com Lodging Support on the stop-sale thread, "Thank you for your email. We look
+# forward to welcoming your guests."): "Email đơn giản cảm ơn Khách thì ko cần phải duyệt. Được auto gửi" (thanks).
 AUTO_KINDS = ("deposit_reminder", "balance_reminder", "ota_note", "pickup", "booking_status", "cancellation",
-              "stop_sales")
+              "stop_sales", "thanks")
+# A thanks reply is a short courtesy and nothing else (email-templates.md 9): no figure, date or booking number, no
+# question, no promise. Anything more is a --kind reply a person reads.
+THANKS_WORDS = re.compile(r"thank|cảm ơn|cám ơn|спасибо|благодар|감사|고맙|谢谢|感谢|多謝|ありがとう", re.I)
+THANKS_GREETING = re.compile(r"^(?:dear|hi|hello|kính gửi|kính chào|chào|thân gửi|уважаем|здравствуй|добрый)\b", re.I)
+THANKS_SIGN_OFF = re.compile(r"^(?:best regards|kind regards|warm regards|regards|best|sincerely|trân trọng|"
+                             r"thân ái|с уважением|reservations team)\b", re.I)
+THANKS_NOT = re.compile(r"\d|\?|confirm|xác nhận|cancel|\bhu[ỷỹ]\b|discount|giảm giá|\bfree|miễn phí|complimentary|"
+                        r"upgrade|nâng hạng|waive|refund|hoàn tiền|\bprices?\b|\brates?\b|\bgiá\b|deposit|\bcọc\b|"
+                        r"payment|thanh toán|\bbank|tài khoản|invoice|hoá đơn|hóa đơn|availab|còn phòng|hết phòng|"
+                        r"fully booked|sold out|скидк|бесплат|\bцен[аыу]\b|оплат|подтвер|отмен", re.I)
+THANKS_MAX = 300  # characters between the greeting and the sign-off
+
+
+def thanks_refusal(text):
+    """Why this text is not a plain thank-you Emi may send by itself, or ''. Read on Emi's own plain text
+    (tools.emi draft-reply), not on the Outlook body, which carries the quoted thread."""
+    lines = [x.strip() for x in (text or "").strip().splitlines()]
+    if lines and THANKS_GREETING.match(lines[0]):
+        lines = lines[1:]
+    for i, x in enumerate(lines):
+        if THANKS_SIGN_OFF.match(x):
+            lines = lines[:i]
+            break
+    body = " ".join(x for x in lines if x)
+    if not THANKS_WORDS.search(body):
+        return "a thanks reply says thank you"
+    if len(body) > THANKS_MAX:
+        return f"a thanks reply is a line or two ({len(body)} characters, at most {THANKS_MAX})"
+    bad = sorted({m.group(0).lower() for m in THANKS_NOT.finditer(body)})
+    if bad:
+        return (f"a thanks reply carries no figure, date, question or booking matter ({', '.join(bad)}): "
+                f"that is --kind reply, read by a person")
+    return ""
 OWN_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
 # A send to a no-reply robot bounces (Karen, 15/11, SynXis): such a draft waits for a person to readdress it.
 NO_REPLY_ADDRESS = re.compile(r"(?:^|[._-])(?:no-?reply|do-?not-?reply|donotreply)[^@]*@", re.I)

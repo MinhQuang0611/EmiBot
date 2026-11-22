@@ -98,7 +98,7 @@ from types import SimpleNamespace
 
 from . import anex_recon, attachments, config, drive, stop_sales, telegram
 from .graph_mail import (ACCOUNTING, AUTO_KINDS, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES,
-                         SendBlocked, clean_subject, is_internal, share_links)
+                         SendBlocked, clean_subject, is_internal, share_links, thanks_refusal)
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -1838,7 +1838,7 @@ def booking_email(text):
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
 GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup",
-               "booking_status")
+               "booking_status", "thanks")
 REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
@@ -2040,6 +2040,8 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
         check_bank_details_booked(text, args.kind, args.ref, rows)
     if args.kind == "booking_status":
         check_booking_status(rows, args.ref)
+    if args.kind == "thanks":
+        check_thanks(text)
     zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
             if rows is not None and args.ref and args.kind in ZALO_KINDS and not zalo_done(rows(), args.ref) else [])
     to, cc = reply_recipients(mail, args, args.kind)
@@ -2105,6 +2107,8 @@ def auto_hold(st, args, text, rows=None):
             return f"{args.ref} chưa có dòng CANCEL trên intake sheet"
     if args.kind == "booking_status" and rows is None:
         return "không đọc được intake sheet"
+    if args.kind == "thanks" and thanks_refusal(text):
+        return f"không phải thư cảm ơn đơn giản: {thanks_refusal(text)}"
     if args.kind == "pickup":
         outcome = (st.data.get("pickups", {}).get(args.ref) or {}).get("outcome")
         if outcome not in (pickups.FREE, pickups.PAID):
@@ -2165,6 +2169,16 @@ def check_booking_status(rows, ref):
     if channel not in ("OTA", "Direct"):
         raise Refused(f"{ref} is a {channel or '?'} booking: an agency asking whether HAYA has it gets the "
                       "confirmation (draft-confirmation), not a booking_status note")
+
+
+def check_thanks(text):
+    """dev 22/11, on the reply to Trip.com Lodging Support (stop-sale thread): "Email đơn giản cảm ơn Khách thì ko
+    cần phải duyệt. Được auto gửi". A thanks reply is the short courtesy of email-templates.md 9 alone: a thank-you
+    and the sign-off, nothing a person must check. Anything more is --kind reply."""
+    why = thanks_refusal(text)
+    if why:
+        raise Refused(f"{why}. --kind thanks is only the one-line thank-you of email-templates.md 9 (e.g. 'Thank "
+                      f"you for your email. We look forward to welcoming your guests.'). No draft made.")
 
 
 def close_confirmations_of_cancelled(mail, st, tg, rows, ref, n, out=print):
@@ -4286,7 +4300,8 @@ def parser():
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
                             "inquiry, request, pickup (airport pick-up answer, after 'pickup <ref>'), booking_status (a guest "
-                            "asking whether HAYA has their booking, when it is on the sheet)")
+                            "asking whether HAYA has their booking, when it is on the sheet), thanks (a plain "
+                            "one-line thank-you to an email that needs nothing else)")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")

@@ -47,7 +47,8 @@ One email can be two types (a change request with a payment slip attached). Hand
 - `cancellation` — the reply confirming a cancellation (`confirmation-replies.md`), always with `--ref`. An agency's "please ignore this booking request" is a cancellation: CANCEL rows first, then this. Sent at once when the CANCEL rows are on the sheet (dev, 2026-11-21).
 - `booking_status` — a guest (OTA relay or direct) asking whether we received their booking, with `--ref` of the rows on the sheet: sent at once (dev, 2026-11-21). Not on the sheet → find it (`sheet-find` surname + arrival); an agency asking → the confirmation.
 - `stop_sales` — Long's stop-sale chart to the B2B and OTA sites. Job 5 sends it (09:00, 12:00, 17:00), never job 1 (`inquiries-and-quotes.md`).
-- `reply` — anything else (a decline, a greeting, a colleague's question).
+- `thanks` — the one-line thank-you to an email that needs nothing else ("thank you", "received", "ok", a partner's acknowledgement), `email-templates.md` 9: sent at once (dev, 2026-11-22). Refused when the text holds a figure, date, question, confirmation, price, payment or availability: that is `reply`. The email also carrying a booking, slip or question → handle that; the thanks kind is only for a reply that is nothing but thanks.
+- `reply` — anything else (a decline, a colleague's question).
 
 **Reply all, always** (Tracy's audit, 29/10): `draft-reply` keeps the email's To and Cc unless `--to` sets the recipients. `--sender-only` only when a person asks for it. The draft file is plain text, never HTML tags (`email-templates.md`).
 
