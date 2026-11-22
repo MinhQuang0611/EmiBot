@@ -94,6 +94,10 @@ class RunTest(Base):
         p = mock.patch.object(ss, "stale", lambda data, now, today: real(data, self.now, today))
         p.start()
         self.addCleanup(p.stop)
+        # the host's .env names stop_sales in EMI_AUTO_SEND (since 21/11): a test that doesn't set it means "off"
+        p = mock.patch.dict(os.environ, {"EMI_AUTO_SEND": ""})
+        p.start()
+        self.addCleanup(p.stop)
 
     def run_with(self, rows, tg=None, **kw):
         drive = folder(rows, **kw)
