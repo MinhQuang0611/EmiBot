@@ -603,9 +603,18 @@ class GraphMail:
         """The body as Outlook holds it (HTML): the links' addresses, which the text body may drop."""
         return (self._call("GET", f"/messages/{message_id}?$select=body").get("body") or {}).get("content", "")
 
-    def has_new_inbox_mail(self, since_iso):
-        q = self._query(filter=f"receivedDateTime ge {since_iso}", select="id", top="1")
-        return bool(self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value"))
+    NEW_MAIL_PAGE = 50
+
+    def has_new_inbox_mail(self, since_iso, skip_noise=False):
+        """skip_noise (the every-minute watcher, dev 26/11): Tracy's hourly "HAYA intake audit" alone doesn't count.
+        It started 114 job 1 runs in a week (~37M tokens) only to read "internal, no draft"; job 1 still reads each
+        audit on its next run for real mail or its 3-hourly run (leftovers)."""
+        if not skip_noise:
+            q = self._query(filter=f"receivedDateTime ge {since_iso}", select="id", top="1")
+            return bool(self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value"))
+        q = self._query(filter=f"receivedDateTime ge {since_iso}", select="id,subject", top=str(self.NEW_MAIL_PAGE))
+        got = self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value") or []
+        return len(got) >= self.NEW_MAIL_PAGE or any(not is_search_noise(m) for m in got)
 
     def list_drafts(self, only_emi=False):
         q = self._query(select="id,subject,toRecipients,createdDateTime,lastModifiedDateTime,categories,conversationId", top="200")

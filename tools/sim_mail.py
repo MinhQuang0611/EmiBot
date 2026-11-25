@@ -75,7 +75,7 @@ class SimMail:
         return sorted((self._public(m) for m in self._load().values() if m["hasAttachments"] or not with_files),
                       key=lambda m: m["receivedDateTime"])
 
-    def has_new_inbox_mail(self, since_iso):
+    def has_new_inbox_mail(self, since_iso, skip_noise=False):
         return bool(self._load())
 
     def get_message_text(self, message_id):

@@ -998,6 +998,10 @@ def _earlier_arrivals(sheet, records):
                   and str(r.get("arrival", "")).strip()} for ref in refs}
 
 
+# A CANCEL that is HAYA's own decline, not the sender's cancellation (build_watch.DECLINE_REASON, its notes)
+OWN_DECLINE = re.compile(r"no availability|cannot be accommodated|declined at once|no room", re.I)
+
+
 def check_rows(sheet, records, fresh=True):
     """Check every row against tools/intake_schema.py; all problems at once, so one fix covers them.
     fresh=True: rows about to be written (not sheet-update of a row already there)."""
@@ -1034,6 +1038,14 @@ def check_rows(sheet, records, fresh=True):
                      "paid, the booking was never entered — NEW rows (booking-intake.md, 'Quote accepted'). If "
                      "the thread does show HAYA's own confirmation, put its group code or confirmation no. on the "
                      "row, or write 'HAYA confirmed on DD/MM (<how>)' in internal_notes"]
+        if fresh and rec.get("action") == "CANCEL" and build_watch.is_ota(rec) and OWN_DECLINE.search(" ".join(
+                str(rec.get(k) or "") for k in ("what_changed", "Cancellation Reason", "internal_notes"))):
+            # dev 25/11, Booking.com 5349803632 / SynXis 92777EF003597 (live row 2572): CANCEL "No availability"
+            # written by Emi with no cancellation email; SynXis still said Confirmed and the guest arrived
+            e = e + ["action: CANCEL on an OTA / B2B booking because of no room or Emi's own decline: refused (dev "
+                     "25/11, R2572). An OTA booking is entered exactly as the OTA's email says; a CANCEL row only "
+                     "from the OTA's (or SynXis's) own cancellation email. No room in EZFOLIO → leave the NEW rows, "
+                     "the question goes to Karen (build-stuck)"]
         if fresh and rec.get("action") == "NEW" and str(rec.get("channel_type") or "").strip() == "Tour operator":
             gate = operators.on_request_gate(rec, sheet.header)
             if gate:

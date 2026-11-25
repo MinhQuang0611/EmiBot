@@ -17,6 +17,10 @@ on-request bookings with no availability. Kind 'full'; an open question already 
 only part of it is declined too, the whole booking (dev, same day: "cũng từ chối luôn"). A type free the whole stay or
 a change on a built booking still goes to Karen.
 
+25/11 (dev, Booking.com 5349803632, live row 2572): never an OTA or B2B booking. Emi wrote CANCEL "No availability"
+for a SynXis booking nobody had cancelled; the guest arrived. An OTA booking stays as the OTA sent it ('stuck', a
+question to Karen) and gets a CANCEL row only from the OTA's own cancellation email.
+
 21/11 (dev, on SynXis 92777EE002243 (Agoda), live row 1082, "not picked up for 444 hours"): Agoda 698918623 is two
 rooms, one SynXis number each (2243, 2244). Its cancellation came as Agoda's notice (row 1081, ref Agoda 698918623 /
 SynXis 2244) and as SynXis's notice for 2243 (row 1082). The build tool cancelled group 28281 from row 1081 and touched
@@ -77,6 +81,15 @@ def no_room(note):
     return not whole or "không phòng nào" in whole.group(1).lower()
 
 
+def is_ota(r):
+    """An OTA or B2B site's booking (dev, 2026-11-25, Booking.com 5349803632 / SynXis 92777EF003597, live row 2572:
+    the build tool found no room on 22/11, Emi wrote a CANCEL row "No availability" on its own; there was no
+    cancellation email, SynXis's modification of 21/11 still said Confirmed and the guest landed 25/11 — group 31516
+    made by hand. "Emi nhận email OTA như nào thì phải nhập đúng như vậy. Họ có email hủy thì [mới] log cancel
+    row"). An OTA booking is never declined by Emi: it is what the OTA sent until the OTA's own cancellation."""
+    return (r.get("channel_type") or "").strip().upper() == "OTA" or payments.ota_company(r.get("company"))
+
+
 def on_cancelled_group(r):
     return r.get("action") == "CHANGE" and _status(r) == "no_change" and bool(CANCELLED_GROUP.search(r.get("ez_note") or ""))
 
@@ -123,8 +136,10 @@ def stuck(rows, state_of, now):
             note = next((x for r in bad for x in ((r.get("ez_error") or "").strip(), (r.get("ez_note") or "").strip())
                          if x), "")
             stamp = max((r.get("ez_processed_at") or "") for r in bad) or head.get("received_at", "")
-            # dev 21/11: a new booking with no room in EZFOLIO is declined at once, not asked
-            kind = "full" if all(r.get("action") == "NEW" for r in state) and no_room(note) else "stuck"
+            # dev 21/11: a new booking with no room in EZFOLIO is declined at once, not asked. Never an OTA's
+            # (dev 25/11, R2572): it stays a question, Emi writes no CANCEL row of its own
+            kind = ("full" if all(r.get("action") == "NEW" for r in state) and no_room(note) and not is_ota(head)
+                    else "stuck")
         elif all(not _status(r) for r in state):
             got = _received(head)
             if not got or got < WATCH_FROM or now - got < WAIT:
@@ -175,9 +190,9 @@ def decline_steps(i):
             f"\"No availability in EZFOLIO, declined <DD/MM>\", internal_notes \"Build tool: no room (rows "
             f"{', '.join(map(str, i['rows']))}); declined at once (dev 21/11)\"), then the decline draft on the "
             f"booking's email (mail-find {i['ref'].split(' / ')[0]}): draft-reply <id> <body> --kind decline --ref "
-            f"<ref> (email-templates.md 9b; tour operator: section 6's decline). An OTA notice from SynXis: "
-            f"ota-note instead, and the report says a person cancels it with the OTA. Then done <id> \"no room, "
-            f"declined: CANCEL rows …, decline #n\".")
+            f"<ref> (email-templates.md 9b; tour operator: section 6's decline). Then done <id> \"no room, "
+            f"declined: CANCEL rows …, decline #n\". Never an OTA or B2B booking (dev 25/11): no CANCEL row "
+            f"until the OTA's own cancellation email.")
 
 
 def _esc(s):

@@ -14,7 +14,7 @@ class FakeMail:
     def __init__(self, new):
         self.new = new
 
-    def has_new_inbox_mail(self, since):
+    def has_new_inbox_mail(self, since, skip_noise=False):
         return self.new
 
 
