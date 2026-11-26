@@ -44,7 +44,7 @@ class SweepTest(unittest.TestCase):
         built = self.ask("TA333", "Hệ thống nhập EZFOLIO dừng ở booking TA333: hết phòng. Quyết định thế nào?")
         live = self.ask("TA444", "Which rate for the Indian guests?")
         rows = [row("TA111", dep="10/11/2026"),
-                row("TA222"), row("TA222", action="CANCEL", at="05/11/2026 09:00"),
+                row("TA222"), row("TA222", action="CANCEL", at="05/11/2026 09:00", ez_status="done"),
                 row("TA333", ez_status="done", pdf_link="https://drive/x.pdf"),
                 row("TA444")]
         close, keep = self.sweep(rows)

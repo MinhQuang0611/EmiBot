@@ -2775,7 +2775,33 @@ def pdf_fetch(sheet, row, work_dir=None, out=print):
     amounts = pdf_amounts(text)
     if amounts:  # dev 16/11: a booking with no price on the sheet takes the PDF's (booking-intake.md, Rates)
         out("AMOUNTS IN THE PDF: " + ", ".join(f"{a:,}" for a in amounts))
+        line = pdf_rounding_line(booking_state(sheet.rows(), r.get("booking_ref", "")) or [r], amounts)
+        if line:
+            out(line)
     return path, name, mime, data
+
+
+ROUNDING_MIN_VND = 10  # the least a rounding difference may be, whatever the room-nights
+
+
+def pdf_rounding_line(state, amounts):
+    """The PDF's figure a few đồng off the sheet's total is EZFOLIO rounding the nightly rate, not another price
+    (Crystal Bay 1107315: 10,625,000 on the row and the PDF's Notice, 10,624,999 in its rate detail, E-668; 1107316
+    11,900,000 / 11,899,998, E-728; Pegas 11136304 17,765,004). Under 1 đồng per room-night: the same total."""
+    rows = [x for x in state if (x.get("action") or "").upper() != "CANCEL"]
+    total = payments.total_of(rows)
+    if not total:
+        return ""
+    room_nights = sum(max(operators._amount(x.get("rooms")), 1) * max(operators._amount(x.get("nights")), 1)
+                      for x in rows)
+    tol = max(ROUNDING_MIN_VND, room_nights)
+    near = [a for a in amounts if a != total and abs(a - total) <= tol]
+    if not near:
+        return ""
+    return (f"PDF TOTAL = SHEET TOTAL (ROUNDING): the sheet says {total:,}; the PDF's "
+            + ", ".join(f"{a:,} ({a - total:+,})" for a in near)
+            + f" is EZFOLIO rounding the nightly rate (within {tol:,} VND for {room_nights} room-night(s)). The same "
+            f"total: confirm with {total:,}. No hold, no question to Karen")
 
 
 AMOUNT = re.compile(r"(?<![\d.,])([1-9]\d{0,2}(?:[.,]\d{3})+|[1-9]\d{5,9})(?:[.,]\d{1,2})?(?![\d.,]*\d)")
@@ -2981,7 +3007,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
                       f"PDF on it. No second draft.")
     if before and _built(r):
         raise Refused(f"row {args.row} is built and has its PDF: draft-confirmation without --before-pdf")
-    company = r.get("company", "")
+    company = operators.operator_name(r.get("company"))
     subject, attach = getattr(args, "subject", ""), getattr(args, "attach", None) or []
     if company == "Odeon":
         odeon = operators.OPERATORS["Odeon"]
@@ -3152,11 +3178,11 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
         raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
                       f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
                       f"#{n} keeps its DO NOT SEND line")
-    if row.get("company") == "Odeon" and not attach:
+    if operators.operator_name(row.get("company")) == "Odeon" and not attach:
         made = _auto_invoice(sheet, r.get("ref", ""), out=out)  # dev, 2026-11-09: Emi makes the proforma itself
         attach = [made] if made else []
     # no invoice could be made: the EZFOLIO PDF doesn't wait for it (dev, 2026-11-09, Odeon 4801957)
-    no_invoice = row.get("company") == "Odeon" and not attach
+    no_invoice = operators.operator_name(row.get("company")) == "Odeon" and not attach
     extra = read_pdfs(attach)
     path, name, mime, data = pdf_fetch(sheet, row["_row"], out=out)
     if mime != "application/pdf":
@@ -3782,7 +3808,7 @@ def _invoice_state(sheet, ref):
         raise Refused(f"no rows for booking_ref {ref!r} on the sheet")
     if operators.cancelled(state):
         raise Refused(f"{ref} is cancelled on the sheet: no invoice")
-    if state[0].get("company") != "Odeon":
+    if operators.operator_name(state[0].get("company")) != "Odeon":
         raise Refused(f"{ref} is {state[0].get('company')!r}: invoice-make is Odeon's proforma only")
     try:
         return operators.invoice_data(state)
@@ -4119,8 +4145,8 @@ def _why_settled(qid, q, rows, st, today):
     ref, mid = q.get("booking_ref") or "", q.get("message_id") or ""
     state = booking_state(rows, ref) if ref and _parts(ref) else []
     if state:
-        if all((r.get("action") or "").upper() == "CANCEL" for r in state):
-            return f"booking cancelled (row {state[0].get('_row', '?')})"
+        if all((r.get("action") or "").upper() == "CANCEL" for r in state) and _cancel_done(state, rows):
+            return f"booking cancelled (row {state[0].get('_row', '?')}, done in EZFOLIO)"
         deps = [d for d in (schema._date(r.get("departure"), "%d/%m/%Y") for r in state) if d]
         if deps and max(deps).date() < today:
             return f"stay over (departure {max(deps):%d/%m/%Y})"
@@ -4136,9 +4162,36 @@ def _why_settled(qid, q, rows, st, today):
         return f"asked again later as {later[-1][0]}"
     revs = [(n, r) for n, r in st.data["reviews"].items() if mid and r.get("source") == mid]
     if revs and all(r["status"] != REVIEW_OPEN for _, r in revs):
+        if _price_waits_on_build(q, state):
+            return None
         n, r = revs[-1]
         return f"its email's draft #{n} is {r['status']} (a person dealt with it)"
     return None
+
+
+CANCEL_DONE = payments.BUILT_STATUSES + ("no_change",)
+PRICE_QUESTION = re.compile(r"\b(?:rates?|prices?|totals?|amounts?|giá|tổng)\b", re.I)
+
+
+def _cancel_done(state, rows):
+    """A cancellation the build tool has carried out, or another CANCEL row of the booking it did (`covered`). Not:
+    a CANCEL still waiting or stopped (365 Travel, row 2622 needs_review: E-676/E-678 would have closed on the very
+    row they ask about; SynXis 92777EE002243 row 1082, run with no result: E-627/E-646), and never Emi's own
+    "no room" CANCEL on an OTA booking (dev 25/11: only the OTA's cancellation email cancels it)."""
+    if any(build_watch.is_ota(r) and OWN_DECLINE.search(" ".join(str(r.get(k) or "") for k in (
+            "what_changed", "Cancellation Reason", "internal_notes"))) for r in state):
+        return False
+    done = all((r.get("ez_status") or "").strip() in CANCEL_DONE for r in state)
+    return done or build_watch.covered(state, rows) is not None
+
+
+def _price_waits_on_build(q, state):
+    """A price question on a booking not built yet: the draft being gone settles nothing (Turtle Adventure
+    TA-08Jan2027-GGT06, E-645: 2,000,000 or 2,400,000 with the Indian +20%, row 2521 waiting to be built)."""
+    live = [r for r in state if (r.get("action") or "").upper() != "CANCEL"]
+    unbuilt = any(not ((r.get("ez_status") or "").strip() in payments.BUILT_STATUSES and (r.get("pdf_link") or "").strip())
+                  for r in live)
+    return bool(live) and unbuilt and bool(PRICE_QUESTION.search(q.get("ask") or ""))
 
 
 def sweep_questions(sheet, st, apply=False, out=print, today=None, now=None):

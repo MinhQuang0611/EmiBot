@@ -137,9 +137,22 @@ for _canon, _aliases in CANONICAL_COMPANIES.items():
         _COMPANY_KEYS[_key] = _canon
 
 
+# Dropped from the front: "Công ty du lịch ODEON" (Odeon 1462822, E-731, 25/11: invoice-make refused the booking
+# because the row's company was not "Odeon"). Matched without accents; the words are counted, then dropped.
+LEGAL_PREFIX = re.compile(r"^(?:cong ty|cty)(?: (?:tnhh|co phan|cp|mtv|dich vu|du lich|lu hanh|thuong mai|tm|dv))* ")
+
+
+def _plain_words(s):
+    s = unicodedata.normalize("NFD", s.replace("đ", "d").replace("Đ", "D"))
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
 def _match_company(name):
     """(canonical name, extra words) for a known channel, else (None, '')."""
-    words = _norm(name).split()
+    words = unicodedata.normalize("NFC", _norm(name)).split()
+    m = LEGAL_PREFIX.match(_plain_words(" ".join(words)) + " ")
+    if m and len(m.group(0).split()) < len(words):
+        words = words[len(m.group(0).split()):]
     while len(words) > 1 and words[-1] in LEGAL_SUFFIXES:
         words.pop()
     s = " ".join(words)

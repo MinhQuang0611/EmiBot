@@ -5,7 +5,7 @@ tools/operator_rates.py; this file is the procedure.
 import re
 from datetime import date, timedelta
 
-from .intake_schema import is_built
+from .intake_schema import canonical_company, is_built
 
 # skills/tour-operators.md step 5: an on-request booking (release passed or allotment used up)
 ON_REQUEST_OCCUPANCY = 60.0   # % on any night of the stay -> suggest decline, near check-in too (dev, 21/11)
@@ -146,6 +146,14 @@ COMMON_STEPS = [
 
 def known(company):
     return company in OPERATORS
+
+
+def operator_name(company):
+    """The operator's key in OPERATORS for a row's company, however it is spelled ("Công ty du lịch ODEON" ->
+    "Odeon", Odeon 1462822, E-731, 25/11), or the company as written."""
+    company = (company or "").strip()
+    canon = canonical_company(company)
+    return canon if canon in OPERATORS else company
 
 
 def is_robot(operator, address):
@@ -302,7 +310,7 @@ def voucher_ref(booking_ref):
 def invoice_data(state):
     """The proforma figures for one booking (Odeon, Crystal Bay, Pegas): number, due date, lines."""
     h = state[0]
-    op = OPERATORS.get(h.get("company", ""), {})
+    op = OPERATORS.get(operator_name(h.get("company")), {})
     inv = op.get("invoice")
     if not inv:
         raise KeyError(f"{h.get('company')!r} has no proforma invoice in skills/tour-operators.md")
@@ -320,7 +328,7 @@ def invoice_data(state):
               "total": _amount(r.get("total_vnd"))} for r in state]
     d = {"number": inv["number"].format(group=group), "file": inv["file"].format(ref=ref),
          "due": arrival - timedelta(days=inv["due_days_before"]), "due_rule": f"{inv['due_days_before']} days "
-         f"before check-in", "company": h.get("company"), "ref": h.get("booking_ref"), "group": group,
+         f"before check-in", "company": operator_name(h.get("company")), "ref": h.get("booking_ref"), "group": group,
          "guests": h.get("guest_names"), "arrival": h.get("arrival"), "departure": h.get("departure"),
          "lines": lines, "total": sum(x["total"] for x in lines), "voucher": ref, "rows": list(state)}
     if inv.get("send_days_before"):

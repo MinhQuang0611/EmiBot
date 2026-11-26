@@ -42,6 +42,27 @@ def total_of(state):
     return sum(operators._amount(r.get("total_vnd")) for r in state)
 
 
+def _item6(r):
+    """Notes item 6 (how the price was worked out), or the whole notes when they aren't the 8 items."""
+    items = [x.strip() for x in (r.get("notes") or "").splitlines() if x.strip()]
+    return items[5] if len(items) == schema.NOTES_ITEMS else (r.get("notes") or "")
+
+
+def _ebooking(rows):
+    return bool(rows) and all(re.search(r"ebooking", _item6(r), re.I) and not re.search(r"provisional", _item6(r), re.I)
+                              for r in rows)
+
+
+def tripcom_net_fix(ref, before, changed):
+    """A Trip.com price brought down to the Ebooking net (dev, 2026-11-19: the VCC pays the net on Trip.com's Ebooking
+    voucher; SynXis's figure is before Pay Now & Save). Not a rate move for Karen: E-705–E-717 (25/11) were eleven
+    questions "rate changed solely to match the Trip.com VCC amount". Only a cut, only when the new rows say Ebooking
+    and the earlier ones didn't (a second cut on a figure already from the Ebooking voucher still goes to Karen)."""
+    trip = any(schema.canonical_company(r.get("company")) == "Trip.com" for r in changed) or \
+        re.search(r"trip\.?com", ref or "", re.I)
+    return bool(trip) and total_of(changed) < total_of(before) and _ebooking(changed) and not _ebooking(before)
+
+
 def paid_of(hits, state):
     """What has been paid. The columns don't always say it on the latest rows (a CHANGE row with Payment 1 blank but
     Remaining halved, live row 1103), so: the most any one email's rows show as paid, or total − Remaining. Each
@@ -550,7 +571,8 @@ def needs_confirmation(rows, state_of, parts_of, mail, st, mailbox, today):
                         total_of(changed) != total_of(before):
                     # Ohmyhotel #27984: a name change carried a provisional TA-card rate and the build tool put it
                     # into EZFOLIO, 1,487,500 -> 1,900,000. The PDF then matches the wrong row.
-                    item["rate_moved"] = (total_of(before), total_of(changed))
+                    pair = (total_of(before), total_of(changed))
+                    item["tripcom_net" if tripcom_net_fix(ref, before, changed) else "rate_moved"] = pair
                 out.append(item)
             continue  # changed since the NEW: its first confirmation is not what is owed
         if not total_of(state):
@@ -645,6 +667,11 @@ def render_confirmations(items):
         if i.get("attach"):
             out.append(f"  ATTACH: draft #{i['attach']} was written before the PDF. confirmation-attach {i['attach']}"
                        f" (the PDF, group code, confirmation no. and deposit deadline go on it; no new draft)")
+        if i.get("tripcom_net"):
+            was, now = i["tripcom_net"]
+            out.append(f"  TRIP.COM EBOOKING NET {money(was)} → {money(now)}: the earlier figure was SynXis's (before "
+                       f"Trip.com's Pay Now & Save), the new one is the Ebooking net the VCC pays (dev 19/11). Not a "
+                       f"rate move: no hold, no question to Karen")
         if i.get("rate_moved"):
             was, now = i["rate_moved"]
             out.append(f"  RATE MOVED {money(was)} → {money(now)} with the same dates and rooms. A price the agency or "
