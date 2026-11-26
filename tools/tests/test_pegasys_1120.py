@@ -157,8 +157,17 @@ class PegasysTests(unittest.TestCase):
     def test_cancelled_or_unbuilt_is_not_due(self):
         mail = FakeMail(notice("n1", "11138234", "2026-11-18T02:00:00Z"), sent("s1", "11138234", "2026-11-18T09:00:00Z"))
         self.assertEqual(self.due(mail, [row(1), row(2, action="CANCEL")])[0], [])
-        self.assertEqual(self.due(mail, [row(1, ez_status="needs_review")])[0], [])
-        self.assertEqual(self.due(mail, [row(1, pdf_link="")])[0], [])
+        bare = FakeMail(notice("n1", "11138234", "2026-11-18T02:00:00Z"))
+        self.assertEqual(self.due(bare, [row(1, ez_status="needs_review")])[0], [])
+        self.assertEqual(self.due(bare, [row(1, pdf_link="")])[0], [])
+
+    def test_unbuilt_but_confirmation_sent_is_due(self):
+        # dev 26/11, Pegas 11152394: the revised PDF went to Pegas while the build tool's change waited on Long;
+        # the site stayed "Changed" a day. The confirmation a person sent is the signal.
+        mail = FakeMail(notice("n1", "11138234", "2026-11-18T02:00:00Z"), sent("s1", "11138234", "2026-11-18T09:00:00Z"))
+        [item] = self.due(mail, [row(1, action="CHANGE", ez_status="needs_review")])[0]
+        self.assertEqual(item["sent"]["id"], "s1")
+        self.assertEqual(item["group"], "31200")
 
     def test_not_on_the_sheet_is_a_line(self):
         mail = FakeMail(notice("n1", "11138234", "2026-11-18T02:00:00Z"), sent("s1", "11138234", "2026-11-18T09:00:00Z"))
@@ -399,3 +408,28 @@ class DetailsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoInternalStepInDraftTest(unittest.TestCase):
+    """Dev 26/11, Pegas 11152394 (#1841): 'Confirmation on the Pegas extranet is awaiting the required manager
+    approval' went to Pegas. HAYA's own approvals, the build tool and E-nnn never go in an email."""
+
+    def check(self, text):
+        from tools import emi
+        emi.check_no_gaps(text)
+
+    def test_internal_steps_refused(self):
+        from tools import emi
+        for bad in ("Confirmation on the Pegas extranet is awaiting the required manager approval.",
+                    "The change is pending approval from our management.",
+                    "Our build tool has not finished yet.",
+                    "See E-696.",
+                    "Booking đang chờ quản lý duyệt."):
+            with self.assertRaises(emi.Refused, msg=bad) as e:
+                self.check(f"Dear Ms. Dao,\n\n{bad}\n\nBest regards,\nReservations Team")
+            self.assertIn("INTERNAL STEP", str(e.exception))
+
+    def test_check_line_and_plain_reply_pass(self):
+        self.check("[CHECK BEFORE SENDING: E-696 is open; manager approval in EZFOLIO.]\n\nDear Ms. Dao,\n\n"
+                   "The revised booking #11152394 is confirmed under group code #31444 and confirmed on the Pegas "
+                   "extranet.\n\nBest regards,\nReservations Team")

@@ -1962,6 +1962,17 @@ GAP = re.compile(r"\[[^\]\n]*(?:to confirm|xác nhận)[^\]\n]*\]", re.I)
 # Tracy audit 29/10: the uncertain part of a best-answer draft is named in one first line, bold red in Outlook.
 CHECK_LINE = re.compile(r"^\[CHECK BEFORE SENDING:[^\]\n]+\]$")
 KAREN = re.compile(r"\bKaren\b", re.I)
+# Dev, 2026-11-26, Pegas 11152394 (#1841): "Confirmation on the Pegas extranet is awaiting the required manager
+# approval" went to Pegas. That was the build tool's own approval of the room change in EZFOLIO (E-696), never
+# Pegas's business, and it was wrong: the revised PDF had gone, so the site is confirmed with it (pegas-confirm).
+# An outgoing email never names HAYA's own approval steps, the build tool or an E-nnn question.
+INTERNAL_PROCESS = re.compile(
+    r"\b(?:manager(?:'s|s')?|management|internal|supervisor)\s+(?:approval|sign[- ]off)"
+    r"|\b(?:awaiting|pending|waiting (?:for|on))\s+(?:the\s+)?(?:required\s+|internal\s+|final\s+)?"
+    r"(?:manager(?:'s)?\s+|management\s+)?approval\b"
+    r"|\bapproval\s+(?:from|by)\s+(?:the\s+|our\s+)?(?:manager|management)"
+    r"|\bbuild tool\b|\bE-\d{3,4}\b"
+    r"|\bchờ\s+(?:quản lý\s+|sếp\s+)?(?:duyệt|phê duyệt)|\bquản lý\s+(?:duyệt|phê duyệt)", re.I)
 HTML_TAG = re.compile(r"</?(?:p|br|b|i|u|div|span|table|tr|td|th|ul|ol|li|strong|em|a|font|html|body|h[1-6])\b[^>]*>",
                       re.I)
 
@@ -1990,6 +2001,14 @@ def check_no_gaps(text, message_id="<message_id>"):
         raise Refused(f"the text still has {len(gaps)} gap(s): {' | '.join(gaps)}. Write the best full answer "
                       f"instead, and name what is uncertain in a first line '[CHECK BEFORE SENDING: <what to check>]'; "
                       f"then ask-karen {message_id} \"<the uncertain fact, as a question>\" --ref <ref>.")
+    m = INTERNAL_PROCESS.search(body)
+    if m:
+        raise Refused(f"INTERNAL STEP IN THE TEXT ('{m.group(0)}'): an email never tells the sender about HAYA's own "
+                      f"approvals, the build tool or an E-nnn question (dev 26/11, Pegas 11152394: "
+                      f"'awaiting the required manager approval' went to Pegas). Say what is true for them: a Pegas "
+                      f"booking whose confirmation has gone is confirmed on Pegasys too (pegas-confirm; pegas-booking "
+                      f"<id> shows the site's status). Unsure → the full answer with a first line "
+                      f"[CHECK BEFORE SENDING: …] and ask-karen. No draft made.")
     if KAREN.search(text):
         raise Refused("the draft names Karen: never put Karen's name in a draft (Tracy audit 29/10). The sign-off "
                       "is Reservations Team; an internal note says 'khách sạn' / 'sales'.")

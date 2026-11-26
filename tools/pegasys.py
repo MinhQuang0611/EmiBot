@@ -334,12 +334,17 @@ def due(mail, rows, state_of, st, mailbox, now, days=DAYS):
             continue  # a cancellation is never pressed (Palma's rule)
         built = [r for r in state if (r.get("ez_status") or "").strip().lower() in BUILT_STATUSES
                  and (r.get("pdf_link") or "").strip()]
-        if not built:
+        sent = sent_confirmation(mail, bid, mailbox, n["at"])
+        if not built and not sent:
             st_ = ", ".join(sorted({(r.get("ez_status") or "blank").strip() or "blank" for r in state}))
             lines.append(f"PEGAS {bid}: WAITING, not built on the sheet ({state[0].get('action')} rows, "
-                         f"ez_status {st_}{', no pdf_link' if not any((r.get('pdf_link') or '').strip() for r in state) else ''})")
-            continue  # not built yet: no confirmation can have gone
-        sent = sent_confirmation(mail, bid, mailbox, n["at"])
+                         f"ez_status {st_}{', no pdf_link' if not any((r.get('pdf_link') or '').strip() for r in state) else ''})"
+                         f" and no confirmation with a file sent to Pegas after the notice of {at} UTC")
+            continue
+        # Not built but sent (dev, 2026-11-26, Pegas 11152394): sales@ sent Pegas the revised confirmation PDF on
+        # 25/11 while the build tool's room change waited for Long's approval, so the site stayed "Changed" until
+        # 26/11 16:30 and Pegas asked why. Pegas and HAYA agreed the confirmation and Confirm on the site go
+        # together: the confirmation a person sent is the signal, the build tool's own approval is not Pegas's.
         if not sent:
             lines.append(f"PEGAS {bid}: WAITING, no mail with a file from {mailbox} to Pegas naming {bid} after "
                          f"the robot's notice of {at} UTC ({n['subject'][:60]})")
