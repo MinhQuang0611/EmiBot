@@ -254,13 +254,19 @@ class DeviceCodeToken:
         self._expires = time.time() + int(resp.get("expires_in", 3600))
         # The access token is cached too (same 600 file), so a check every minute (tools.watch) reuses it for
         # its hour instead of redeeming the refresh token on every run.
+        # 26/11 09:15 UTC: two commands refreshed at the same minute; one read the file while the other had it
+        # truncated, got {}, and wrote the code's SCOPE (Files.Read.All, never consented; no Mail.Send) in place of
+        # the scope Karen signed in with. The next refresh asked for it: AADSTS65001, no mail for 9 hours. Now the
+        # scope written is always the one just asked for, and the file is replaced whole, never seen half-written.
         cache = self._read_cache()
         rt = resp.get("refresh_token") or cache.get("refresh_token")
         if rt:
-            fd = os.open(self.cache_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            tmp = f"{self.cache_path}.{os.getpid()}.tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump({"refresh_token": rt, "access_token": self._token, "expires_at": self._expires,
                            "scope": scope or cache.get("scope") or self.SCOPE}, f)
+            os.replace(tmp, self.cache_path)
 
     def can_send(self):
         return "mail.send" in str(jwt_claims(self()).get("scp", "")).lower().split()
@@ -285,10 +291,11 @@ class DeviceCodeToken:
         rt = cache.get("refresh_token")
         if not rt:
             return False
+        scope = cache.get("scope") or self.SCOPE
         try:
             self._save(self.http("POST", f"{self.base}/token", form={
                 "client_id": self.client_id, "grant_type": "refresh_token",
-                "refresh_token": rt, "scope": cache.get("scope") or self.SCOPE}))
+                "refresh_token": rt, "scope": scope}), scope=scope)
             return True
         except httpjson.HttpError as e:
             self.refresh_error = refusal_text(e)

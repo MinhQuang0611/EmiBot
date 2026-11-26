@@ -64,6 +64,43 @@ class RefusedRefreshTest(unittest.TestCase):
             tok()
 
 
+class ScopeKeptTest(unittest.TestCase):
+    """26/11 09:15 UTC: the cached scope became the code's SCOPE (Files.Read.All, no Mail.Send) -> AADSTS65001."""
+    SIGNED_IN = "offline_access https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send"
+
+    def setUp(self):
+        self.cache = os.path.join(tempfile.mkdtemp(), "tok.json")
+        with open(self.cache, "w") as f:
+            json.dump({"refresh_token": "r", "access_token": "old", "expires_at": time.time() - 10,
+                       "scope": self.SIGNED_IN}, f)
+        self.asked = []
+
+    def http(self, method, url, form=None, **kw):
+        self.asked.append(form["scope"])
+        return {"access_token": "new", "refresh_token": "r2", "expires_in": 3600}
+
+    def test_file_read_empty_mid_write_keeps_the_signed_in_scope(self):
+        tok = DeviceCodeToken("cid", self.cache, http=self.http, interactive=False)
+        # cached-access check and refresh read the real file; the save's read lands on another process's truncate
+        reads = iter([None, None, {}])
+        real = tok._read_cache
+        tok._read_cache = lambda: (lambda v: real() if v is None else v)(next(reads, None))
+        self.assertEqual(tok(), "new")
+        with open(self.cache) as f:
+            saved = json.load(f)
+        self.assertEqual(saved["scope"], self.SIGNED_IN)
+        self.assertEqual(saved["refresh_token"], "r2")
+        saved["expires_at"] = time.time() - 10  # an hour later: the next refresh asks for the same scope
+        with open(self.cache, "w") as f:
+            json.dump(saved, f)
+        DeviceCodeToken("cid", self.cache, http=self.http, interactive=False)()
+        self.assertEqual(self.asked, [self.SIGNED_IN, self.SIGNED_IN])  # never Files.Read.All
+
+    def test_no_temp_file_left(self):
+        DeviceCodeToken("cid", self.cache, http=self.http, interactive=False)()
+        self.assertEqual(os.listdir(os.path.dirname(self.cache)), ["tok.json"])
+
+
 class AlertTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
