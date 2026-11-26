@@ -312,13 +312,17 @@ def sent_confirmation(mail, booking_id, mailbox, after_iso, search_top=25):
 
 
 def due(mail, rows, state_of, st, mailbox, now, days=DAYS):
-    """(items to press, lines to report). An item: {booking_id, guid, notice_at, sent, group, conf_no, ref}."""
+    """(items to press, lines to report). An item: {booking_id, guid, notice_at, sent, group, conf_no, ref}.
+    Every booking left alone gets a line with the reason (dev, 2026-11-26: "sao EMI vẫn chưa xác nhận được Pegas",
+    and the dry run only said "nothing to confirm"). `pegas-confirm --site` reads the site's status for each of them."""
     from .payments import BUILT_STATUSES
     items, lines = [], []
     done = _rec(st)["bookings"]
     for bid, n in sorted(notices(mail, st, now, days).items()):
         rec = done.get(bid) or {}
+        at = n["at"][:16].replace("T", " ")
         if rec.get("notice_at", "") >= n["at"] and rec.get("status") in CONFIRMED + ("skipped",):
+            lines.append(f"PEGAS {bid}: done ({rec.get('status')}, notice {at} UTC)")
             continue  # already pressed (or left alone) for this notice
         ref = f"Pegas {bid}"
         state = state_of(rows, ref)
@@ -326,13 +330,19 @@ def due(mail, rows, state_of, st, mailbox, now, days=DAYS):
             lines.append(f"PEGAS {bid}: not on the intake sheet, not confirmed on Pegasys")
             continue
         if operators.cancelled(state):
+            lines.append(f"PEGAS {bid}: cancelled on the sheet, never pressed")
             continue  # a cancellation is never pressed (Palma's rule)
         built = [r for r in state if (r.get("ez_status") or "").strip().lower() in BUILT_STATUSES
                  and (r.get("pdf_link") or "").strip()]
         if not built:
+            st_ = ", ".join(sorted({(r.get("ez_status") or "blank").strip() or "blank" for r in state}))
+            lines.append(f"PEGAS {bid}: WAITING, not built on the sheet ({state[0].get('action')} rows, "
+                         f"ez_status {st_}{', no pdf_link' if not any((r.get('pdf_link') or '').strip() for r in state) else ''})")
             continue  # not built yet: no confirmation can have gone
         sent = sent_confirmation(mail, bid, mailbox, n["at"])
         if not sent:
+            lines.append(f"PEGAS {bid}: WAITING, no mail with a file from {mailbox} to Pegas naming {bid} after "
+                         f"the robot's notice of {at} UTC ({n['subject'][:60]})")
             continue  # the confirmation hasn't left sales@ yet
         group = next((v.strip().lstrip("#") for r in state for v in (r.get("ezfolio_group_code"), r.get("Group code"))
                       if (v or "").strip()), "")

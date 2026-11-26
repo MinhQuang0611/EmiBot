@@ -90,6 +90,16 @@ def is_ota(r):
     return (r.get("channel_type") or "").strip().upper() == "OTA" or payments.ota_company(r.get("company"))
 
 
+ALLOTMENT = re.compile(r"\ballotment\b(?!\s*:\s*no)", re.I)
+
+
+def allotment(r):
+    """A tour operator's booking inside its contract allotment (dev, 2026-11-26, Pegas 11162942, 17–29/12 TPL): the
+    contract owes those rooms, so no room in EZFOLIO is a question for Karen, never a decline. Emi declined it at
+    13:45, Karen took it back, and the booking sat New on Pegasys."""
+    return ALLOTMENT.search(r.get("internal_notes") or "") is not None
+
+
 def on_cancelled_group(r):
     return r.get("action") == "CHANGE" and _status(r) == "no_change" and bool(CANCELLED_GROUP.search(r.get("ez_note") or ""))
 
@@ -138,8 +148,9 @@ def stuck(rows, state_of, now):
             stamp = max((r.get("ez_processed_at") or "") for r in bad) or head.get("received_at", "")
             # dev 21/11: a new booking with no room in EZFOLIO is declined at once, not asked. Never an OTA's
             # (dev 25/11, R2572): it stays a question, Emi writes no CANCEL row of its own
+            # nor a tour operator's allotment booking (dev 26/11, Pegas 11162942: the contract owes the rooms)
             kind = ("full" if all(r.get("action") == "NEW" for r in state) and no_room(note) and not is_ota(head)
-                    else "stuck")
+                    and not allotment(head) else "stuck")
         elif all(not _status(r) for r in state):
             got = _received(head)
             if not got or got < WATCH_FROM or now - got < WAIT:
