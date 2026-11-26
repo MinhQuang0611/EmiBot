@@ -104,19 +104,32 @@ class TripcomNetTest(unittest.TestCase):
         after = [dict(self.EBOOKING[0], total_vnd="10711436")]
         self.assertFalse(payments.tripcom_net_fix("SynXis 92777EF003442 (Trip.com)", before, after))
 
-    def test_other_ota_or_no_ebooking_word_is_a_rate_move(self):
+    def test_the_live_rows_vcc_wording_counts(self):  # CHANGE row 2705, 25/11 12:22
+        vcc = [dict(self.EBOOKING[0], notes=notes("6. Trip.com VCC (hotel receives): 1,692,259 × 2 nights × 1 room "
+                                                  "= 3,384,518 VND; prepaid by Trip.com, non-refundable"))]
+        self.assertTrue(payments.tripcom_net_fix("SynXis 92777EF003603 (Trip.com)", self.SYNXIS, vcc))
+
+    def test_other_ota_or_no_net_word_is_a_rate_move(self):
         agoda = [dict(r, company="Agoda") for r in self.SYNXIS], [dict(r, company="Agoda") for r in self.EBOOKING]
         self.assertFalse(payments.tripcom_net_fix("Agoda 1", *agoda))
-        vague = [dict(self.EBOOKING[0], notes=notes("6. Net per VCC"))]
+        vague = [dict(self.EBOOKING[0], notes=notes("6. OTA net rate 2,082,779 × 4 nights × 1 room"))]
         self.assertFalse(payments.tripcom_net_fix("SynXis 1 (Trip.com)", self.SYNXIS, vague))
 
-    def test_rendered_without_a_hold(self):
-        item = {"ref": "SynXis 92777EF003603 (Trip.com)", "row": 2700, "company": "Trip.com", "group": "31500",
-                "arrival": date(2026, 12, 1), "subject": "s", "channel": "OTA", "rows": [2700], "total": 3384518,
-                "change": "price to Ebooking net", "tripcom_net": (4835025, 3384518)}
-        text = payments.render_confirmations([item])
-        self.assertIn("TRIP.COM EBOOKING NET 4,835,025", text)
-        self.assertNotIn("RATE MOVED", text)
+    def test_confirmations_due_leaves_the_correction_out(self):
+        from tools.tests.test_build_stuck_1107 import BUILT as CHANGED, MAILBOX, NoMail, c
+        trip = dict(channel_type="OTA", company="Trip.com", company_email="hotel.vn@trip.com",
+                    booking_ref="SynXis 92777EF003603 (Trip.com)", ezfolio_group_code="31500", arrival="10/12/2026",
+                    departure="12/12/2026", rooms="1", adults="2")
+        due = lambda rows: payments.needs_confirmation(rows, emi.booking_state, emi._parts, NoMail(),
+                                                       State(tempfile.mktemp(suffix="-state.json")), MAILBOX,
+                                                       date(2026, 11, 26))
+        rows = [c(2584, total_vnd="4835025", notes=self.SYNXIS[0]["notes"], **trip),
+                c(2705, total_vnd="3384518", what_changed="Rate corrected to Trip.com VCC",
+                  notes=notes("6. Trip.com VCC (hotel receives): 3,384,518 VND"), **{**CHANGED, **trip})]
+        self.assertEqual([i for i in due(rows) if i.get("change") is not None], [])
+        rows[1] = dict(rows[1], total_vnd="17500000")  # a rise is still RATE MOVED
+        [i] = [i for i in due(rows) if i.get("change") is not None]
+        self.assertEqual(i["rate_moved"], (4835025, 17500000))
 
 
 class PdfRoundingTest(unittest.TestCase):
