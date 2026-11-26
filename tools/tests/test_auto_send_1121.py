@@ -85,6 +85,15 @@ class AutoSend1121Test(Base):
                        ref="Trip.com 1539369445053786")
 
 
+class PickupBothTest(unittest.TestCase):
+    def test_the_rule_as_a_condition_is_caught(self):
+        # PICKUP_BOTH's \b were backspace characters from c6a2495 to 26/11: this branch never matched
+        with self.assertRaises(emi.Refused):
+            emi.check_pickup_one_answer("If your booking total is above USD 250, the transfer is free; "
+                                        "otherwise it is 200,000 VND.")
+        emi.check_pickup_one_answer("Your airport pick-up is complimentary. The driver will wait at arrivals.")
+
+
 class NoReplyTest(unittest.TestCase):
     def test_a_no_reply_recipient_is_never_auto_sent(self):
         self.assertIn("no-reply", auto_send_refusal("cancellation", ["noreply@mgbedbank.com"], [], [], "Dear"))

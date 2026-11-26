@@ -237,15 +237,35 @@ class OldRowRulesTest(unittest.TestCase):
 
 
 class RoundingTest(unittest.TestCase):
-    def test_negative_rounding_in_surcharge_amount(self):
-        # contract total 2,816,000 - 3: the difference goes in the extra-service columns (Tracy audit 29/10)
-        errors, warnings = check(total_vnd="2815997", surcharge="Rounding -3", **{"Surcharge amount": "-3"})
-        self.assertEqual(errors, [])
+    """Dev, 2026-11-26 ("bỏ cái này đi"): no "Rounding +4" in surcharge / Surcharge amount any more (Tracy audit
+    29/10). total_vnd is the exact total; the few đồng off the rounded nightly rate are left as they are."""
+
+    def test_a_few_dong_off_is_no_warning(self):
+        _, warnings = check(total_vnd="2816004")
         self.assertFalse(has(warnings, "total_vnd"))
 
-    def test_mismatch_suggests_the_rounding_line(self):
-        w = next(x for x in check(total_vnd="2816004")[1] if x.startswith("total_vnd"))
-        self.assertIn("'Rounding +4'", w)
+    def test_a_real_difference_still_warns_without_a_rounding_hint(self):
+        w = next(x for x in check(total_vnd="2900000")[1] if x.startswith("total_vnd"))
+        self.assertNotIn("Rounding", w)
+        self.assertIn("+84,000", w)
+
+    def test_a_rounding_line_is_refused_on_a_new_row(self):
+        errors, _ = check(total_vnd="2815997", surcharge="Rounding -3", **{"Surcharge amount": "-3"})
+        self.assertTrue(has(errors, "surcharge: no rounding line"))
+
+    def test_built_rows_keep_their_old_rounding_line(self):
+        errors, _ = check(total_vnd="2815997", surcharge="Rounding -3", pdf_link="Booking.pdf",
+                          ezfolio_group_code="G1", **{"Surcharge amount": "-3"})
+        self.assertFalse(has(errors, "surcharge"))
+
+    def test_strip_rounding_keeps_the_real_surcharge(self):
+        rec = {"surcharge": "Child 6y sharing bed 1,050,000; Rounding -3", "Surcharge amount": "1049997"}
+        self.assertEqual(schema.strip_rounding(rec), -3)
+        self.assertEqual((rec["surcharge"], rec["Surcharge amount"]), ("Child 6y sharing bed 1,050,000", "1050000"))
+        alone = {"surcharge": "Rounding +4", "Surcharge amount": "4"}
+        self.assertEqual(schema.strip_rounding(alone), 4)
+        self.assertEqual((alone["surcharge"], alone["Surcharge amount"]), ("", ""))
+        self.assertIsNone(schema.strip_rounding({"surcharge": "Early check-in 500,000", "Surcharge amount": "500000"}))
 
 
 if __name__ == "__main__":

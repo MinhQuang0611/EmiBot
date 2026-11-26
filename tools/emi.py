@@ -1586,12 +1586,24 @@ def rooms_still_booked(rows, ref):
 REBOOK = re.compile(r"\brebook", re.I)
 
 
+def _later(a, b):
+    """received_at a (DD/MM/YYYY HH:MM) after b; True when either can't be read (nothing to compare)."""
+    try:
+        return datetime.strptime(str(a).strip(), "%d/%m/%Y %H:%M") > datetime.strptime(str(b).strip(), "%d/%m/%Y %H:%M")
+    except ValueError:
+        return True
+
+
 def cancelled_in_ezfolio(rows, ref):
     """The booking's last CANCEL row, when the build tool has cancelled the group (ez_status done) and nothing was
     built on it since: a later CHANGE there gets ez_status no_change ("group đã huỷ (CX)", Pegas 11131133 row 1864).
-    None otherwise."""
+    Also a CANCEL of a booking that never had a group (dev, 2026-11-26, Pegas 11162942: Emi declined it for no room
+    before the build, Karen took it back; the CHANGE written for that got out_of_scope and the booking stayed New on
+    Pegasys): there too only NEW rows build it. None otherwise."""
     mine = [r for r in rows if _parts(r.get("booking_ref")) & _parts(ref)]
-    cancels = [i for i, r in enumerate(mine) if r.get("action") == "CANCEL" and (r.get("ez_status") or "") == "done"]
+    never_built = not any((r.get("ez_status") or "") in payments.BUILT_STATUSES for r in mine)
+    cancels = [i for i, r in enumerate(mine) if r.get("action") == "CANCEL"
+               and ((r.get("ez_status") or "") == "done" or never_built)]
     if not cancels:
         return None
     after = mine[cancels[-1] + 1:]
@@ -1652,9 +1664,16 @@ def sheet_append(sheet, data, out=print, live=None):
             rebook = cancelled_in_ezfolio(rows + elsewhere, ref)
             if rebook and REBOOK.search(str(rec.get("internal_notes") or "")):
                 rebuild = True  # dev, 2026-11-12, Pegas 11131133: the cancelled group is not built again by a CHANGE
+                if not _later(rec.get("received_at"), rebook.get("received_at")):
+                    # dev 26/11, 11162942: the build tool goes by received_at; a row dated before the CANCEL is the
+                    # older one and is left out_of_scope
+                    raise Refused(f"booking_ref {ref!r}: received_at {rec.get('received_at')!r} is not after the "
+                                  f"CANCEL row {rebook['_row']} ({rebook.get('received_at')}); the build tool would "
+                                  f"read the CANCEL as the newer row. Write the time the booking was taken back "
+                                  f"(Karen's answer, or now)")
             if not rebuild and rebook:
-                raise Refused(f"booking_ref {ref!r} was cancelled in EZFOLIO (CANCEL row {rebook['_row']}, ez_status "
-                              f"done). Booked again under the same number (a tour operator's on-request type declined, "
+                raise Refused(f"booking_ref {ref!r} was cancelled (CANCEL row {rebook['_row']}, ez_status "
+                              f"{rebook.get('ez_status') or 'blank'}). Booked again under the same number (a tour operator's on-request type declined, "
                               f"another type sent in the allotment): NEW rows are right, the build tool makes a new "
                               f"group. Write internal_notes \"Rebooked after cancellation row {rebook['_row']}\" (plus "
                               f"\"Allotment\" for a tour operator) and run this again. A CHANGE row would get "
@@ -1719,6 +1738,10 @@ def sheet_append(sheet, data, out=print, live=None):
         keep_room_types(records, current)
         records = fill_group_code(records, rows + elsewhere, sheet.group_code_columns(), out=out)
         keep_known_rate(records, rows + elsewhere, sheet.group_code_columns())
+    for rec in records:  # dev 26/11: no rounding line; a CHANGE copies one from an older row, or it is written in
+        if rec.get("action") in ("NEW", "CHANGE") and schema.strip_rounding(rec) is not None:
+            out(f"{rec['action']} {rec.get('room_code') or ''}: rounding line taken out of surcharge / Surcharge "
+                f"amount (dev 26/11: the few đồng are left as they are)")
     sheet_check(sheet, records, out=out)
     sheet.append_rows(records)
     verify_appended(sheet, records)
@@ -2185,7 +2208,7 @@ def auto_send(mail, st, tg, n, d, args, text, out=print, rows=None):
 
 # email-templates.md 7: one answer, free or paid. Utegelova/Gelnara (Trip.com 1539369445053786, #1550, 21/11) got
 # both: "applies when the amount paid is above USD 250 … If the booking is below that amount, … VND 200,000".
-PICKUP_BOTH = re.compile(r"if (?:the|your) (?:booking|amount|total|stay)[^.]{0,60}(?:below|above|under|over|qualif)"
+PICKUP_BOTH = re.compile(r"\bif (?:the|your) (?:booking|amount|total|stay)\b[^.]{0,60}\b(?:below|above|under|over|qualif)"
                          r"|confirm the (?:paid|total) amount|before sending this|whether (?:the|your) booking qualifies",
                          re.I)
 
@@ -2781,9 +2804,6 @@ def pdf_fetch(sheet, row, work_dir=None, out=print):
     return path, name, mime, data
 
 
-ROUNDING_MIN_VND = 10  # the least a rounding difference may be, whatever the room-nights
-
-
 def pdf_rounding_line(state, amounts):
     """The PDF's figure a few đồng off the sheet's total is EZFOLIO rounding the nightly rate, not another price
     (Crystal Bay 1107315: 10,625,000 on the row and the PDF's Notice, 10,624,999 in its rate detail, E-668; 1107316
@@ -2794,7 +2814,7 @@ def pdf_rounding_line(state, amounts):
         return ""
     room_nights = sum(max(operators._amount(x.get("rooms")), 1) * max(operators._amount(x.get("nights")), 1)
                       for x in rows)
-    tol = max(ROUNDING_MIN_VND, room_nights)
+    tol = schema.rounding_slack(room_nights, 1)
     near = [a for a in amounts if a != total and abs(a - total) <= tol]
     if not near:
         return ""
@@ -4321,7 +4341,29 @@ def run_pegas_confirm(mail, sheet, st, args, tg=None, out=print):
         if client:
             pegasys.run(items, client, st, field=pegasys.conf_field(), dry_run=dry,
                         tg=None if dry else (tg or config.telegram()), out=out)
+    if getattr(args, "site", False):
+        _pegas_site_status(mail, st, args.days, {i["booking_id"] for i in items}, out)
     out("END pegas-confirm")
+
+
+def _pegas_site_status(mail, st, days, pressed, out):
+    """--site (dev, 2026-11-26): what Pegasys itself says for every booking left alone, so a New one waiting on
+    something Emi can't see is named. Read only."""
+    from . import pegasys
+    try:
+        client = pegasys.from_env()
+    except pegasys.PegasysError as e:
+        out(f"PEGAS SITE: {e}")
+        return
+    for bid, n in sorted(pegasys.notices(mail, st, datetime.now(VN), days).items()):
+        if bid in pressed:
+            continue
+        try:
+            b = client.booking(bid, n["guid"])
+            flag = "  <-- NOT CONFIRMED ON PEGASYS" if b["status"] in pegasys.CONFIRMABLE else ""
+            out(f"PEGAS SITE {bid}: {b['status']}, Confirmation # '{b['confirmation_number']}'{flag}")
+        except (pegasys.PegasysError, OSError) as e:
+            out(f"PEGAS SITE {bid}: not read ({e})")
 
 
 def _recipient_args(s):
@@ -4417,6 +4459,7 @@ def parser():
                                              "confirmation has gone to Pegas (EMI_PEGAS_CONFIRM=1)")
     s.add_argument("--dry-run", action="store_true", help="read the site and list, press nothing")
     s.add_argument("--days", type=int, default=30, help="robot notices this many days back")
+    s.add_argument("--site", action="store_true", help="also read Pegasys's status of every booking left alone")
     sub.add_parser("build-stuck", help="bookings the build tool stopped on (needs_review / error) or hasn't picked "
                                        "up after 4 h, with its reason; Karen gets them from the hourly check")
     s = sub.add_parser("confirmation-hold", help="leave a booking out of confirmations-due: its PDF doesn't match, or "

@@ -47,7 +47,8 @@ DATETIMES = ("received_at",)
 INTEGERS = ("nights", "rooms", "adults", "children")
 AMOUNTS = ("rate_per_night_vnd", "Average rate per night after discount", "total_vnd",
            "Payment 1", "Payment 2", "Remaining amount", "Cancellation Amount")
-# Surcharge amount carries the rounding difference too, which can be negative (Tracy audit 29/10: "-3").
+# Surcharge amount may be negative only on old rows: until 26/11 it carried the rounding difference (Tracy audit
+# 29/10: "-3"). Dev, 2026-11-26 ("bỏ cái này đi"): no rounding line any more, see ROUNDING_LINE.
 SIGNED_AMOUNTS = ("Surcharge amount",)
 AGENCY_CHANNELS = ("TA", "Tour operator")
 NEVER_FOR_AGENCIES = ("TW-DLX",)  # MEMORY: never TW-DLX or APT to agencies
@@ -318,6 +319,35 @@ def _named_ota(name):
         f" {k} " in words for k in payments._OTA_KEYS if k not in payments.B2B_KEYS)
 
 
+# Dev, 2026-11-26 ("Rounding +4 — cái này sao lại ghi vào trong dòng surcharge amount" → "bỏ cái này đi"): the few
+# đồng between rate × nights × rooms and the exact total are no longer written as "Rounding +4" in surcharge and +4
+# in Surcharge amount (Tracy audit 29/10); a reader took it for a charge. total_vnd stays the exact total, the nightly
+# rate is rounded, and the difference is left as it is (EZFOLIO's total may be those few đồng off).
+ROUNDING_LINE = re.compile(r"\brounding(?:\s+adjustment)?\s*:?\s*([-+−]?)\s*(\d[\d.,]*)\s*(?:vnd|đ)?", re.I)
+
+
+def rounding_slack(rooms, nights):
+    """The most a rounded nightly rate can miss the exact total by: under 1 đồng per room-night, at least 10."""
+    return max(10, rooms * nights)
+
+
+def strip_rounding(rec):
+    """Take a rounding line out of surcharge and its amount out of Surcharge amount (dev 26/11). Returns the
+    amount taken out, or None when there was none. Other surcharge text and amounts stay."""
+    text = str(rec.get("surcharge") or "")
+    m = ROUNDING_LINE.search(text)
+    if not m:
+        return None
+    diff = int(re.sub(r"\D", "", m.group(2))) * (-1 if m.group(1) in ("-", "−") else 1)
+    rest = "; ".join(p.strip() for p in (text[:m.start()] + text[m.end():]).split(";") if p.strip())
+    rec["surcharge"] = rest
+    amount = str(rec.get("Surcharge amount") or "").strip()
+    if re.fullmatch(r"-?\d+", amount):
+        left = int(amount) - diff
+        rec["Surcharge amount"] = str(left) if left else ""
+    return diff
+
+
 def check_row(rec, room_codes=None, earlier_arrivals=None):
     """(errors, warnings) for one row. Errors block the write; warnings are printed.
     earlier_arrivals: the arrival dates on the booking's rows already on the sheet (a CHANGE's past arrival is
@@ -400,8 +430,7 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
             errors.append(f"{k}: {g(k)!r} must be digits only, VND, no dots/commas (e.g. 2000000)")
     for k in SIGNED_AMOUNTS:
         if g(k) and not re.fullmatch(r"-?\d+", g(k)):
-            errors.append(f"{k}: {g(k)!r} must be digits only, VND, a minus sign allowed for a rounding "
-                          f"difference (e.g. 1050000, -3)")
+            errors.append(f"{k}: {g(k)!r} must be digits only, VND (e.g. 1050000)")
 
     a, d = _date(g("arrival"), "%d/%m/%Y"), _date(g("departure"), "%d/%m/%Y")
     if a and d:
@@ -576,12 +605,15 @@ def check_row(rec, room_codes=None, earlier_arrivals=None):
     extra = g("Surcharge amount") or "0"
     if all(x.isdigit() for x in (avg, rooms, nights, total)) and re.fullmatch(r"-?\d+", extra):
         want = int(avg) * int(rooms) * int(nights) + int(extra)
-        if want != int(total):
+        diff = int(total) - want
+        if abs(diff) > rounding_slack(int(rooms), int(nights)):  # a few đồng is the rounded rate: left as it is
             plus = f" + surcharge {extra}" if extra != "0" else ""
-            diff = int(total) - want
-            warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights{plus} = {want}. If "
-                            f"{total} is the email's or contract's exact total, the {diff:+d} is rounding: add it "
-                            f"to 'Surcharge amount' and 'Rounding {diff:+d}' to surcharge (booking-intake.md)")
+            warnings.append(f"total_vnd: {total} ≠ {avg} × {rooms} rooms × {nights} nights{plus} = {want} "
+                            f"({diff:+,d}): check the rate, rooms, nights and surcharges against the email")
+    if action in ("NEW", "CHANGE") and not built and ROUNDING_LINE.search(g("surcharge")):
+        errors.append("surcharge: no rounding line (dev 26/11): total_vnd is the exact total and the few đồng off "
+                      "the rounded nightly rate are left as they are; take 'Rounding …' out of surcharge and its "
+                      "amount out of Surcharge amount")
     return errors, warnings
 
 
