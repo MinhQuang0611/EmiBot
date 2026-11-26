@@ -12,7 +12,7 @@ the Hợp đồng link) and "CAR007C1 Báo cáo đặt phòng" (Công nợ = wha
 bookings made before it are not on it (19–25/10: 9 Anex groups checked out, the sheet had none, the 26/10 email
 named one). A folio with no Công nợ (the 0 room of a group, extras paid in cash) is not a line.
 
-The Monday 09:00 run (`python -m tools.emi anex-recon`, Monday only) drafts the email once everything is there; a
+The Monday 15:30 run (`python -m tools.emi anex-recon`, Monday only) drafts the email once everything is there; a
 report, VAT or confirmation still missing → a Telegram line naming what is missing (no email to staff yet), and no
 draft; that week is taken again the next Monday. Nothing is sent: a person presses Send. The hard copies (VAT
 invoice, folio, reservation) go by post once Anex confirms: a person.
@@ -332,7 +332,7 @@ def missing(bookings, vats, confirmations):
 
 
 def reminder(first, last, gaps, esc=lambda s: s):
-    """The Telegram line when something is still missing at the Monday 09:00 run."""
+    """The Telegram line when something is still missing at the Monday 15:30 run."""
     head = (f"📑 Đối chiếu công nợ Anex {first:%d/%m} – {last:%d/%m/%Y}: chưa gửi được, còn thiếu "
             f"{len(gaps)} booking:")
     rows = [f"• Đoàn {esc(b['group'])} (ANEX {esc(b['ref'] or '?')}, {esc(b['guests'] or 'khách')}, trả phòng "

@@ -46,7 +46,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi upgrade --arrival D --departure D --booked STD --adults 2 --channel OTA  # sea view: free? surcharge
     python -m tools.emi on-request --arrival D --departure D --alloc "DLX-SV:1"  # reject / ask Karen
     python -m tools.emi checkouts --company X (--from D [--to D] | --last-week)  # check-outs for operator invoicing
-    python -m tools.emi anex-recon [--preview] [--week DD/MM/YYYY]  # job 7, Monday 09:00: Anex reconciliation draft, or what's missing
+    python -m tools.emi anex-recon [--preview] [--week DD/MM/YYYY]  # job 7, Monday 15:30: Anex reconciliation draft, or what's missing
     python -m tools.emi payments-due       # job 3: TA deposits and balances, reminders to draft now
     python -m tools.emi deposit-extension --asked "DD/MM/YYYY HH:MM" [--wanted "DD/MM/YYYY[ HH:MM]"] [--current "…"] [--balance-by DD/MM/YYYY]
                                                           # agency asks to move the deposit: the new deadline + COD
@@ -3624,7 +3624,7 @@ def _anex_tell(tg, text, out):
 
 
 def run_anex_recon(mail, sheet, st, tg, today=None, preview=False, work_dir=None, out=print, call=None, redo=False):
-    """Monday 09:00 only (schedule.md job 7). Last week's reconciliation, and any earlier week still waiting:
+    """Monday 15:30 only (schedule.md job 7). Last week's reconciliation, and any earlier week still waiting:
     everything there → the draft, once; the week's EZFOLIO reports, a VAT invoice, a confirmation PDF or an Anex
     number missing → a Telegram line, no draft. Bookings, folios and amounts: EZFOLIO's reports (tools/anex_recon.py).
     redo: last week's email made again although it was drafted (anex-recon --week D --redo, dev 21/11: #1571 went out
@@ -4419,7 +4419,7 @@ def parser():
     s.add_argument("--from", dest="from_", help="DD/MM/YYYY")
     s.add_argument("--to", help="DD/MM/YYYY, default = --from")
     s.add_argument("--last-week", action="store_true", help="last Monday to Sunday")
-    s = sub.add_parser("anex-recon", help="job 7, Monday 09:00: last week's Anex reconciliation email (xlsx + VAT + "
+    s = sub.add_parser("anex-recon", help="job 7, Monday 15:30: last week's Anex reconciliation email (xlsx + VAT + "
                                           "confirmations), or a Telegram line for what is missing")
     s.add_argument("--preview", action="store_true", help="print the week and what is missing: no draft, no "
                                                          "Telegram, nothing remembered")
