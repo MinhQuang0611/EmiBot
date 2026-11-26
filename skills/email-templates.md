@@ -747,6 +747,29 @@ sales@haya-hotels.com
 ```
 Vietnamese: `Rất tiếc khách sạn đã hết phòng trong thời gian này, nên khách sạn không thể nhận booking sau:` … `Chị/Anh vui lòng huỷ booking này trên hệ thống giúp khách sạn. Khách sạn xin lỗi vì sự bất tiện và rất mong được đón tiếp khách của Quý Đối tác vào dịp khác.`
 
+## 9c. Booking sold after our stop sale (`--kind stop_sale_decline`)
+Dev, 2026-11-26: `sheet-append` said `STOP SALE LEAK` (no row). Reply on the booking's email; `draft-reply` sends it to the partner's stop-sale address itself (MG → roomupdate@mgholiday.com: the booking robot's address bounces). It must name the booking's number and say the dates were on stop sale, with the date and time of the chart from the `STOP SALE LEAK` line. A draft; a person presses Send. English unless the partner wrote in another language.
+```
+Dear [MG Reservations Team],
+
+Thank you for your booking at HAYA Hotel Phu Quoc, Trademark Collection by Wyndham.
+
+We are unable to accept the following booking, as these dates were already on stop sale in the stop sale chart we sent you on [DD/MM/YYYY] at [HH:MM] (Vietnam time, UTC+7):
+
+Booking no.: [ref]
+Guests: [names]
+Room: [n] [room type]
+Stay: [DD/MM/YYYY] – [DD/MM/YYYY] ([n] nights)
+Stopped nights: [DD/MM/YYYY], [DD/MM/YYYY]
+
+Kindly cancel this booking in your system and close these dates as shown in the chart. We apologise for the inconvenience.
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+
 ---
 
 ## 10. Front office sent a voucher as a link — ask for the PDF (`draft-reply <id> <body> --kind reply --internal`)

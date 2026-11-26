@@ -44,8 +44,11 @@ NO_ROW_REASON = re.compile(r"inquiry|quote|báo giá|duplicate|trùng|same booki
                            r"forward|Palma|NO REPLY|ANSWERED BY STAFF|sheet-update|updated row|không cần row|no row "
                            r"needed|hỏi giá|special request|yêu cầu đặc biệt|pick-?up|đưa đón|upgrade|"
                            r"extension|gia hạn|reminder|nhắc|invoice|hoá đơn|hóa đơn|VAT|not a booking|noise|"
-                           r"marketing|no action|not needed|voucher as link|front office asked",
+                           r"marketing|no action|not needed|voucher as link|front office asked|STOP SALE LEAK",
                            re.I)
+
+
+STOP_SALE_OUTCOME = re.compile(r"^\s*(?:DAY CHECK:\s*)?STOP SALE LEAK\b", re.I)
 
 
 def _vn_minute(iso):
@@ -95,7 +98,11 @@ def judge(m, st, rows, now):
     if done is None:
         missing.append("never handled (not done)")
     ota = is_ota_notice(sender, subject)
-    if ota:
+    # dev 26/11: a partner's booking sold after our stop sale has no row by rule; its outcome names the decline
+    leak = STOP_SALE_OUTCOME.search(outcome)
+    if ota and leak:
+        pass
+    elif ota:
         action = notice_action(subject)
         if not hits:
             missing.append("OTA notice with no row on the sheet")

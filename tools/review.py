@@ -33,6 +33,7 @@ KIND_LABEL = {
     "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
     "pickup": "Trả lời đón sân bay", "booking_status": "Trả lời khách: đã nhận booking",
     "cancellation": "Xác nhận huỷ booking", "thanks": "Thư cảm ơn",
+    "stop_sale_decline": "Từ chối booking: đã stop sale",
 }
 # The headline of a draft Emi sent itself (forward-slip; Karen's auto-send list, 19/11)
 SENT_LABEL = {"forward": "Đã chuyển kế toán", "deposit_reminder": "Đã gửi nhắc đặt cọc",

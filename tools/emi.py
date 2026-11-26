@@ -32,6 +32,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi forget-confirmation <ref> <row>   # only after a person deleted that confirmation draft
     python -m tools.emi quote --arrival DD/MM/YYYY --departure DD/MM/YYYY --adults N [--children "13;5"] [--rooms N] [--room-type X] [--alloc "STD:3,TPL:1"] [--twin] [--indian] [--channel TA|Direct]
     python -m tools.emi stop-sales [--preview]            # Long's stop-sale chart (OTA, .xlsx) to the partners, only when it changed
+    python -m tools.emi stop-sales-history [--rebuild] [--check "MG|QPL|02/01/2027|04/01/2027|25/11/2026 23:49"]
     python -m tools.emi pickup <booking_ref> [--ota-rooms N] [--paid-vnd X | --paid-usd X]  # airport pick-up: free or paid
     python -m tools.emi cancel-fee <booking_ref> [--cancelled-at "DD/MM/YYYY HH:MM"] [--no-show]  # TA cancellation charge
     python -m tools.emi pdf-fetch <row>                   # download the file behind pdf_link, print it next to the row
@@ -349,6 +350,8 @@ OTA_NOTICE_SUBJECT = re.compile(r"\bRes(?:ervation)?\b.{0,25}\b(?:Confirm|Modif|
                                 r"\breservation\b|đặt phòng", re.I)
 NO_ROW = re.compile(r"\bno rows?\b|không ghi row|chưa ghi row|no row written", re.I)
 ROW_NAMED = re.compile(r"\brows?\s+\d+|\bduplicate\b|\btrùng\b", re.I)
+# dev, 2026-11-26: a partner's booking sold after our stop sale gets no row, only the decline (stop_sale_decline)
+STOP_SALE_LEAK = re.compile(_DAY_CHECK + r"STOP SALE LEAK\b", re.I)
 
 
 def is_ota_notice(sender, subject):
@@ -558,7 +561,9 @@ def ota_audit(mail, st, rows, days=7, out=print, now=None):
         hits, how = notice_rows(mail, m, rows)
         done = st.data["processed"].get(m["id"])
         missing, check = [], []
-        if not hits:
+        if not hits and done is not None and STOP_SALE_LEAK.search(done.get("outcome", "")):
+            pass  # dev 26/11: sold after our stop sale, declined, no row by rule
+        elif not hits:
             missing.append(f"no row on the sheet ({how})")
         elif action == "CANCEL" and not any(r.get("action") == "CANCEL" for r in hits):
             missing.append("cancelled, but no CANCEL row")
@@ -721,6 +726,16 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
         msg = {}
         out(f"GAP: email not readable for the reply check ({str(e).splitlines()[0][:120]})")
     sender = ((msg.get("from") or {}).get("emailAddress") or {}).get("address", "")
+    if STOP_SALE_LEAK.search(outcome):
+        declines = {n for n, r in st.data["reviews"].items()
+                    if r.get("kind") == "stop_sale_decline" and r.get("status") != "denied"}
+        if (any(st.data["reviews"][n].get("source") == message_id for n in declines)
+                or set(re.findall(r"#(\d+)", outcome)) & declines):
+            return
+        raise Refused("STOP SALE LEAK WITHOUT ITS DECLINE: a booking sold after our stop sale gets no row, but the "
+                      "partner hears that we can't accept it (dev, 26/11): draft-reply <id> <body> --kind "
+                      "stop_sale_decline --ref <ref> (email-templates.md 9c), then done <id> \"STOP SALE LEAK: "
+                      "declined #n, no row\". Not marked.")
     ota = is_ota_notice(sender, msg.get("subject", ""))
     if ota and NO_ROW.search(outcome) and not ROW_NAMED.search(outcome):
         raise Refused("OTA BOOKING WITHOUT A ROW: an OTA or SynXis booking notice always gets its rows (OTA bookings "
@@ -1639,11 +1654,12 @@ def ota_whole_cancel(rec, rows):
     return None
 
 
-def sheet_append(sheet, data, out=print, live=None):
+def sheet_append(sheet, data, out=print, live=None, st=None):
     data = split_payments(data, out)
     records = expand_booking(data)
     if not records:
         raise Refused("no rows given")
+    check_stop_sale_leak(st, records, out=out)
     rows = None
     elsewhere = None  # the live sheet's rows, read once: a booking from before 22/10 is only there (dev 30/10)
     cancelled_here = {p for rec in records if rec.get("action") == "CANCEL" for p in _parts(rec.get("booking_ref"))}
@@ -1904,7 +1920,7 @@ def booking_email(text):
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
 GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup",
-               "booking_status", "thanks")
+               "booking_status", "thanks", "stop_sale_decline")
 REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
@@ -2127,6 +2143,10 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
         check_booking_status(rows, args.ref)
     if args.kind == "thanks":
         check_thanks(text)
+    if args.kind == "stop_sale_decline":
+        leak = check_stop_sale_decline(st, args.ref, text)
+        if not getattr(args, "to", ""):
+            args.to = ",".join(leak["to"])  # the partner's stop-sale desk: the booking robot's address bounces
     zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
             if rows is not None and args.ref and args.kind in ZALO_KINDS and not zalo_done(rows(), args.ref) else [])
     to, cc = reply_recipients(mail, args, args.kind)
@@ -2623,6 +2643,137 @@ def run_stop_sales(mail, st, tg, data, call, preview=False, out=print):
                                     "file": data["name"], "file_id": data["id"],
                                     "rows": stop_sales.to_state(data["closed"])}
     return new, reopened
+
+
+STOP_SALE_FROM = "2026-11-20T00:00:00Z"  # Long's charts went as .xlsx from 21/11; Emi's PDFs before it aren't read
+# Karen took the booking all the same (her answer to the partner's reply, or E-nnn)
+STOP_SALE_ACCEPTED = re.compile(r"accepted by Karen despite (?:the )?stop sale", re.I)
+
+
+def sync_stop_sale_history(mail, st, rebuild=False, out=print):
+    """Read the stop-sale charts that left sales@ (Sent Items, the .xlsx) into st['stop_sales_history'], oldest first:
+    {"spans": {"QPL|2027-01-03": [[since, until], ...]}, "seen": [message ids], "through": sentDateTime}."""
+    h = st.data.get("stop_sales_history")
+    if rebuild or not h:
+        h = {"spans": {}, "seen": [], "through": ""}
+    seen = set(h["seen"])
+    sent = [m for m in mail.list_sent_since(h["through"] or STOP_SALE_FROM)
+            if m["id"] not in seen and stop_sales.is_chart_mail(m.get("subject")) and m.get("hasAttachments", True)]
+    read, gaps = 0, []
+    for m in sorted(sent, key=lambda m: m.get("sentDateTime") or ""):
+        files = [a for a in mail.list_attachments(m["id"])
+                 if stop_sales.ATTACHMENT.match(a.get("name") or "") and a.get("data")]
+        if files:
+            try:
+                closed, codes = stop_sales.read_chart_xlsx(files[0]["data"])
+            except Exception as e:  # a chart Emi can't read is said, never guessed
+                gaps.append(f"{m.get('sentDateTime')} {files[0]['name']}: {type(e).__name__}: {str(e)[:120]}")
+                continue
+            pairs, unknown = stop_sales.closed_codes(closed, codes)
+            if unknown:
+                gaps.append(f"{files[0]['name']}: room types with no room code: {', '.join(unknown)}")
+            stop_sales.apply_sent(h["spans"], pairs, m["sentDateTime"])
+            read += 1
+        h["through"] = max(h["through"], m.get("sentDateTime") or "")
+        seen.add(m["id"])
+    stop_sales.prune(h["spans"], _today_vn())
+    h["seen"] = sorted(seen)[-300:]
+    st.data["stop_sales_history"] = h
+    shut = sum(1 for sp in h["spans"].values() if sp and sp[-1][1] is None)
+    out(f"STOP SALE HISTORY: {read} chart(s) read, last sent {h['through'] or 'none'}, {shut} room-code night(s) "
+        f"closed now")
+    for g in gaps:
+        out(f"GAP: {g}")
+    return h
+
+
+def sync_stop_sale_history_safe(mail, st, out=print):
+    try:
+        return sync_stop_sale_history(mail, st, out=out)
+    except Exception as e:  # job 5's email is out already; the history waits for the next run
+        out(f"GAP: stop-sale history not updated ({type(e).__name__}: {str(e)[:200]})")
+        return None
+
+
+def _vn_time(text):
+    when = schema._date(text or "", "%d/%m/%Y %H:%M")
+    return when.replace(tzinfo=VN) if when else None
+
+
+def stop_sale_hits(spans, code, arrival, departure, received):
+    a, d = schema._date(arrival or "", "%d/%m/%Y"), schema._date(departure or "", "%d/%m/%Y")
+    when = _vn_time(received)
+    if not (a and d and when and code):
+        return []
+    return stop_sales.leaks(spans, code, a.date(), d.date(), when)
+
+
+def check_stop_sale_leak(st, records, out=print):
+    """dev, 2026-11-26 (MG AGIN303795261, Tiket 80887501): a NEW booking from a stop-sale partner on nights the
+    partner had been told were stopped (24 hours before it came in, still stopped) is not accepted: no row, the
+    partner is told (draft-reply --kind stop_sale_decline). A booking that came through SynXis was sold from HAYA's
+    own channel manager, not the partner's mistake: not checked."""
+    news = [r for r in records if r.get("action") == "NEW"]
+    if not news:
+        return
+    company, ref = str(news[0].get("company") or ""), str(news[0].get("booking_ref") or "").strip()
+    name = stop_sales.partner(company)
+    if not name or "synxis" in ref.lower() or any(STOP_SALE_ACCEPTED.search(str(r.get("internal_notes") or ""))
+                                                    for r in news):
+        return
+    spans = ((st.data.get("stop_sales_history") or {}).get("spans") if st else None) or {}
+    if not spans:
+        out("STOP SALE NOT CHECKED: no stop-sale history on this host yet (stop-sales-history --rebuild)")
+        return
+    hits = []
+    for r in news:
+        hits += stop_sale_hits(spans, str(r.get("room_code") or ""), r.get("arrival"), r.get("departure"),
+                               r.get("received_at"))
+    if not hits:
+        return
+    since = min(h[2] for h in hits).astimezone(VN)
+    lines = ", ".join(f"{n:%d/%m/%Y} {c}" for n, c, _ in sorted(hits))
+    st.data.setdefault("stop_sale_leaks", {})[ref] = {
+        "partner": name, "to": list(stop_sales.PARTNERS[name][0]), "company": company, "nights": lines,
+        "since": since.strftime("%d/%m/%Y %H:%M"), "received": news[0].get("received_at") or "",
+        "at": datetime.now(VN).strftime("%d/%m/%Y %H:%M")}
+    st.save()
+    raise Refused(f"STOP SALE LEAK: {company} {ref}, received {news[0].get('received_at')}: {lines} stopped in the "
+                  f"chart sent to {name} since {since:%d/%m/%Y %H:%M} (Vietnam time). Not accepted (dev, 26/11): NO "
+                  f"ROW. Reply: draft-reply <message_id> <body> --kind stop_sale_decline --ref \"{ref}\" "
+                  f"(email-templates.md 9c; goes to {', '.join(stop_sales.PARTNERS[name][0])}); then done "
+                  f"<message_id> \"STOP SALE LEAK: declined #n, no row\". Karen takes it all the same → "
+                  f"internal_notes \"Accepted by Karen despite stop sale E-…\" and run this again")
+
+
+STOP_SALE_WORDS = re.compile(r"\bstop[- ]?(?:sale|sell)s?\b|\bclosed (?:for sale|out)\b", re.I)
+
+
+def check_stop_sale_decline(st, ref, text):
+    """The decline goes only for a leak sheet-append found, and says why: the stop sale, the booking's number."""
+    leak = (st.data.get("stop_sale_leaks") or {}).get(ref or "")
+    if not leak:
+        raise Refused(f"--kind stop_sale_decline needs --ref of a booking sheet-append refused as STOP SALE LEAK "
+                      f"({ref or 'no --ref'} is not one). No draft made.")
+    numbers = [p for p in re.findall(r"[A-Z0-9]{5,}", ref.upper()) if any(ch.isdigit() for ch in p)]
+    if not STOP_SALE_WORDS.search(text) or (numbers and not any(p in text.upper() for p in numbers)):
+        raise Refused("a stop-sale decline names the booking's number and says the dates were on stop sale "
+                      "(email-templates.md 9c). No draft made.")
+    return leak
+
+
+def print_stop_sale_check(st, spec, out=print):
+    parts = [p.strip() for p in spec.split("|")]
+    if len(parts) != 5:
+        raise Refused('--check "COMPANY|ROOM_CODE|DD/MM/YYYY arrival|DD/MM/YYYY departure|DD/MM/YYYY HH:MM received"')
+    company, code, arrival, departure, received = parts
+    spans = (st.data.get("stop_sales_history") or {}).get("spans") or {}
+    hits = stop_sale_hits(spans, code, arrival, departure, received) if stop_sales.partner(company) else []
+    name = stop_sales.partner(company)
+    out(f"{company} ({name or 'not a stop-sale partner'}) {code} {arrival}-{departure} received {received}: "
+        + ("LEAK " + ", ".join(f"{n:%d/%m/%Y} since {s.astimezone(VN):%d/%m/%Y %H:%M}" for n, _, s in hits)
+           if hits else "not a leak"))
+    return hits
 
 
 def run_quote(args, out=print, availability=None):
@@ -4515,6 +4666,11 @@ def parser():
     s.add_argument("--children", help="ages separated by ';'")
     s.add_argument("--indian", action="store_true", help="Indian guests on the TA table: +20%% on room rate")
     s.add_argument("--channel", default="TA", choices=["TA", "Tour operator", "OTA", "Direct"])
+    s = sub.add_parser("stop-sales-history", help="what the partners were told was stopped, from the charts in Sent "
+                                                  "Items (job 5 keeps it up to date)")
+    s.add_argument("--rebuild", action="store_true", help="read every chart sent since 20/11 again")
+    s.add_argument("--check", default="", help='"MG|QPL|02/01/2027|04/01/2027|25/11/2026 23:49": would this booking '
+                                                "be a leak")
     s = sub.add_parser("stop-sales", help="Long's stop-sale chart to the partners, only when the closed nights changed")
     s.add_argument("--preview", action="store_true", help="read Long's chart and print the changes: no email, nothing "
                                                          "remembered")
@@ -4680,7 +4836,7 @@ def main(argv=None):
         elif c == "change-replay":
             change_replay((config.live_sheet() or config.sheet()).rows())
         elif c == "sheet-append":
-            sheet_append(config.sheet(), read_json(args.file), live=config.live_sheet())
+            sheet_append(config.sheet(), read_json(args.file), live=config.live_sheet(), st=st)
         elif c == "sheet-update":
             sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR, ref=args.ref)
         elif c == "draft-reply":
@@ -4748,8 +4904,17 @@ def main(argv=None):
             if data is None:
                 stop_sales_gap(tg, call)
                 return 0
-            run_stop_sales(None if args.preview else config.mail(), st, tg, data, call, preview=args.preview)
+            mail = None if args.preview else config.mail()
+            run_stop_sales(mail, st, tg, data, call, preview=args.preview)
             if not args.preview:
+                st.save()
+                sync_stop_sale_history_safe(mail, st)
+                st.save()
+        elif c == "stop-sales-history":
+            if args.check:
+                print_stop_sale_check(st, args.check)
+            else:
+                sync_stop_sale_history(config.mail(), st, rebuild=args.rebuild)
                 st.save()
         elif c == "pickup":
             run_pickup(config.sheet(), args, live=config.live_sheet(), st=st)

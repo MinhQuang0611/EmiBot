@@ -13,9 +13,10 @@ closed nights differ from the list the partners last got (dev, 21/11: 09:00, 12:
 changes between each version. do not send email if everything stays the same"). A night that has passed is no change.
 The 24/12/2026-06/01/2027 close (dev, 14/11) is in Long's chart: every type 0 on those nights.
 """
+import io
 import re
 import urllib.parse
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
 DRIVE = "https://www.googleapis.com/drive/v3/files"
@@ -30,15 +31,20 @@ SUBJECT = "Stop Sale / Sold Out Room Type Chart"
 MAX_LISTED = 40  # changed lines written out in the email; the chart has them all
 # Bcc: the partners compete, and HAYA's own list went out with an empty To (10/09).
 # Dev, 2026-11-13: WebBeds' second and third, Traveloka's last five and Trip.com's khoi.duong added; HotelBeds dropped.
-RECIPIENTS = (
-    "suppliers@webbeds.com", "Stopsales.APAC@webbeds.com", "tuankhang.truong@webbeds.com",  # WebBeds
-    "info.partner@tiket.com",  # Tiket
-    "hotelsupport@trip.com", "khoi.duong@trip.com",  # Trip.com B2B
-    "roomupdate@mgholiday.com",  # MG
-    "phuong.truong@traveloka.com", "hotel@traveloka.com", "loi.le@traveloka.com", "hotel-mm-vn@traveloka.com",
-    "phuong.tran@traveloka.com", "long.duong@traveloka.com", "dung.huynh@traveloka.com",  # Traveloka
-    "booking@ohmyhotel.com", "stopsell@ohmyhotel.com",  # OhMyHotel
-)
+# name: (the stop-sale addresses, the words of the company on an intake row). The addresses are also where a booking
+# sold after the stop sale is declined (dev, 2026-11-26).
+PARTNERS = {
+    "WebBeds": (("suppliers@webbeds.com", "Stopsales.APAC@webbeds.com", "tuankhang.truong@webbeds.com"),
+                ("webbeds", "dotw")),
+    "Tiket": (("info.partner@tiket.com",), ("tiket", "tiketcom", "tiket com")),
+    "Trip.com": (("hotelsupport@trip.com", "khoi.duong@trip.com"), ("trip com", "tripcom", "ctrip")),
+    "MG": (("roomupdate@mgholiday.com",), ("mg", "mgholiday", "mg holiday", "mgbedbank", "mg bedbank")),
+    "Traveloka": (("phuong.truong@traveloka.com", "hotel@traveloka.com", "loi.le@traveloka.com",
+                   "hotel-mm-vn@traveloka.com", "phuong.tran@traveloka.com", "long.duong@traveloka.com",
+                   "dung.huynh@traveloka.com"), ("traveloka",)),
+    "OhMyHotel": (("booking@ohmyhotel.com", "stopsell@ohmyhotel.com"), ("ohmyhotel", "oh my hotel")),
+}
+RECIPIENTS = tuple(a for addresses, _ in PARTNERS.values() for a in addresses)
 
 
 class StopSaleError(Exception):
@@ -172,3 +178,109 @@ def body(new, reopened, today, first):
     parts.append("Best regards,\nReservations Team\nHAYA Hotel Phu Quoc, Trademark Collection by Wyndham\n"
                  "sales@haya-hotels.com")
     return "\n\n".join(parts)
+
+
+# ---- What the partners were told, and bookings they sold anyway (dev, 2026-11-26) ----
+# MG AGIN303795261 (3 QPL 02-04/01/2027, mailed 25/11 23:49) and Tiket 80887501 (26-30/12) were sold on nights the
+# chart had stopped since 21/11. Dev: "booking từ các trang online đổ về tuy nhiên mình đã thông báo stop sales thì
+# Emi ... phải email lại cho họ và thông báo là booking này mình không nhận được do mình đã stop sales rồi"; no row
+# on the intake sheet, a draft a person sends, and the partner gets 24 hours to close the dates on its side.
+# The record is the chart itself as it left sales@ (Sent Items, the .xlsx), so a draft a person sent late counts
+# from when it really went.
+GRACE = timedelta(hours=24)
+ATTACHMENT = re.compile(r"^Stop-Sale-HAYA-\d{4}-\d{2}-\d{2}\.xlsx$", re.I)
+# Long's "Gồm các hạng" column names the room codes of each line; these are for a chart without it.
+ROOM_CODES = {"STANDARDDOUBLE": ("STD",), "SUPERIORDOUBLE": ("SUP-DBL",), "SUPERIORTWIN": ("SUP-TWN", "STD-TWN"),
+              "TRIPLE": ("TPL", "TPL-SV"), "QUADRUPLE": ("QPL",), "DELUXESEAVIEW": ("DLX-SV", "TW-DLX"),
+              "SUITESEAVIEW": ("SUITE-SV",)}
+
+
+def _words(text):
+    return f" {re.sub(r'[^a-z0-9]+', ' ', str(text or '').lower()).strip()} "
+
+
+def partner(company):
+    """The stop-sale partner a row's company is, or ''. 'MG' -> 'MG', 'CÔNG TY TNHH OHMYHOTEL&CO VN' -> 'OhMyHotel'."""
+    words = _words(company)
+    for name, (_, keys) in PARTNERS.items():
+        if any(_words(k) in words for k in keys):
+            return name
+    return ""
+
+
+def is_chart_mail(subject):
+    """A chart Emi sent, not a partner's reply on its thread ("RE: Stop Sale / …")."""
+    return str(subject or "").strip().lower().startswith(SUBJECT.lower())
+
+
+def parse_codes(rows):
+    """{room type: (room codes)} from the "Gồm các hạng" column: "TPL + TPL-SV" -> ("TPL", "TPL-SV")."""
+    out = {}
+    for r in rows[1:]:
+        r = list(r) + [""] * 6
+        room, codes = str(r[2] or "").strip(), [c.strip().upper() for c in re.split(r"[+,]", str(r[5] or ""))]
+        if room and any(codes):
+            out.setdefault(room, set()).update(c for c in codes if c)
+    return {k: tuple(sorted(v)) for k, v in out.items()}
+
+
+def read_chart_xlsx(data):
+    """(closed {(night, room)}, {room: codes}) from a sent chart's "Danh sách" tab."""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    if LIST_TAB not in wb.sheetnames:
+        raise StopSaleError(f"no '{LIST_TAB}' tab in the chart (tabs: {wb.sheetnames})")
+    rows = [["" if c is None else (f"{c:%d/%m/%Y}" if isinstance(c, (date, datetime)) else str(c)) for c in r]
+            for r in wb[LIST_TAB].iter_rows(values_only=True)]
+    return parse_list(rows), parse_codes(rows)
+
+
+def closed_codes(closed, codes):
+    """({(room code, night)}, [room types with no codes]): each closed line by the codes it stands for."""
+    pairs, unknown = set(), set()
+    for night, room in closed:
+        mine = codes.get(room) or ROOM_CODES.get(key(room))
+        if not mine:
+            unknown.add(room)
+            continue
+        pairs.update((c, night) for c in mine)
+    return pairs, sorted(unknown)
+
+
+def span_key(code, night):
+    return f"{code.upper()}|{night.isoformat()}"
+
+
+def apply_sent(spans, pairs, at):
+    """One chart sent at `at` (ISO, UTC): what it closes stays or starts closed, what it leaves out is open from then.
+    spans: {"QPL|2027-01-03": [[since, until or None], ...]}."""
+    now = {span_key(c, n) for c, n in pairs}
+    for k, sp in spans.items():
+        if sp and sp[-1][1] is None and k not in now:
+            sp[-1][1] = at
+    for k in now:
+        sp = spans.setdefault(k, [])
+        if not sp or sp[-1][1] is not None:
+            sp.append([at, None])
+
+
+def prune(spans, today):
+    for k in [k for k in spans if date.fromisoformat(k.split("|")[1]) < today - timedelta(days=7)]:
+        del spans[k]
+
+
+def _when(text):
+    return datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+
+
+def leaks(spans, code, arrival, departure, received):
+    """[(night, code, since)] of a booking's nights the partners had been told were stopped for at least GRACE when
+    it came in (received: an aware datetime), and still were."""
+    out, night = [], arrival
+    while night < departure:
+        for since, until in (spans or {}).get(span_key(code, night), []):
+            if _when(since) + GRACE <= received and (until is None or _when(until) > received):
+                out.append((night, code.upper(), _when(since)))
+                break
+        night += timedelta(days=1)
+    return out
