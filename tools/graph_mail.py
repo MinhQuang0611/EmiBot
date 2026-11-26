@@ -616,6 +616,19 @@ class GraphMail:
         got = self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value") or []
         return len(got) >= self.NEW_MAIL_PAGE or any(not is_search_noise(m) for m in got)
 
+    def new_inbox_mail(self, since_iso):
+        """The inbox's emails at or after since_iso, oldest first, at most NEW_MAIL_PAGE: the watcher's one call a
+        minute, with what it needs to wait for a batch and to close auto-replies (dev 26/11)."""
+        q = self._query(filter=f"receivedDateTime ge {since_iso}", orderby="receivedDateTime asc",
+                        select="id,subject,from,receivedDateTime,hasAttachments", top=str(self.NEW_MAIL_PAGE))
+        return self._call("GET", f"/mailFolders/inbox/messages?{q}").get("value") or []
+
+    def message_headers(self, message_id):
+        """{lower-case header name: value} of one message (tools/auto_reply.py)."""
+        q = self._query(select="internetMessageHeaders")
+        got = self._call("GET", f"/messages/{message_id}?{q}").get("internetMessageHeaders") or []
+        return {(h.get("name") or "").lower(): h.get("value") or "" for h in got}
+
     def list_drafts(self, only_emi=False):
         q = self._query(select="id,subject,toRecipients,createdDateTime,lastModifiedDateTime,categories,conversationId", top="200")
         drafts = list(self._pages(f"/mailFolders/drafts/messages?{q}"))

@@ -1,6 +1,7 @@
 """The commands Emi's scheduled jobs call. One fixed command per step, so the agent never has
 to write its own Python to reach the mailbox or the sheet (schedule.md says which job uses which).
 
+    python -m tools.emi job1-start                        # job 1 step 1: quiet/work, auto-replies closed, the list
     python -m tools.emi inbox-new                         # emails since the last scan, not yet handled
     python -m tools.emi show <message_id>                 # whole thread + attachments saved and read
     python -m tools.emi mail-find <text> [--days 14]      # emails matching text (ref, subject, sender, attached file)
@@ -205,6 +206,36 @@ def inbox_new(mail, st, out=print, tg=None):
     # dev 17/11: each email gets its line in the group's '📥 Email tới' tab; `done` writes the outcome on it
     inbox_notices.announce(tg, msgs, config.SIM_DIR or WORK_DIR, vn, missed_ids={m["id"] for m in earlier}, out=out)
     return msgs, started
+
+
+def job1_start(mail, st, tg=None, out=print):
+    """Job 1's first step (dev, 2026-11-26, tokens): the precheck, auto-replies closed by code (tools/auto_reply.py)
+    and inbox-new in one shell call instead of three model turns, each of which re-reads the whole prompt (~70k
+    tokens). First line `quiet` (answer NO_REPLY) or `work`, then inbox-new's list. Quiet after closing auto-replies:
+    every email since the scan clock is done, so the clock moves (else the next run would see them as new again)."""
+    from . import auto_reply, precheck
+    if not precheck.inbox_has_work(mail, st, leftovers=True):
+        out("quiet")
+        return []
+    work_dir = config.SIM_DIR or WORK_DIR
+    if st.data["last_scan"] is not None:
+        autos = auto_reply.find(mail, unhandled_inbox(mail, st, st.data["last_scan"]),
+                                cache_path=os.path.join(work_dir, "auto-reply.json"))
+        if autos:
+            auto_reply.close(st, autos, tg=tg, work_dir=work_dir, vn=vn, out=out)
+            st.save()
+    lines = []
+    msgs, started = inbox_new(mail, st, out=lines.append, tg=tg)
+    if not msgs:
+        if st.data["last_scan"] is not None:
+            st.mark_scanned(started)
+            st.save()
+        out("quiet")
+        return []
+    out("work")
+    for s in lines:
+        out(s)
+    return msgs
 
 
 ATTACHMENT_LOOKBACK_DAYS = 14  # mail-find reads the files of the inbox's emails this far back
@@ -4251,6 +4282,8 @@ def parser():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("inbox-new")
+    sub.add_parser("job1-start", help="job 1's first step: precheck + auto-replies closed by code + inbox-new; "
+                                      "first line quiet or work (dev 26/11)")
     s = sub.add_parser("show"); s.add_argument("message_id")
     s = sub.add_parser("mail-find"); s.add_argument("text")
     s.add_argument("--days", type=int, default=ATTACHMENT_LOOKBACK_DAYS,
@@ -4486,6 +4519,8 @@ def main(argv=None):
         c = args.cmd
         if c == "inbox-new":
             inbox_new(config.mail(), st, tg=config.telegram())
+        elif c == "job1-start":
+            job1_start(config.mail(), st, tg=config.telegram())
         elif c == "show":
             show(config.mail(), args.message_id)
         elif c == "mail-find":

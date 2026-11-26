@@ -78,6 +78,12 @@ class SimMail:
     def has_new_inbox_mail(self, since_iso, skip_noise=False):
         return bool(self._load())
 
+    def new_inbox_mail(self, since_iso):
+        return self.list_inbox_since(since_iso)
+
+    def message_headers(self, message_id):
+        return {}
+
     def get_message_text(self, message_id):
         return self._public(self._load()[message_id])
 
