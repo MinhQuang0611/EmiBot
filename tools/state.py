@@ -4,6 +4,7 @@ Not on the intake sheet: the sheet's columns belong to the EZFOLIO build tool.
 """
 import json
 import os
+import sys
 import tempfile
 import time
 from datetime import datetime, timedelta, timezone
@@ -44,12 +45,38 @@ def hold_lock(path, wait=120):
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             _held[path] = f
+            _write_holder(f)
             return
         except OSError:
             if time.time() >= deadline:
                 f.close()
-                raise TimeoutError(f"another command has held {path}.lock for {wait} s; run this one again") from None
+                raise TimeoutError(f"another command has held {path}.lock for {wait} s{_holder(path)}; "
+                                   "run this one again") from None
             time.sleep(0.1)
+
+
+def _write_holder(f):
+    """Who holds the lock, in the lock file itself (dev 27/11: on 26/11 the lock was held for hours and nothing said
+    by what). Never stops the command."""
+    try:
+        os.ftruncate(f.fileno(), 0)
+        f.write(json.dumps({"pid": os.getpid(), "since": now_iso(),
+                            "cmd": " ".join(os.path.basename(a) if i == 0 else a
+                                            for i, a in enumerate(sys.argv))[:200]}))
+        f.flush()
+    except (OSError, ValueError):
+        pass
+
+
+def _holder(path):
+    """' (pid 123, tools.emi done …, since 26/11 17:28 Vietnam time)', or '' when the file says nothing."""
+    try:
+        with open(path + ".lock", encoding="utf-8") as f:
+            h = json.loads(f.read() or "{}")
+        since = datetime.strptime(h["since"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) + timedelta(hours=7)
+        return f" (by pid {h['pid']}, `{h.get('cmd', '?')}`, since {since:%d/%m %H:%M} Vietnam time)"
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
 
 
 def now_iso():

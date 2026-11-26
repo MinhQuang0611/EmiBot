@@ -298,7 +298,7 @@ class DeviceCodeTokenTest(unittest.TestCase):
                     raise a
                 return a
             msgs = []
-            tok = DeviceCodeToken("cid", os.path.join(d, "none.json"), http=http, out=msgs.append)
+            tok = DeviceCodeToken("cid", os.path.join(d, "none.json"), http=http, out=msgs.append, interactive=True)
             self.assertEqual(tok(), "AT2")
             self.assertEqual(msgs, ["go sign in"])
 

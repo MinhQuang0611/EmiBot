@@ -19,6 +19,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import build_watch, config, payments
+from .graph_mail import SignInNeeded
 
 # Dev 26/11: job 2 ran 310 times in 7 days (~100M tokens), 303 of them woken by the 15-minute check, and only 35 made
 # or changed a draft. The rest re-read the same list ("build dừng, chờ Karen E-676", "giữ xác nhận, đã hỏi E-716")
@@ -173,6 +174,12 @@ def main(argv):
             work = bool(keys) if agent else should_wake(keys, wake_path())
         else:
             work = payments_have_work(config.mail(), config.sheet(), st)
+    except SignInNeeded as e:  # one Telegram line (tools/signin.py), not a failed run every 15 minutes
+        from . import signin
+        from .watch import _telegram, _work_dir
+        signin.alert(e, _telegram(), _work_dir())
+        print("quiet")
+        return 0 if agent else 1
     except Exception as e:
         print(f"precheck {argv[0]} failed: {e}", file=sys.stderr)
         return 2

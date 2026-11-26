@@ -64,11 +64,19 @@ def waiting_mail(mail, st):
     return [m for m in got if not is_search_noise(m) and m["id"] not in (st.data.get("processed") or {})]
 
 
+LOCK_WAIT = 15  # the watcher's own run is killed at 120 s: it never waits that long for another command
+
+
 def close_auto_replies(msgs):
-    """The watcher's own state write: under the state lock, on the state as it is now."""
+    """The watcher's own state write: under the state lock, on the state as it is now. Returns False when another
+    command holds the lock: the auto-replies are left for the next minute."""
     from .emi import vn
     from .state import hold_lock
-    hold_lock(config.state_path())
+    try:
+        hold_lock(config.state_path(), wait=LOCK_WAIT)
+    except TimeoutError as e:
+        print(f"auto-replies left for the next minute: {e}", file=sys.stderr)
+        return False
     st = config.state()
     msgs = [m for m in msgs if not st.is_processed(m["id"])]
     tg = None
@@ -78,6 +86,13 @@ def close_auto_replies(msgs):
         pass
     auto_reply.close(st, msgs, tg=tg, work_dir=_work_dir(), vn=vn, out=lambda s: print(s, file=sys.stderr))
     st.save()
+
+
+def _telegram():
+    try:
+        return config.telegram()
+    except Exception:
+        return None
 
 
 def check(mail, st, job_id, run=subprocess.run, now=time.time, lock_path=None, out=print, closer=None,
@@ -100,7 +115,9 @@ def check(mail, st, job_id, run=subprocess.run, now=time.time, lock_path=None, o
         autos = auto_reply.find(mail, msgs, cache_path=cache_path or os.path.join(_work_dir(), "auto-reply.json"),
                                 now=now)
         if autos:
-            (closer or close_auto_replies)(autos)
+            if (closer or close_auto_replies)(autos) is False:
+                out("NO_REPLY")  # state busy: they are closed next minute, before any run is started for them
+                return "busy"
             for m in autos:  # the count below sees them as handled, so they aren't taken for a run's progress
                 st.data.setdefault("processed", {})[m["id"]] = {"outcome": auto_reply.OUTCOME}
             msgs = [m for m in msgs if m not in autos]
@@ -134,8 +151,14 @@ def main(argv):
     if len(argv) != 1:
         print(__doc__, file=sys.stderr)
         return 2
+    from .graph_mail import SignInNeeded
     try:
         check(config.mail(), config.state(), argv[0])
+    except SignInNeeded as e:  # one Telegram line, not a failed run every minute (the automation turns itself off)
+        from . import signin
+        signin.alert(e, _telegram(), _work_dir())
+        print("NO_REPLY")
+        return 0
     except Exception as e:
         print(f"watch failed: {type(e).__name__}: {e}", file=sys.stderr)
         return 2

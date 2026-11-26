@@ -208,6 +208,10 @@ class ClientCredentialsToken:
         return self._token
 
 
+class SignInNeeded(RuntimeError):
+    """Microsoft refused the cached refresh token: a person signs in again (tools.acceptance mail-login-start)."""
+
+
 class DeviceCodeToken:
     """Delegated token, signed in once with a device code. No client secret.
 
@@ -224,14 +228,19 @@ class DeviceCodeToken:
     SCOPE = "offline_access https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Files.Read.All"
     SEND_SCOPE = SCOPE + " https://graph.microsoft.com/Mail.Send"
 
-    def __init__(self, client_id, cache_path, tenant="consumers", http=httpjson.request, out=print):
+    def __init__(self, client_id, cache_path, tenant="consumers", http=httpjson.request, out=print, interactive=None):
         self.base = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0"
         self.client_id = client_id
         self.cache_path = cache_path
         self.http = http
         self.out = out
+        # Waiting for a device-code sign-in only when asked for (EMI_DEVICE_LOGIN=1, a person at the terminal).
+        # 26/11 17:15–00:00: the refresh failed, every job waited 15 minutes for a sign-in nobody saw, the ones
+        # holding the state lock blocked the rest, and the mail watcher was switched off after 10 timeouts.
+        self.interactive = os.environ.get("EMI_DEVICE_LOGIN") == "1" if interactive is None else interactive
         self._token = None
         self._expires = 0
+        self.refresh_error = ""
 
     def _read_cache(self):
         try:
@@ -281,7 +290,8 @@ class DeviceCodeToken:
                 "client_id": self.client_id, "grant_type": "refresh_token",
                 "refresh_token": rt, "scope": cache.get("scope") or self.SCOPE}))
             return True
-        except httpjson.HttpError:
+        except httpjson.HttpError as e:
+            self.refresh_error = refusal_text(e)
             return False
 
     def _device_login(self):
@@ -347,8 +357,23 @@ class DeviceCodeToken:
     def __call__(self):
         if not self._token or time.time() > self._expires - 300:
             if not self._cached_access() and not self._refresh():
+                if not self.interactive:
+                    raise SignInNeeded(
+                        "sales@ sign-in refused by Microsoft (" + (self.refresh_error or "no refresh token cached")
+                        + "). Karen signs in again: python -m tools.acceptance mail-login-start --send, "
+                          "then mail-login-finish")
                 self._device_login()
         return self._token
+
+
+def refusal_text(e):
+    """Microsoft's own words for a refused token request: 'invalid_grant: AADSTS700082: …' (first line only)."""
+    try:
+        body = json.loads(e.body or "{}")
+        desc = (body.get("error_description") or "").splitlines()[0][:220]
+        return f"HTTP {e.status} {body.get('error', '')}: {desc}".strip(": ")
+    except (ValueError, AttributeError, IndexError):
+        return f"HTTP {getattr(e, 'status', '?')}: {(getattr(e, 'body', '') or '')[:220]}"
 
 
 def jwt_claims(token):
