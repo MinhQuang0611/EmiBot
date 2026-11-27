@@ -601,6 +601,23 @@ sales@haya-hotels.com
 ```
 Several refs in one notice → `reservations [ref], [ref] and [ref]`. No ref in it → `Thank you very much for your email.`
 
+### 6d. Proforma invoice asked for (`draft-reply <id> <body> --kind invoice --ref <ref>`, dev 2026-11-26)
+A tour operator (Odeon so far) asks for our proforma invoice, often "in the attached format". I make it (`invoice-make`, run by the command itself) and it goes on this reply, reply all on Odeon's email. Never "the proforma invoice will follow" or "we have noted your request" (Odeon 1462822, 26/11: that note went out and the request was forwarded to accounting; dev: "Emi đã biết làm invoice cho Odeon thì phải gửi luôn"). `--attach <EZFOLIO PDF>` adds the confirmation when they ask for it too. The invoice can't be made (`NO INVOICE` line) → no draft; fix the cause, or `ask-karen` with the cause. The draft is refused if it doesn't say the invoice is attached.
+```
+Dear [name],
+
+Thank you for your email.
+
+Please find attached our proforma invoice HAYA - [group] for reservation [ref] ([guest surnames], [DD/MM/YYYY] – [DD/MM/YYYY]), amount [X] VND, to be settled by [DD/MM/YYYY].
+
+Best regards,
+Reservations Team
+HAYA Hotel Phu Quoc, Trademark Collection by Wyndham
+sales@haya-hotels.com
+```
+
+**No holding words in any draft (dev, 2026-11-26).** Every draft command refuses "will follow", "we'll check", "we will get back to you", "revert", "in due course", "sẽ kiểm tra", "sẽ gửi sau", "sẽ phản hồi", "проверим", "свяжемся" (`HOLDING REPLY`). The only exception is 6b's and 6c's own sentence "our reservations team will get back to you as soon as possible", and never in a reply about an invoice.
+
 ### 6c. On-request booking received (`draft-reply <id> <body> --kind reply --ref <ref>`, dev 2026-11-15)
 A tour operator's on-request booking while Karen decides (`tour-operators.md` step 5). On the operator's email; `draft-reply` addresses Anex's robot to reservation@anexvietnam.com and Pegas's to reservation.vtm@pegast.com. No booking lines, no promise either way, no `[CHECK BEFORE SENDING]` line. Karen's yes brings the confirmation, her no the decline (below). Odeon: 6b.
 ```

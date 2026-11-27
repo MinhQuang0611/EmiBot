@@ -25,6 +25,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-append <booking.json>       # new booking: {"booking": {...}, "room_lines": [{...}, ...]}
     python -m tools.emi sheet-update <row> <fields.json> --ref <booking_ref>  # change named cells on one row
     python -m tools.emi draft-reply <message_id> <body.txt> [--to A[,B] [--cc C] | --sender-only] [--kind K --ref R --row N] [--replaces N]
+                                                         # --kind invoice --ref R [--attach PDF]: our proforma made and attached
                                                           # reply all by default, To and Cc kept
     python -m tools.emi draft-forward <message_id> <to> <body.txt> [--kind K --ref R --row N]
     python -m tools.emi forward-slip <message_id> <body.txt> [--ref R --row N]   # a payment slip to accounting: SENT at once
@@ -1920,7 +1921,7 @@ def booking_email(text):
 
 # Drafts that speak to a guest or an agency. They never go to our own staff, --internal or not.
 GUEST_KINDS = ("request", "inquiry", "confirmation", "cancellation", "deposit_reminder", "balance_reminder", "pickup",
-               "booking_status", "thanks", "stop_sale_decline")
+               "booking_status", "thanks", "invoice", "stop_sale_decline")
 REMINDERS = ("deposit_reminder", "balance_reminder")
 
 FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or agency: a reply would go back to "
@@ -1989,6 +1990,21 @@ INTERNAL_PROCESS = re.compile(
     r"|\bapproval\s+(?:from|by)\s+(?:the\s+|our\s+)?(?:manager|management)"
     r"|\bbuild tool\b|\bE-\d{3,4}\b"
     r"|\bchờ\s+(?:quản lý\s+|sếp\s+)?(?:duyệt|phê duyệt)|\bquản lý\s+(?:duyệt|phê duyệt)", re.I)
+# AGENTS rule 9: no holding replies. Odeon 1462822 (26/11, #31528): Odeon asked for the proforma, Emi answered "The
+# proforma invoice will follow" and forwarded the request to accounting, though invoice-make makes it in a minute.
+# dev: "nói rất nhiều lần là không được ghi câu chữ như là 'chúng tôi sẽ kiểm tra lại'… phải gửi luôn".
+HOLDING = re.compile(
+    r"\b(?:will|to) follow\b(?! up)"
+    r"|\b(?:we|i)(?:'ll| will| shall| would)\s+(?:double[- ]?)?(?:check|look into|revert|get back|come back|update you"
+    r"|keep you|let you know|send (?:it|them|this|the \w+(?: \w+)?)? ?(?:later|shortly|soon|separately|in due course))"
+    r"|\bget back to you\b|\brevert to you\b|\bin due course\b"
+    r"|\bwill be (?:sent|provided|shared|issued) (?:to you )?(?:later|shortly|soon|separately)\b"
+    r"|\bsẽ (?:kiểm tra|phản hồi|báo lại|liên hệ lại|cập nhật|xem lại|gửi (?:lại|sau|bổ sung))|\bgửi sau\b"
+    r"|(?:проверим|свяжемся|вернёмся|вернемся|сообщим (?:позже|дополнительно))", re.I)
+# The two acknowledgements rule 9 allows: 6b (an Odeon notice) and 6c (an on-request booking), in their own words.
+RECEIVED_NOTE = re.compile(r"our reservations team (?:is now reviewing it\.\s*We )?will get back to you as soon as "
+                           r"possible", re.I)
+INVOICE_WORD = re.compile(r"\b(?:pro-?forma|invoice|hóa đơn|hoá đơn|сч[её]т)", re.I)
 HTML_TAG = re.compile(r"</?(?:p|br|b|i|u|div|span|table|tr|td|th|ul|ol|li|strong|em|a|font|html|body|h[1-6])\b[^>]*>",
                       re.I)
 
@@ -2017,6 +2033,7 @@ def check_no_gaps(text, message_id="<message_id>"):
         raise Refused(f"the text still has {len(gaps)} gap(s): {' | '.join(gaps)}. Write the best full answer "
                       f"instead, and name what is uncertain in a first line '[CHECK BEFORE SENDING: <what to check>]'; "
                       f"then ask-karen {message_id} \"<the uncertain fact, as a question>\" --ref <ref>.")
+    check_no_holding(body)
     m = INTERNAL_PROCESS.search(body)
     if m:
         raise Refused(f"INTERNAL STEP IN THE TEXT ('{m.group(0)}'): an email never tells the sender about HAYA's own "
@@ -2033,6 +2050,41 @@ def check_no_gaps(text, message_id="<message_id>"):
         # Audit 03/11, Midzio: tags written into the text showed as '<br>' in the email
         raise Refused(f"the text has HTML tags ({', '.join(tags)}): write plain text — a blank line for a new "
                       f"paragraph, '• ' for a list, **label** for bold; the HTML is made from it")
+
+
+def check_no_holding(body):
+    """AGENTS rule 9: every reply is the real answer, never "we'll check / will follow / get back to you". The only
+    such words allowed are 6b's and 6c's own sentence, and never in a reply about an invoice (Odeon 1462822, 26/11:
+    Emi makes Odeon's proforma itself, so it goes with the reply: --kind invoice)."""
+    received = bool(RECEIVED_NOTE.search(body))
+    m = HOLDING.search(RECEIVED_NOTE.sub("", body))
+    if not m and received and INVOICE_WORD.search(body):
+        m = RECEIVED_NOTE.search(body)
+    if m:
+        raise Refused(f"HOLDING REPLY ('{m.group(0)}'): never 'we'll check', 'will follow', 'will get back to you', "
+                      f"'sẽ kiểm tra', 'sẽ gửi sau' (AGENTS rule 9; dev 26/11, Odeon 1462822). Do the thing now and "
+                      f"send it in this reply. A tour operator asking for our proforma invoice → draft-reply <id> "
+                      f"<body> --kind invoice --ref <ref>: Emi makes it (invoice-make) and attaches it. Only 6b (Odeon "
+                      f"notice) and 6c (on request) may say 'our reservations team will get back to you as soon as "
+                      f"possible'. A fact Emi can't find → the full answer with a first line [CHECK BEFORE SENDING: …] "
+                      f"and ask-karen. No draft made.")
+
+
+def invoice_files(args, make_invoice, out=print):
+    """--kind invoice (dev 26/11, Odeon 1462822): the operator asked for our proforma, so it is made now and goes on
+    this reply. Not made → no draft: a 'will follow' note is exactly what this replaces."""
+    if not args.ref:
+        raise Refused("an invoice reply needs --ref: the operator's booking_ref on the intake sheet")
+    path = make_invoice(args.ref) if make_invoice else None
+    if not path:
+        raise Refused(f"NO INVOICE {args.ref}: the proforma could not be made (reason in the NO INVOICE line above). "
+                      f"No draft made. Fix the cause and run this again; if it needs a person (workbook access, a "
+                      f"room with no Odeon name), ask-karen <id> \"<the cause>\" --ref {args.ref}. Never a 'will "
+                      f"follow' reply.")
+    return read_pdfs([path] + list(getattr(args, "attach", None) or []))
+
+
+ATTACHED_WORD = re.compile(r"attach|đính kèm|kèm theo|во вложении|прилага|прикреп", re.I)
 
 
 def reply_all_default(args, to):
@@ -2118,9 +2170,10 @@ def run_zalo_notes(args, out=print):
     return hits
 
 
-def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
+def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None, make_invoice=None):
     """text: the body made by the command itself (ota-note); otherwise read from args.body.
-    rows: callable giving the intake rows (the command passes it), for the bank-details check."""
+    rows: callable giving the intake rows (the command passes it), for the bank-details check.
+    make_invoice: ref -> path of our proforma PDF or None (--kind invoice; the command passes _auto_invoice)."""
     if args.kind == "confirmation" and not (args.ref and args.row):
         raise Refused("a confirmation draft needs --ref and --row")
     if args.kind in REMINDERS:
@@ -2147,6 +2200,14 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
         leak = check_stop_sale_decline(st, args.ref, text)
         if not getattr(args, "to", ""):
             args.to = ",".join(leak["to"])  # the partner's stop-sale desk: the booking robot's address bounces
+    files = []
+    if args.kind == "invoice":
+        if not ATTACHED_WORD.search(text):
+            raise Refused("an invoice reply says the invoice is attached ('Please find attached our proforma "
+                          "invoice …', email-templates.md 6d). No draft made.")
+        files = invoice_files(args, make_invoice, out=out)
+    elif getattr(args, "attach", None):
+        raise Refused("--attach goes with --kind invoice only (a confirmation's files: draft-confirmation)")
     zalo = (zalo_lines(booking_state(rows(), args.ref) or [], out=out)
             if rows is not None and args.ref and args.kind in ZALO_KINDS and not zalo_done(rows(), args.ref) else [])
     to, cc = reply_recipients(mail, args, args.kind)
@@ -2156,7 +2217,7 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     if telegram_first(tg) and not auto:
         n = review.propose(mail, st, tg, pending_store(), how="reply", source=args.message_id, kind=args.kind,
                            ref=args.ref, row=int(args.row or 0), text=text, reply_all=args.all,
-                           to=to, cc=cc, mailbox=config.MAILBOX, zalo=zalo)
+                           to=to, cc=cc, mailbox=config.MAILBOX, zalo=zalo, files=files)
         st.record_draft(review.PENDING + n, args.ref or "", int(args.row or 0), args.kind)
         out(f"draft #{n} sent to Telegram for review, not in Outlook until Accept: {review.PENDING}{n}"
             + _to_line(to, cc))
@@ -2165,15 +2226,18 @@ def draft_reply(mail, st, args, tg=None, out=print, text=None, rows=None):
     suffix = {"subject_suffix": args.subject_suffix} if getattr(args, "subject_suffix", "") else {}
     d = mail.reply_draft_with_text(args.message_id, text, reply_all=args.all, to=to, cc=cc, **suffix)
     _record(st, d, args)
+    for fname, fdata, ctype in files:
+        mail.add_attachment(d["id"], fname, fdata, content_type=ctype)
     n = review.opened(mail, st, tg, d["id"], how="reply", source=args.message_id, kind=args.kind, ref=args.ref,
                       row=int(args.row or 0), text=text, reply_all=args.all, to=to, cc=cc, override=bool(to),
-                      notice=not auto, zalo=zalo)
+                      notice=not auto, zalo=zalo, attachments=[f[0] for f in files])
     close_replaced(mail, st, tg, older, n, out=out)
     if args.kind == "cancellation":
         close_confirmations_of_cancelled(mail, st, tg, rows, args.ref, n, out=out)
     if auto:
         return auto_send(mail, st, tg, n, d, args, text, out=out, rows=rows)
-    out(f"draft #{n} saved in Drafts: {d['id']}" + _to_line(to, cc))
+    out(f"draft #{n} saved in Drafts: {d['id']}" + (f" with {', '.join(f[0] for f in files)}" if files else "")
+        + _to_line(to, cc))
     return d
 
 
@@ -4607,11 +4671,14 @@ def parser():
                            help="the reply really is for our own colleague (haya@, palmahotel.vn); kind reply only")
             s.add_argument("--subject-suffix", default="", help="added to the end of the subject, e.g. a reminder's "
                                                                 "'- PAYMENT REMINDER #30742'")
+            s.add_argument("--attach", action="append", default=[],
+                           help="--kind invoice: another PDF beside our proforma, e.g. the EZFOLIO confirmation")
         s.add_argument("--kind", default="reply" if name == "draft-reply" else "forward",
                        help="reply, forward, confirmation, cancellation, deposit_reminder, balance_reminder, "
                             "inquiry, request, pickup (airport pick-up answer, after 'pickup <ref>'), booking_status (a guest "
                             "asking whether HAYA has their booking, when it is on the sheet), thanks (a plain "
-                            "one-line thank-you to an email that needs nothing else)")
+                            "one-line thank-you to an email that needs nothing else), invoice (a tour operator asking for our "
+                            "proforma: Emi makes it with invoice-make and attaches it, --ref)")
         s.add_argument("--ref", default="")
         s.add_argument("--row", default="")
         s.add_argument("--replaces", default="", help="older open draft(s) this one replaces, e.g. 12 or 12,14: moved to Deleted Items once this one is made")
@@ -4841,7 +4908,8 @@ def main(argv=None):
             sheet_update(config.sheet(), args.row, read_json(args.file), work_dir=WORK_DIR, ref=args.ref)
         elif c == "draft-reply":
             draft_reply(config.mail(), st, args, tg=config.telegram(),
-                        rows=lambda: config.sheet().rows() + live_rows(config.live_sheet()))
+                        rows=lambda: config.sheet().rows() + live_rows(config.live_sheet()),
+                        make_invoice=lambda ref: _auto_invoice(config.sheet(), ref))
             st.save()
         elif c == "ota-note":
             ota_note(config.mail(), config.sheet(), st, args, tg=config.telegram(), live=config.live_sheet())

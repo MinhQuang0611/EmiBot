@@ -32,7 +32,7 @@ KIND_LABEL = {
     "balance_reminder": "Nhắc thanh toán", "decline": "Từ chối booking",
     "stop_sales": "Danh sách stop sell", "ota_note": "Ghi nhận OTA vào intake sheet",
     "pickup": "Trả lời đón sân bay", "booking_status": "Trả lời khách: đã nhận booking",
-    "cancellation": "Xác nhận huỷ booking", "thanks": "Thư cảm ơn",
+    "cancellation": "Xác nhận huỷ booking", "thanks": "Thư cảm ơn", "invoice": "Gửi invoice proforma",
     "stop_sale_decline": "Từ chối booking: đã stop sale",
 }
 # The headline of a draft Emi sent itself (forward-slip; Karen's auto-send list, 19/11)
