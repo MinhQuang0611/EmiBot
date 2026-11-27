@@ -101,7 +101,8 @@ from types import SimpleNamespace
 
 from . import anex_recon, attachments, config, drive, stop_sales, telegram
 from .graph_mail import (ACCOUNTING, AUTO_KINDS, CHECK_LINE as CHECK_MARK, DO_NOT_SEND, NO_INVOICE, STOP_LINES,
-                         SendBlocked, clean_subject, is_internal, share_links, thanks_refusal)
+                         SendBlocked, clean_subject, inbound_thanks_refusal, is_internal, share_links,
+                         thanks_refusal)
 from . import httpjson
 from . import quote as quoting
 from . import cancel_fee as cancelling
@@ -349,6 +350,9 @@ _DAY_CHECK = r"^\s*(?:DAY CHECK:\s*)?"
 NO_REPLY_OK = re.compile(_DAY_CHECK + r"NO REPLY:\s*(?:spam|marketing|newsletter|quảng cáo|phishing|otp|passcode|mã otp|"
                          r"alert|cảnh báo|maintenance|bảo trì|system|hệ thống|internal|nội bộ|palma)\b", re.I)
 ANSWERED_BY_STAFF = re.compile(_DAY_CHECK + r"ANSWERED BY STAFF\b", re.I)
+# Dev, 2026-11-27: "với các mail mà nội dung chỉ có thank you thì không cần reply lại". Accepted by done only when the
+# email's own text is a plain thank-you (graph_mail.inbound_thanks_refusal): no file, figure, question or ask.
+NO_REPLY_THANKS = re.compile(_DAY_CHECK + r"NO REPLY:\s*(?:thanks|thank you|cảm ơn)\b", re.I)
 # --- Which email is an OTA's booking notice (dev, 2026-11-27) ---
 # Trip.com 1359049748321348: "Trip.com - Thông báo đơn đặt mới: <no>" from auto_reservation@trip.com matched no subject
 # word (English only, plus "đặt phòng") and its sender wasn't named no-reply, so ota-note refused it, the model answered
@@ -675,7 +679,8 @@ def reply_audit(mail, st, since, out=print):
         sender, subject, got = _sender(m), m.get("subject", ""), m["receivedDateTime"][:19]
         done = st.data["processed"].get(m["id"])
         outcome = (done or {}).get("outcome", "")
-        if NO_REPLY_OK.search(outcome) or AUTO_MAIL.search(subject) or AUTO_SENDER.search(sender):
+        if (NO_REPLY_OK.search(outcome) or NO_REPLY_THANKS.search(outcome) or AUTO_MAIL.search(subject)
+                or AUTO_SENDER.search(sender)):
             counts["noise"] += 1
             continue
         robot = is_ota_robot_notice(sender, subject)
@@ -775,11 +780,27 @@ def ota_drafts(mail, sheet, st, tg=None, fix=False, out=print, live=None):
             out(line + f" → {done_word}; NO NOTE: {str(e)[:160]}")
 
 
-def check_email_answered(st, message_id, outcome, load_message, out=print, load_headers=None):
+def _message_bodies(mail, message_id):
+    """The email with uniqueBody (its own text) and hasAttachments; SimMail's get_message_text already has both."""
+    get = getattr(mail, "get_message_bodies", None)
+    return get(message_id) if get else mail.get_message_text(message_id)
+
+
+def check_email_answered(st, message_id, outcome, load_message, out=print, load_headers=None, load_bodies=None):
     """done's second check (dev, 2026-11-13): the email has its reply, or the outcome says why not.
+    load_bodies() gives the email with uniqueBody and hasAttachments, read for 'NO REPLY: thanks' (dev 27/11).
     load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP.
     load_headers() gives its headers (an OTA robot not named as one, dev 27/11); None or an error = by name only."""
     if NO_REPLY_OK.search(outcome) or ANSWERED_BY_STAFF.search(outcome):
+        return
+    if NO_REPLY_THANKS.search(outcome):
+        try:
+            why = inbound_thanks_refusal((load_bodies or load_message)() or {})
+        except Exception as e:
+            why = f"the email couldn't be read ({str(e).splitlines()[0][:120]})"
+        if why:
+            raise Refused(f"NOT ONLY THANKS: {why}. Only an email whose own text is a plain thank-you goes without a "
+                          f"reply (dev, 27/11); this one gets its reply (draft-reply …), then done. Not marked.")
         return
     try:
         msg = load_message() or {}
@@ -836,7 +857,8 @@ def check_email_answered(st, message_id, outcome, load_message, out=print, load_
                   "first (draft-reply / draft-confirmation; an OTA or SynXis notice: ota-note; another no-reply "
                   "notice is answered to the email printed in the booking, draft-reply finds it). Answered on another email of the same booking → name that "
                   "draft in the outcome ('same booking as #712'). No reply only for: 'NO REPLY: spam' / 'NO REPLY: "
-                  "OTP' / 'NO REPLY: alert' / 'NO REPLY: internal' / 'NO REPLY: Palma' (forwarded), or 'ANSWERED BY "
+                  "OTP' / 'NO REPLY: alert' / 'NO REPLY: internal' / 'NO REPLY: Palma' (forwarded) / 'NO REPLY: thanks' (the "
+                  "email only says thank you, dev 27/11), or 'ANSWERED BY "
                   "STAFF <when>' when a person at HAYA already replied (Sent Items). Not marked.")
 
 
@@ -5112,7 +5134,8 @@ def main(argv=None):
             check_vouchers_handled(args.message_id, " ".join(args.outcome), _rows_for_done)
             check_email_answered(st, args.message_id, " ".join(args.outcome),
                                  lambda: config.mail().get_message_text(args.message_id),
-                                 load_headers=lambda: config.mail().message_headers(args.message_id))
+                                 load_headers=lambda: config.mail().message_headers(args.message_id),
+                                 load_bodies=lambda: _message_bodies(config.mail(), args.message_id))
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
             print("marked handled")

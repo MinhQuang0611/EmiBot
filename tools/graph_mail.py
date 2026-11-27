@@ -77,6 +77,56 @@ def thanks_refusal(text):
         return (f"a thanks reply carries no figure, date, question or booking matter ({', '.join(bad)}): "
                 f"that is --kind reply, read by a person")
     return ""
+
+
+# Dev, 2026-11-27: "với các mail mà nội dung chỉ có thank you thì không cần reply lại". An email whose own text (Graph's
+# uniqueBody, without the quoted thread) is only a thank-you gets no reply: done "NO REPLY: thanks". Checked here, so a
+# thank-you carrying a request, a figure, a question or a file is still answered.
+QUOTE_START = re.compile(r"^(?:from:|từ:|от:|sent:|-{2,}\s*original|_{5,}|on .+ wrote:|vào .+ đã viết:|"
+                         r"-----)", re.I)
+INBOUND_SIGN_OFF = re.compile(r"^(?:best regards|kind regards|warm regards|warmest regards|regards|rgds|br\b|best\b|"
+                              r"best wishes|cheers|sincerely|trân trọng|thân ái|thanks (?:&|and) (?:best )?regards|"
+                              r"с уважением|reservations team)", re.I)
+# THANKS_NOT less the confirm words ("thanks for your confirmation" is the usual thank-you), plus asks
+INBOUND_NOT = re.compile(r"\d|\?|cancel|\bhu[ỷỹ]\b|discount|giảm giá|\bfree|miễn phí|complimentary|upgrade|nâng hạng|"
+                         r"waive|refund|hoàn tiền|\bprices?\b|\brates?\b|\bgiá\b|deposit|\bcọc\b|payment|thanh toán|"
+                         r"\bbank|tài khoản|invoice|hoá đơn|hóa đơn|availab|còn phòng|hết phòng|fully booked|sold out|"
+                         r"\bplease\b|\bpls\b|kindly|could you|can you|would you|let (?:me|us) know|request|\bneed|"
+                         r"\badd\b|\bchange|\bamend|vui lòng|\bnhờ\b|\bgiúp\b|\bcần\b|\bmuốn\b|\bthêm\b|\bđổi\b|"
+                         r"\bbáo lại\b|скидк|бесплат|\bцен[аыу]\b|оплат|отмен|пожалуйста|прошу", re.I)
+SIGNATURE_LINE = re.compile(r"@|www\.|https?://|\+\s?\d|\b(?:tel|mobile|mob|phone|hotline|fax|m|t|p|add(?:ress)?|"
+                            r"đ/c|địa chỉ|sđt|đt)\s*[:.]", re.I)
+
+
+def inbound_thanks_refusal(message):
+    """Why this received email is not only a thank-you (so it still gets a reply), or ''. `message` is Graph's message
+    with uniqueBody (plain text) and hasAttachments."""
+    if message.get("hasAttachments"):
+        return "it has files attached"
+    text = ((message.get("uniqueBody") or message.get("body") or {}).get("content") or "")
+    lines = []
+    for x in (y.strip() for y in text.splitlines()):
+        if QUOTE_START.match(x):
+            break
+        if x:
+            lines.append(x)
+    if lines and THANKS_GREETING.match(lines[0]):
+        lines = lines[1:]
+    for i, x in enumerate(lines):
+        if INBOUND_SIGN_OFF.match(x):
+            lines = lines[:i]
+            break
+    body = " ".join(x for x in lines if not SIGNATURE_LINE.search(x))
+    if not THANKS_WORDS.search(body):
+        return "its text has no thank-you"
+    if len(body) > THANKS_MAX:
+        return f"it says more than a thank-you ({len(body)} characters)"
+    bad = sorted({m.group(0).lower() for m in INBOUND_NOT.finditer(body)})
+    if bad:
+        return f"it carries a figure, a question, an ask or a booking matter ({', '.join(bad)})"
+    return ""
+
+
 OWN_DOMAINS = ("haya-hotels.com", "palmahotel.vn")
 # A send to a no-reply robot bounces (Karen, 15/11, SynXis): such a draft waits for a person to readdress it.
 NO_REPLY_ADDRESS = re.compile(r"(?:^|[._-])(?:no-?reply|do-?not-?reply|donotreply)[^@]*@", re.I)
@@ -601,7 +651,8 @@ class GraphMail:
 
     def get_message_bodies(self, message_id):
         """One message with body and uniqueBody (its own text, without the quoted history) as plain text."""
-        q = self._query(select="id,subject,from,toRecipients,ccRecipients,sentDateTime,categories,body,uniqueBody")
+        q = self._query(select="id,subject,from,toRecipients,ccRecipients,sentDateTime,categories,body,uniqueBody,"
+                               "hasAttachments")
         return self._call("GET", f"/messages/{message_id}?{q}", headers={"Prefer": 'outlook.body-content-type="text"'})
 
     def list_inbox_since(self, since_iso, with_files=False):
