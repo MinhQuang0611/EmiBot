@@ -1,11 +1,18 @@
 """Settings from environment variables. Secrets live on the host, never in these files.
 
 A `.env` file at the project root is loaded first if present (see `.env.example`).
-Variables already set in the environment win, and blank values in `.env` are ignored.
+Variables already set in the environment win, and blank values in `.env` are ignored,
+except the ENV_FILE_DECIDES ones: for those the `.env` value wins over the environment.
 """
 import os
 
 ENV_FILE = os.path.join(os.path.dirname(__file__), "..", ".env")
+
+# dev, 2026-11-27 (#2018/#2019 left in Drafts): job 3's model ran `EMI_AUTO_SEND= … draft-reply --kind
+# balance_reminder` because its automation message said "không gửi", and the blank variable in its environment won
+# over the host's .env, so the reminders weren't sent. Only the host's .env turns auto-send on, off or narrower; a
+# command can't. A test that wants it off patches os.environ after this module is loaded, which still works.
+ENV_FILE_DECIDES = {"EMI_AUTO_SEND"}
 
 
 def load_env(path=ENV_FILE):
@@ -18,7 +25,9 @@ def load_env(path=ENV_FILE):
                 continue
             k, v = line.split("=", 1)
             k, v = k.strip(), v.strip().strip('"').strip("'")
-            if v:
+            if k in ENV_FILE_DECIDES:
+                os.environ[k] = v  # blank in .env = off, whatever the command line said
+            elif v:
                 os.environ.setdefault(k, v)
 
 
