@@ -26,12 +26,14 @@ class CancelFeeTest(unittest.TestCase):
         for when, fee in cases:
             self.assertEqual(cf.cancel_fee(ROWS, at(when))["fee"], fee, when)
 
-    def test_exactly_seven_days_is_left_to_karen(self):
+    def test_exactly_seven_days_is_free(self):  # dev 27/11: free of charge 7 days or more before arrival
         c = cf.cancel_fee(ROWS, at("28/11/2026 09:00"))
-        self.assertIsNone(c["fee"])
-        self.assertIn("either 0 VND", c["how"])
-        self.assertIn("5.800.000", c["how"])
-        self.assertTrue(any("Karen decides" in g for g in c["gaps"]))
+        self.assertEqual(c["days"], 7)
+        self.assertEqual(c["fee"], 0)
+        self.assertEqual(c["gaps"], [])
+
+    def test_six_days_is_one_night(self):
+        self.assertEqual(cf.cancel_fee(ROWS, at("29/11/2026 09:00"))["fee"], 5800000)
 
     def test_holiday_stay_uses_holiday_column(self):
         rows = [row(arrival="23/12/2026", departure="26/12/2026", room_code="STD", rooms="1",

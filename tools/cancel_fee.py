@@ -96,17 +96,11 @@ def cancel_fee(rows, cancelled_at, data=None, no_show=False):
         basis = f"{days} day(s) before check-in, {column} column"
         tier = next((t for t in policy["tiers"]
                      if days >= t["min_days"] and (t["max_days"] is None or days <= t["max_days"])), None)
-        if tier is None:
-            # On no line of the table (exactly 7 days): show the line either side, Karen picks.
-            above = min((t for t in policy["tiers"] if t["min_days"] > days), key=lambda t: t["min_days"])
-            below = max((t for t in policy["tiers"] if t["max_days"] is not None and t["max_days"] < days),
-                        key=lambda t: t["max_days"])
-            (fa, ha), (fb, hb) = charge(above[column]), charge(below[column])
-            fee, how = None, f"UNCLEAR — either {quoting.money(fa)} VND ({ha}) or {quoting.money(fb)} VND ({hb})"
-            gaps.append(f"{days} days before check-in: {policy['unclear_note']} Karen decides which line applies")
-        else:
-            rule = tier[column]
-            fee, how = charge(rule)
+        if tier is None:  # dev 27/11: 7 days or more is free, so every day count is on a line of the table
+            raise CancelFeeError(f"{days} days before check-in is on no line of the TA cancellation table "
+                                 f"(docs/rate-knowledge/ta-rates.json): fix the table")
+        rule = tier[column]
+        fee, how = charge(rule)
     # dev 30/10: the Cancellation Amount column, one CANCEL row per room type, each with its own share
     per_row = [(r.get("_row"), r.get("room_code"), charge(rule, night, total)[0]) for r, night, total in priced
                ] if rule is not None and fee is not None else []

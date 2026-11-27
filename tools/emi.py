@@ -3200,72 +3200,10 @@ def check_operator_confirmation(body, ref="", group=""):
                       f"{', '.join(missing)}. No draft made.")
 
 
-CANCEL_WORDS = re.compile(r"cancel|hủy|huỷ|отмен|аннул", re.I)
-DAYS = re.compile(r"(\d{1,3})\s*(?:days?|ngày|дн|сут)", re.I)
-
-
-def _cancellation_days(text):
-    return {int(m.group(1)) for line in re.split(r"[\n.;]", text or "") if CANCEL_WORDS.search(line)
-            for m in DAYS.finditer(line)}
-
-
-def check_cancellation_days(body, pdf_text):
-    """Audit 03/11: the email said free cancellation 7 days before arrival, the EZFOLIO PDF 3 days. The PDF is the
-    booking as built: the email's cancellation days are the PDF's."""
-    said, built = _cancellation_days(body), _cancellation_days(pdf_text)
-    if said and built and not said <= built:
-        raise Refused(f"the email gives cancellation {', '.join(f'{d} days' for d in sorted(said - built))} but the "
-                      f"EZFOLIO PDF says {', '.join(f'{d} days' for d in sorted(built))}: write the PDF's terms. If "
-                      f"the PDF is wrong, it goes to Karen (ask-karen), no draft. No draft made.")
-
-
-# EZFOLIO's PDF (Travel Concierge 2825005 / We Go Asia, 27/11): "III. Cancellation Policy: 1. The cancellation is free
-# of charge 3 days prior to the date of arrival 2. Otherwise, 100% the total amount as cancellation fee will be applied."
-PDF_FREE_DAYS = re.compile(r"free\s+of\s+charge\s+(\d{1,3})\s*days?\s+prior", re.I)
-PDF_FEE = re.compile(r"otherwise,?\s*(\d{1,3})\s*%", re.I)
-
-
-def pdf_cancellation_terms(pdf_text):
-    """(free days, fee %) as the EZFOLIO PDF prints them, or None when it doesn't say it that way."""
-    free, fee = PDF_FREE_DAYS.search(pdf_text or ""), PDF_FEE.search(pdf_text or "")
-    if not free or not fee:
-        return None
-    return int(free.group(1)), int(fee.group(1))
-
-
-def _terms_line(label, days, fee, lang):
-    if lang == "vi":
-        return (f"{label or 'Chính sách hủy:'} hủy trước {days:02d} ngày so với ngày đến: miễn phí; sau thời hạn này: "
-                f"phí {fee}% tổng tiền booking.")
-    if lang == "ru":
-        return (f"{label or 'Условия отмены:'} бесплатно не позднее чем за {days} дн. до даты заезда; иначе "
-                f"{fee}% стоимости бронирования.")
-    return (f"{label or 'Cancellation:'} free of charge up to {days} days before the arrival date; otherwise {fee}% of "
-            f"the booking total.")
-
-
-def pdf_terms_fix(body, pdf_text):
-    """The email's cancellation line written again with the PDF's terms when the two differ (dev, 2026-11-27: the
-    TA template says 7 days, EZFOLIO's PDF 3 days, so every TA confirmation drafted before its PDF was refused at
-    confirmation-attach and sat with DO NOT SEND; the PMS is the truth). Returns (old line, new line, kept): `kept` is
-    how many leading characters (bullet, "Label: ") the two lines share, which Outlook's HTML renders apart (the label
-    in bold, the bullet as a list item), so a draft in Outlook is changed from there on. None when nothing differs. Refused, as before, when the PDF's terms can't be read or the email's can't be found on one line."""
-    said, built = _cancellation_days(body), _cancellation_days(pdf_text)
-    if not (said and built and not said <= built):
-        return None
-    terms = pdf_cancellation_terms(pdf_text)
-    lines = [ln for ln in body.splitlines() if _cancellation_days(ln)]
-    if terms is None or len(lines) != 1:
-        check_cancellation_days(body, pdf_text)  # raises with the usual words
-    old = lines[0]
-    prefix = re.match(r"\s*(?:[-•*–]\s+)?", old).group(0)  # indent and bullet stay as they were
-    label = re.match(r"([^:\d]{2,40}:)\s", old[len(prefix):])
-    lang = ("ru" if re.search(r"[а-яё]", old, re.I) else
-            "vi" if re.search(r"hủy|huỷ|ngày|đến", old, re.I) else "en")
-    new = prefix + _terms_line(label.group(1).strip() if label else "", terms[0], terms[1], lang)
-    check_cancellation_days(body.replace(old, new), pdf_text)
-    kept = len(prefix) + (len(label.group(0)) if label else 0)
-    return old, new, kept
+# Cancellation terms (dev, 2026-11-27, EZFOLIO group 31347's PDF): HAYA's terms are free of charge 7 days before
+# arrival, the TA template's line; EZFOLIO's PDF printed "free of charge 3 days prior" and is changed to 7 days. The
+# email's cancellation line is the template's and is no longer compared with, rewritten from, or held on the PDF's
+# (replaces audit 03/11's "the PDF's days" and the same morning's rewrite from the PDF): no question to Karen on it.
 
 
 _SPLIT_DEPOSIT = re.compile(r"50\s*%.*(cọc|deposit)|(cọc|deposit).*50\s*%", re.I)
@@ -3280,8 +3218,8 @@ def full_payment_fix(body, row, due):
     remaining 50% by 28/11"): when the 48-hour deposit deadline `due` is not before the balance date (check-in − 7
     days), the 50/50 split can't stand. The two payment lines become one: the full amount by `due`, or by 14:00 on
     the check-in day when `due` is that day or later. A travel agency's or a guest's confirmation only.
-    Returns ([(old, new, kept)], [dropped lines]): `kept` as in pdf_terms_fix (bullet or label Outlook renders
-    apart). ([], []) when nothing to change; Refused when the split is there but can't be read on two lines."""
+    Returns ([(old, new, kept)], [dropped lines]): `kept`: how many leading characters (bullet,
+    "Label: ") the old and new lines share, which Outlook's HTML renders apart). ([], []) when nothing to change; Refused when the split is there but can't be read on two lines."""
     if row.get("channel_type") == "Tour operator" or is_ota_row(row):
         return [], []
     arrival = operators._date(row.get("arrival"))
@@ -3495,11 +3433,7 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         if mime != "application/pdf":
             raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                           f"exported from EZFOLIO. No draft made.")
-        fix = pdf_terms_fix(body, attachments.extract_text(path, data))
-        if fix:
-            body = body.replace(fix[0], fix[1])
-            out(f"cancellation terms written as the EZFOLIO PDF prints them: '{fix[0].strip()}' → '{fix[1].strip()}'")
-        due = (datetime.now(VN) + timedelta(hours=48)).replace(second=0, microsecond=0)
+        due =(datetime.now(VN) + timedelta(hours=48)).replace(second=0, microsecond=0)
         full = full_payment_fix(body, r, due)  # dev 27/11: deadline past the balance date → one line
         if full[0]:
             body = _apply_full_payment(body, full)
@@ -3702,13 +3636,6 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
             text = text.replace(old, new)
         text = _strip_stop_line(text)
         confirmation_check(row)(text)
-        fix = pdf_terms_fix(text, attachments.extract_text(path, data))
-        if fix:  # dev 27/11: the PDF's terms go in, not a hold (the PMS is the truth)
-            old_line, new_line, kept = fix
-            text = text.replace(old_line, new_line)
-            fills[old_line[kept:]] = new_line[kept:]
-            out(f"#{n}: cancellation terms written as the EZFOLIO PDF prints them: '{fix[0].strip()}' → "
-                f"'{fix[1].strip()}'")
         if no_invoice:
             text = f"{NO_INVOICE}\n\n{text}"
         files = [(name, data, "application/pdf")] + extra
@@ -3716,9 +3643,8 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
             out(f"#{n}: the deposit deadline {due:%H:%M %d/%m/%Y} is not before the balance date: payment terms "
                 f"written as one line, '{full[0][0][1].strip()}'; the 50% balance line taken out")
         if review.in_outlook(r):
-            need = [fix[0][fix[2]:]] if fix else []  # a person's edit of that line in Outlook: not overwritten blind
-            changes, drops = full
-            need += [old[kept:] for old, _, kept in changes] + [line[kept:] for line, kept in drops]
+            changes, drops = full  # a person's edit of those lines in Outlook: not overwritten blind
+            need = [old[kept:] for old, _, kept in changes] + [line[kept:] for line, kept in drops]
             # the payment lines first: the deposit line still holds [DEPOSIT DEADLINE] in Outlook
             outlook = {**{old[kept:]: new[kept:] for old, new, kept in changes}, **fills}
             gone = [line[kept:] for line, kept in drops]
@@ -3751,8 +3677,7 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
             f"above). Once that is fixed: confirmation-attach {n} (it runs invoice-make), or --attach {invoice} made "
             f"by a person. Report: chờ invoice {r.get('ref')}")
         return
-    terms = "; điều khoản hủy viết lại theo PDF" if fix else ""
-    review.notify(tg, n, r, note=f"đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND{terms}", in_place=True)
+    review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
     out(f"#{n}: {len(files)} PDF(s) attached ({name}), {filled}, DO NOT SEND line removed. Ready for review.")
 
 
@@ -4469,6 +4394,27 @@ def check_english_question(question):
                       f"Vietnamese words seen: {' '.join(vi[:8])}. Not asked.")
 
 
+# Dev, 2026-11-27 (EZFOLIO group 31347's PDF): "phần term sẽ đổi thành free trong 7 ngày thay vì 3 ngày như trước,
+# thế nên các câu hỏi về phí hủy sẽ ko cần hỏi lại". The PDF's 3 days against the template's 7 (Greentours 0349-IN
+# 1211, E-460), or exactly 7 days on the TA table, is no question: HAYA's terms are free 7 days or more before arrival,
+# the email keeps the template's line, cancel-fee gives the charge.
+CANCEL_TERMS = re.compile(r"cancel|hủy|huỷ", re.I)
+TERMS_WORDS = re.compile(r"\bterms?\b|polic(?:y|ies)|\bfee\b|charge|điều\s+khoản|chính\s+sách|\bphí\b|"
+                         r"(?:cancel\w*|hủy|huỷ)\W+(?:\w+\W+){0,3}?\d+\s*(?:days?|ngày)", re.I)
+# what makes it the terms question rather than one booking's fee (a direct guest's or an operator's stays a question):
+# the PDF or template named, "which line", exactly 7 days, or 3 days and 7 days set against each other
+TERMS_SOURCE = re.compile(r"\bPDF\b|EZFOLIO|template|which\s+(?:line|terms)|exactly\s+7|"
+                          r"\b3\s*(?:days?|ngày)\b.*\b7\s*(?:days?|ngày)\b|\b7\s*(?:days?|ngày)\b.*\b3\s*(?:days?|ngày)\b",
+                          re.I)
+TERMS_SETTLED = ("cancellation terms settled (dev, 27/11): free of charge 7 days or more before arrival, the "
+                 "template's line; the PDF's 3 days no longer counts")
+
+
+def is_cancel_terms_question(text):
+    text = text or ""
+    return bool(CANCEL_TERMS.search(text) and TERMS_WORDS.search(text) and TERMS_SOURCE.search(text))
+
+
 NO_ROOM = re.compile(r"\bno\s+availability\b|\bnone\s+left\b|\bno\s+rooms?\s+(?:left|free|available)\b", re.I)
 
 
@@ -4481,6 +4427,11 @@ def ask_karen(st, tg, message_id, question, ref="", out=print, also=False, again
     if MISSING_NATIONALITY.search(question):
         raise Refused(NATIONALITY_NOT_A_QUESTION)
     check_english_question(question)
+    if is_cancel_terms_question(question):
+        raise Refused("CANCELLATION TERMS ARE NOT A QUESTION (dev, 27/11: \"các câu hỏi về phí hủy sẽ ko cần hỏi lại\"): "
+                      "HAYA's terms are free of charge 7 days or more before arrival. The confirmation keeps the "
+                      "template's cancellation line whatever the EZFOLIO PDF prints; a TA cancellation's charge is "
+                      "cancel-fee's. Not asked.")
     if operators._ON_REQUEST.search(question) and NO_ROOM.search(question):
         raise Refused("NO AVAILABILITY IS A DECLINE, NOT A QUESTION (Karen, 20/11: \"Nếu no availability thì tất nhiên "
                       "phải decline luôn nhé. Không cần phải xin ý kiến chị\"): CANCEL rows + the decline draft now, "
@@ -4734,12 +4685,25 @@ def sweep_questions(sheet, st, apply=False, out=print, today=None, now=None):
     rows = sheet.rows()
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=SWEEP_MIN_DAYS)
     close, keep, young = [], [], 0
+    # dev 27/11: a confirmation held on the cancellation terms (PDF's 3 days against the template's 7) goes back on
+    # confirmations-due; confirmation-attach no longer compares them
+    terms_holds = [ref for ref, h in st.data["confirmation_holds"].items()
+                   if is_cancel_terms_question(h.get("reason"))]
+    for ref in terms_holds:
+        if apply:
+            st.data["confirmation_holds"].pop(ref, None)
+        out(f"CLEAR HOLD {ref}: {TERMS_SETTLED}" + ("" if apply else " (--apply clears it)"))
     for qid, q in sorted(st.open_questions().items(), key=lambda kv: _qnum(kv[0])):
         asked = datetime.fromisoformat((q.get("asked_at") or now_iso()).replace("Z", "+00:00"))
+        held = _held_on(st, q.get("booking_ref") or "")
+        if held in terms_holds:
+            held = None
+        if is_cancel_terms_question(q.get("ask")):  # settled whatever its age
+            close.append((qid, q, TERMS_SETTLED))
+            continue
         if asked > cutoff:
             young += 1
             continue
-        held = _held_on(st, q.get("booking_ref") or "")
         why = None if held else _why_settled(qid, q, rows, st, today)
         (close if why else keep).append((qid, q, why or (f"confirmation held on {held}" if held else "")))
     out(f"QUESTIONS SWEEP: {len(close)} to close, {len(keep)} kept, {young} younger than {SWEEP_MIN_DAYS} days left "

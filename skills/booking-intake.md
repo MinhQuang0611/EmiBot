@@ -247,7 +247,7 @@ For every TA cancellation, before writing the CANCEL row:
 ```
 - It reads the booking's current rows (latest CHANGE, else NEW) and the TA policy, counts days from the email's date to check-in, and prints the charge, what's been paid (Payment 1/2) and paid − charge.
 - The CANCEL row's `notes` item 6 is this line (items 1–5, 7, 8 as the booking stood; dev 30/10): "Cancellation charge (TA policy): [amount] VND — [days] days before check-in, [rule]. Paid: [amount]." Copy the figures from the output. Tour operator: "Cancellation charge (Anex contract): … To check." in the same shape.
-- `CHARGE: UNCLEAR` (exactly 7 days) or any `GAP:` → the row's `missing_info` says "cancellation charge: Karen to decide", `Cancellation Amount` the lower figure, and the scan report shows both figures.
+- Exactly 7 days before check-in is free (dev, 2026-11-27): no UNCLEAR any more. Any `GAP:` → the row's `missing_info` says "cancellation charge: Karen to decide", `Cancellation Amount` the lower figure, and the scan report shows both figures.
 - Copy `CANCELLATION AMOUNT per CANCEL row` into each row's `Cancellation Amount`.
 - Tour operator, OTA or Direct → the command refuses; take the charge from that operator's own cancellation table in `docs/rate-knowledge/<name>.md` and mark it "to check" for Karen, or give it to Karen.
 - A refund is never promised. Paid − charge is shown to Karen; accounting gets the refund request only after she decides (`department-forwards.md`).

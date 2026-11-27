@@ -323,13 +323,3 @@ class Audit0311PaymentRowsTest(unittest.TestCase):
         with self.assertRaisesRegex(emi.Refused, "repeats every room type.*TPL"):
             emi.sheet_append(sh, {"booking": change, "room_lines": [DLX]}, out=lambda *_: None)
         self.assertFalse(appended(http))
-
-
-class CancellationDaysTest(unittest.TestCase):
-    def test_email_days_must_be_the_pdfs(self):
-        pdf = "Cancellation policy: free cancellation up to 3 days before arrival."
-        with self.assertRaisesRegex(emi.Refused, "7 days.*PDF says 3 days"):
-            emi.check_cancellation_days("Free cancellation until 7 days before arrival.", pdf)
-        emi.check_cancellation_days("Free cancellation until 3 days before arrival.", pdf)
-        emi.check_cancellation_days("Hủy miễn phí trước 3 ngày.", pdf)
-        emi.check_cancellation_days("Thank you for your booking.", pdf)  # no terms in the email: nothing to compare

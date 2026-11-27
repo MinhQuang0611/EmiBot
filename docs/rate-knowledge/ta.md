@@ -82,7 +82,7 @@ Nhận sau 14:00, trả trước 12:00.
 ## Chính sách hủy
 | Báo trước check-in | Ngày thường | Ngày lễ |
 |---|---|---|
-| > 7 ngày | Miễn phí | 50% tiền phòng |
+| ≥ 7 ngày (dev 27/11: đúng 7 ngày cũng miễn phí) | Miễn phí | 50% tiền phòng |
 | 3–6 ngày | 1 đêm | 50% tiền phòng |
 | Trong 3 ngày | 50% tiền phòng | 100% tiền phòng |
 | Không đến (no show) | 100% | 100% |

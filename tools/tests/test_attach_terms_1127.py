@@ -2,8 +2,11 @@
 after their build, because the TA template's cancellation line (7 days) wasn't the EZFOLIO PDF's (3 days) and
 confirmation-attach refused; nothing held them, so nobody saw it. Pegas 11162942's early draft was on a row from before
 its decline and rebook, so it was "not built yet" for ever.
-Now: the PDF's terms are written into the draft; any other refusal on a built booking holds it and says so on
-Telegram; a draft from before a rebook goes to the rebuilt booking's row."""
+Then, the same day (EZFOLIO group 31347): "phần term sẽ đổi thành free trong 7 ngày thay vì 3 ngày như trước, thế nên
+các câu hỏi về phí hủy sẽ ko cần hỏi lại". HAYA's terms are the template's 7 days: the email's cancellation line is no
+longer compared with or rewritten from the PDF, a question about it is refused, and questions-sweep closes the old ones
+and clears their holds. Any other refusal on a built booking still holds it and says so on Telegram; a draft from
+before a rebook goes to the rebuilt booking's row."""
 import os
 import tempfile
 import unittest
@@ -43,40 +46,45 @@ class Tg:
         return len(self.sent)
 
 
-class TermsHelpersTest(unittest.TestCase):
-    def test_pdf_terms_read(self):
-        self.assertEqual(emi.pdf_cancellation_terms(PDF_TEXT), (3, 100))
-        self.assertIsNone(emi.pdf_cancellation_terms("Cancellation policy: see contract"))
+class TermsQuestionTest(unittest.TestCase):
+    def setUp(self):
+        self.st = State(os.path.join(tempfile.mkdtemp(), "state.json"))
 
-    def test_vietnamese_line_rewritten(self):
-        old, new, kept = emi.pdf_terms_fix("Xin chào\n" + VI_TERMS + "\nTrân trọng", PDF_TEXT)
-        self.assertEqual(old[:kept], "Chính sách hủy: ")
-        self.assertEqual(old, VI_TERMS)
-        self.assertEqual(new, "Chính sách hủy: hủy trước 03 ngày so với ngày đến: miễn phí; sau thời hạn này: phí 100% "
-                              "tổng tiền booking.")
+    def test_terms_questions_recognised(self):
+        for q in ("Greentours 0349-IN 1211: the PDF's cancellation terms (free until 3 days, then 100%) differ from the "
+                  "TA terms in #838. Which terms apply?",
+                  "Cancellation 7 days in the template, 3 days in the EZFOLIO PDF: which line goes in the email?",
+                  "AAT261113 cancelled exactly 7 days before arrival: which line of the cancellation table applies?",
+                  "Chính sách hủy: template 7 ngày, PDF 3 ngày?"):
+            self.assertTrue(emi.is_cancel_terms_question(q), q)
+        for q in ("Direct guest Mr Roy cancels 3 days before arrival: what cancellation fee do we charge?",
+                  "Anex 113031070 cancelled: is the contract fee 100%?",
+                  "Which rate for the Indian guests?"):
+            self.assertFalse(emi.is_cancel_terms_question(q), q)
 
-    def test_english_line_rewritten_keeps_bullet(self):
-        old, new, kept = emi.pdf_terms_fix("Dear X,\n- " + EN_TERMS + "\nBest regards,", PDF_TEXT)
-        self.assertEqual(old[:kept], "- Cancellation: ")
-        self.assertEqual(new, "- Cancellation: free of charge up to 3 days before the arrival date; otherwise 100% of "
-                              "the booking total.")
+    def test_ask_karen_refuses_it(self):
+        with self.assertRaisesRegex(emi.Refused, "CANCELLATION TERMS ARE NOT A QUESTION"):
+            emi.ask_karen(self.st, None, "m1", "The PDF says free cancellation 3 days, our email 7 days: which terms?",
+                          ref="2825005", out=lambda *_: None)
+        self.assertEqual(self.st.open_questions(), {})
 
-    def test_russian_line_rewritten(self):
-        _, new, _ = emi.pdf_terms_fix("Отмена: бесплатно за 7 дней до заезда.", PDF_TEXT)
-        self.assertIn("за 3 дн. до даты заезда; иначе 100%", new)
-        emi.check_cancellation_days(new, PDF_TEXT)
-
-    def test_same_terms_nothing_to_do(self):
-        self.assertIsNone(emi.pdf_terms_fix("Cancellation: free of charge up to 3 days before arrival.", PDF_TEXT))
-        self.assertIsNone(emi.pdf_terms_fix("Thank you.", PDF_TEXT))
-
-    def test_unreadable_pdf_terms_still_refused(self):
-        with self.assertRaisesRegex(emi.Refused, "PDF says 3 days"):
-            emi.pdf_terms_fix(EN_TERMS, "Cancellation within 3 days: see the contract")
-
-    def test_two_lines_with_terms_still_refused(self):
-        with self.assertRaises(emi.Refused):
-            emi.pdf_terms_fix(EN_TERMS + "\nNo cancellation fee if cancelled 7 days ahead.", PDF_TEXT)
+    def test_sweep_closes_old_questions_and_clears_terms_holds(self):
+        terms = self.st.ask("0349-IN 1211", "The PDF's cancellation terms (3 days, then 100%) differ from the TA "
+                                            "template's 7 days. Which apply?", "m1")
+        other = self.st.ask("TA444", "Which rate for the Indian guests?", "m2")
+        self.st.data["questions"][other]["asked_at"] = "2026-11-27T03:00:00Z"
+        self.st.data["confirmation_holds"] = {
+            "0349-IN 1211": {"pdf_link": "x", "reason": "confirmation-attach #838 refused: the email gives "
+                             "cancellation 7 days but the EZFOLIO PDF says 3 days"},
+            "AMARA": {"pdf_link": "y", "reason": "PDF 14 rooms, email 12 rooms"}}
+        lines = []
+        close, keep = emi.sweep_questions(SimpleNamespace(rows=lambda: []), self.st, apply=True, out=lines.append,
+                                          now=datetime(2026, 11, 27, 12, 0, tzinfo=VN))
+        self.assertEqual([q for q, _, _ in close], [terms])  # closed though younger than two days
+        self.assertIn("cancellation terms settled", self.st.data["questions"][terms]["closed"]["reason"])
+        self.assertEqual(list(self.st.open_questions()), [other])
+        self.assertEqual(list(self.st.data["confirmation_holds"]), ["AMARA"])
+        self.assertTrue(any(line.startswith("CLEAR HOLD 0349-IN 1211") for line in lines), lines)
 
 
 class AttachTest(unittest.TestCase):
@@ -113,32 +121,26 @@ class AttachTest(unittest.TestCase):
             emi.confirmation_attach(self.mail, sheet, self.st, SimpleNamespace(n=n, attach=[]), tg=self.tg, out=out,
                                     now=datetime(2026, 11, 27, 10, 0, tzinfo=VN))
 
-    def test_terms_made_the_pdfs_and_attached(self):  # Travel Concierge 2825005, 27/11
+    def test_template_terms_kept_with_a_3_day_pdf(self):  # Travel Concierge 2825005; group 31347's PDF, 27/11
         n = self.draft()
         self.assertIn("07 ngày", self.html[0])
         lines = []
         self.attach(n, FakeSheet({**TA, **BUILT}), lines)
         self.assertNotIn(DO_NOT_SEND, self.html[0])
-        self.assertNotIn("07 ngày", self.html[0])
-        self.assertIn("hủy trước 03 ngày so với ngày đến: miễn phí; sau thời hạn này: phí 100%", self.html[0])
-        text = self.st.data["reviews"][n]["text"]
-        self.assertIn("hủy trước 03 ngày", text)
-        self.assertNotIn("07 ngày", text)
+        self.assertIn(VI_TERMS.split(": ", 1)[1], self.html[0])
+        self.assertNotIn("03 ngày", self.html[0])
+        self.assertIn(VI_TERMS, self.st.data["reviews"][n]["text"])
         self.assertEqual(self.st.data["confirmation_holds"], {})
-        self.assertTrue(any("cancellation terms written as the EZFOLIO PDF" in line for line in lines), lines)
+        self.assertFalse([t for t, topic in self.tg.sent if topic == "question"])  # no ⚠️ hold notice
         self.assertTrue([c for c in self.http.calls if c[1].endswith("/messages/d1/attachments")])
 
-    def test_line_edited_in_outlook_is_held_not_overwritten(self):
+    def test_terms_line_a_person_edited_is_left_alone(self):
         n = self.draft()
         self.html[0] = self.html[0].replace("07 ngày", "10 ngày")  # a person changed it by hand
-        before = len(self.http.calls)
-        with self.assertRaisesRegex(emi.Refused, "no longer has the line"):
-            self.attach(n, FakeSheet({**TA, **BUILT}))
-        self.assertIn(DO_NOT_SEND, self.html[0])
-        self.assertFalse([c for c in self.http.calls[before:] if c[0] in ("PATCH", "POST")])
-        self.assertIn("2825005", self.st.data["confirmation_holds"])
-        self.assertEqual(len(self.tg.sent), 1)
-        self.assertEqual(self.tg.sent[0][1], "question")
+        self.attach(n, FakeSheet({**TA, **BUILT}))
+        self.assertNotIn(DO_NOT_SEND, self.html[0])
+        self.assertIn("10 ngày", self.html[0])
+        self.assertEqual(self.st.data["confirmation_holds"], {})
 
     def test_refusal_on_a_built_booking_holds_it_once(self):
         n = self.draft()

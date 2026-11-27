@@ -149,7 +149,7 @@ Payment terms:
 – The remaining 50% (VND [amount]) is payable 7 days before check-in (by [DD/MM/YYYY]).
 The booking will be automatically released without further notice if the deposit is not received by the deadline.
 
-Cancellation: free of charge more than 7 days before check-in; 3–6 days: 1 night charge; within 3 days: 50% of the booking total; no-show: 100%.
+Cancellation: free of charge 7 days or more before check-in; 3–6 days: 1 night charge; within 3 days: 50% of the booking total; no-show: 100%.
 
 Bank details:
 Account name: CÔNG TY TNHH DU LỊCH PHƯƠNG NGUYỄN PHÚ QUỐC
