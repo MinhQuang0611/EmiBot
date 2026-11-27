@@ -4401,18 +4401,18 @@ def check_english_question(question):
 CANCEL_TERMS = re.compile(r"cancel|hủy|huỷ", re.I)
 TERMS_WORDS = re.compile(r"\bterms?\b|polic(?:y|ies)|\bfee\b|charge|điều\s+khoản|chính\s+sách|\bphí\b|"
                          r"(?:cancel\w*|hủy|huỷ)\W+(?:\w+\W+){0,3}?\d+\s*(?:days?|ngày)", re.I)
-# what makes it the terms question rather than one booking's fee (a direct guest's or an operator's stays a question):
-# the PDF or template named, "which line", exactly 7 days, or 3 days and 7 days set against each other
-TERMS_SOURCE = re.compile(r"\bPDF\b|EZFOLIO|template|which\s+(?:line|terms)|exactly\s+7|"
-                          r"\b3\s*(?:days?|ngày)\b.*\b7\s*(?:days?|ngày)\b|\b7\s*(?:days?|ngày)\b.*\b3\s*(?:days?|ngày)\b",
-                          re.I)
+# What makes it HAYA's terms question rather than one booking's fee: the PDF or template set against HAYA's TA terms
+# (7 days). Not: a direct guest's or an operator's fee, an OTA's own terms (Agoda 724017135, E-517: Agoda 1 day vs
+# the PDF's 3), a refund on a cancelled booking (365 Travel, E-678: "cancelled without charge, EZFOLIO needs_review").
+TERMS_SOURCE = re.compile(r"\bPDF\b|template|which\s+line|exactly\s+7", re.I)
+TERMS_SEVEN = re.compile(r"\b0?7\s*-?\s*(?:days?|ngày)\b|\bTA\s+terms\b|template|which\s+line|exactly\s+7", re.I)
 TERMS_SETTLED = ("cancellation terms settled (dev, 27/11): free of charge 7 days or more before arrival, the "
                  "template's line; the PDF's 3 days no longer counts")
 
 
 def is_cancel_terms_question(text):
     text = text or ""
-    return bool(CANCEL_TERMS.search(text) and TERMS_WORDS.search(text) and TERMS_SOURCE.search(text))
+    return all(p.search(text) for p in (CANCEL_TERMS, TERMS_WORDS, TERMS_SOURCE, TERMS_SEVEN))
 
 
 NO_ROOM = re.compile(r"\bno\s+availability\b|\bnone\s+left\b|\bno\s+rooms?\s+(?:left|free|available)\b", re.I)

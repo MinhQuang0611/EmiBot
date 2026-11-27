@@ -46,6 +46,33 @@ class Tg:
         return len(self.sent)
 
 
+HOST_TERMS = (
+    "For HT 2702 17-21, please confirm whether to accept GrandViet Tour's split 50% deposit schedule for 4 rooms first "
+    "and 3 rooms at the end of November 2026, provide guest counts and rooming list, and confirm the cancellation terms: "
+    "PDF free until 3 days before arrival then 100%, versus draft #728's TA terms.",
+    "PDF EZFOLIO ghi hủy miễn phí trước 3 ngày, sau đó 100%, nhưng điều khoản trong email/draft đang là 7 ngày, 3–6 "
+    "ngày và 3 ngày. Xin xác nhận điều khoản nào áp dụng trước khi hoàn tất draft #838.",
+    "NPKM00750000002: Chính sách hủy trong draft là miễn phí trước 7 ngày, 3–6 ngày phí 1 đêm, dưới 3 ngày 50%; PDF "
+    "EZFOLIO ghi miễn phí trước 3 ngày, sau đó 100%. Cần xác nhận điều khoản áp dụng trước khi đính PDF.",
+    "For SI781720A, the email cancellation terms are 6/7 days, while the EZFOLIO PDF says free cancellation until 3 days "
+    "before arrival and then 100%. Which terms apply?",
+    "2816829: The agency booking gives 7-day cancellation terms, while the EZFOLIO PDF gives free cancellation until 3 "
+    "days before arrival then 100%. Which terms should we confirm?",
+    "2825005: cancellation terms conflict — original TA booking says 7-day terms; EZFOLIO PDF says free until 3 days, "
+    "then 100%. Please confirm which terms apply.",
+    "PDF cancellation terms are free until 3 days before arrival then 100%; original booking email states 6/7-day "
+    "terms. Confirm which terms apply.",
+    "confirmation-attach #838 refused: the email gives cancellation 7 days but the EZFOLIO PDF says 3 days")
+HOST_NOT_TERMS = (
+    "Agoda 724017135: email ghi hủy miễn phí trước 1 ngày, PDF EZFOLIO ghi trước 3 ngày. Xin xác nhận điều khoản nào "
+    "áp dụng.",
+    "Agoda email states cancellation free until 1 day before arrival; EZFOLIO PDF states 3 days. Confirm the "
+    "applicable cancellation terms.",
+    "365 Travel now requests a refund of the VND 7,650,000 deposit to the supplied VietinBank account. The booking was "
+    "cancelled without charge, but EZFOLIO is needs_review because the deposit remains. May we approve the refund and "
+    "draft it to accounting?")
+
+
 class TermsQuestionTest(unittest.TestCase):
     def setUp(self):
         self.st = State(os.path.join(tempfile.mkdtemp(), "state.json"))
@@ -57,9 +84,12 @@ class TermsQuestionTest(unittest.TestCase):
                   "AAT261113 cancelled exactly 7 days before arrival: which line of the cancellation table applies?",
                   "Chính sách hủy: template 7 ngày, PDF 3 ngày?"):
             self.assertTrue(emi.is_cancel_terms_question(q), q)
+        for q in HOST_TERMS:  # the open ones on hotpink-bee, 27/11
+            self.assertTrue(emi.is_cancel_terms_question(q), q)
         for q in ("Direct guest Mr Roy cancels 3 days before arrival: what cancellation fee do we charge?",
+                  "Direct guest cancels 7 days before arrival: what fee?",
                   "Anex 113031070 cancelled: is the contract fee 100%?",
-                  "Which rate for the Indian guests?"):
+                  "Which rate for the Indian guests?") + HOST_NOT_TERMS:
             self.assertFalse(emi.is_cancel_terms_question(q), q)
 
     def test_ask_karen_refuses_it(self):
