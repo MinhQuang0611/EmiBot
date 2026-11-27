@@ -86,6 +86,7 @@ I follow up on unpaid bookings myself for **travel companies (TA) and Odeon**. O
 **Balance — remaining 50%, due 7 days before check-in.**
 - No balance seen by 09:00 the day before it's due (8 days before check-in) → draft the balance reminder.
 - Booking made less than 8 days before check-in: flag to Karen instead — the standard terms don't fit and she sets the deadline.
+- **The deposit deadline is not before the balance date** (confirmed 9 days or less before check-in; dev, 2026-11-27, Travel Concierge 2825005: confirmed 14:05, a 100% balance reminder auto-sent at 15:03): no reminder by itself, deposit or balance. `payments-due` prints it as `SHORT NOTICE … deposit deadline … is not before the balance date …, Karen sets the deadline, no reminder`: a report line. Its confirmation asks for the full amount by the deposit deadline (`email-templates.md`, Short notice).
 
 **Both reminders ask for the payment slip** so the hotel's accountant can check it.
 

@@ -172,8 +172,11 @@ def drop_line(content, line):
     (<b><span> as Emi writes it, <span><b> after Outlook saved it: #686 kept an empty red paragraph on top, 09/11)."""
     inline = r"(?:<(?:b|strong|span|font)\b[^>]*>\s*)*"
     close = r"(?:</(?:b|strong|span|font)>\s*)*"
-    content = re.sub(r"<p[^>]*>\s*" + inline + re.escape(html.escape(line)) + r"\s*" + close + r"</p>\s*", "",
-                     content, flags=re.I)
+    esc = re.escape(html.escape(line))
+    content = re.sub(r"<(p|li)[^>]*>\s*" + inline + esc + r"\s*" + close + r"</\1>\s*", "", content, flags=re.I)
+    # a line inside a paragraph of several: it goes with its <br> (dev 27/11, the 50% balance line)
+    content = re.sub(esc + r"\s*<br\s*/?>\s*", "", content, flags=re.I)
+    content = re.sub(r"<br\s*/?>\s*" + esc, "", content, flags=re.I)
     content = content.replace(html.escape(line), "")
     # a red paragraph left with nothing in it is the line's shell
     red = r"(?=(?:<[^>]*>\s*)*?<[^>]*(?:255,\s*0,\s*0|#ff0000|color:\s*red)[^>]*>)"
@@ -830,8 +833,8 @@ class GraphMail:
                               f"its cancellation terms must be made the PDF's by hand")
         for old, new in replacements.items():  # DO_NOT_SEND -> NO_INVOICE keeps the line's bold red markup
             content = content.replace(html.escape(old), html.escape(new)).replace(old, html.escape(new))
-        if drop:
-            content = drop_line(content, drop)
+        for line in ([drop] if isinstance(drop, str) else drop or []):
+            content = drop_line(content, line)
         self._call("PATCH", f"/messages/{draft_id}", body={"body": {"contentType": "HTML", "content": content}})
         return content
 

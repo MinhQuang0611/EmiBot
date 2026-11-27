@@ -180,8 +180,9 @@ class SimMail:
             raise LookupError(f"the draft no longer has the line '{gone[0].strip()}'")
         for old, new in replacements.items():
             text = text.replace(old, new)
-        if drop:
-            text = "\n".join(l for l in text.split("\n") if l.strip() != drop).lstrip("\n")
+        for d in ([drop] if isinstance(drop, str) else drop or []):  # a bulleted line is named without its bullet
+            text = "\n".join(l for l in text.split("\n")
+                             if d.strip() not in (l.strip(), re.sub(r"^[-•*–]\s+", "", l.strip()))).lstrip("\n")
         meta["text"] = text
         self._save(meta)
         return text

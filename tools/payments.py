@@ -345,6 +345,15 @@ def due(rows, state_of, parts_of, mail, st, mailbox, now, cache=None):
         if sent is None:
             out["no_confirmation"].append(item)
             continue
+        # dev, 2026-11-27 (Travel Concierge 2825005, 05/12, confirmed 27/11 14:05): booked 8-9 days ahead, the
+        # 48-hour deposit deadline (29/11) fell after the balance date (28/11), and 58 minutes after the confirmation
+        # the balance reminder asked for 100% by 28/11. Such a booking is short notice, like one inside 7 days:
+        # no reminder by itself, Karen sets the date.
+        deposit_due = fixed or sent["sent_at"] + timedelta(hours=DEPOSIT_HOURS)
+        if paid < half and deposit_due.date() >= balance_day:
+            out["short_notice"].append(dict(item, why=f"deposit deadline {deposit_due:%H:%M %d/%m/%Y} is not before "
+                                                      f"the balance date {balance_day:%d/%m/%Y}"))
+            continue
         if which == "deposit":
             deadline = fixed or sent["sent_at"] + timedelta(hours=DEPOSIT_HOURS)
             if soon < deadline - timedelta(hours=DEPOSIT_HOURS - REMIND_AT_HOURS):
@@ -644,8 +653,8 @@ def render(result, now):
                    f"Karen; nothing cancelled, no second reminder")
     for i in r["short_notice"]:
         out.append(f"SHORT NOTICE | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']} | "
-                   f"unpaid {money(i['total'] - i['paid'])} | arrival {i['arrival']:%d/%m/%Y}: booked inside 7 days, "
-                   f"Karen sets the deadline. Report line")
+                   f"unpaid {money(i['total'] - i['paid'])} | arrival {i['arrival']:%d/%m/%Y}: "
+                   f"{i.get('why') or 'booked inside 7 days'}, Karen sets the deadline, no reminder. Report line")
     for i in r["no_confirmation"]:
         out.append(f"NO CONFIRMATION FOUND | {i['company']} | ref {i['ref']} | row {i['row']} | group #{i['group']}: "
                    + (i.get("why") or "built, unpaid, and no mail from sales@ has the group code")

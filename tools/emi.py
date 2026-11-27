@@ -3184,6 +3184,74 @@ def pdf_terms_fix(body, pdf_text):
     return old, new, kept
 
 
+_SPLIT_DEPOSIT = re.compile(r"50\s*%.*(cọc|deposit)|(cọc|deposit).*50\s*%", re.I)
+_SPLIT_BALANCE = re.compile(r"50\s*%.*(còn lại|remaining|balance)|(còn lại|remaining|balance).*50\s*%", re.I)
+_AMOUNT = re.compile(r"\d{1,3}(?:[.,]\d{3})+|\d{5,}")
+_RELEASE = (("if the deposit is not received", "if the full payment is not received"),
+            ("không nhận được tiền cọc", "không nhận được đủ tiền thanh toán"))
+
+
+def full_payment_fix(body, row, due):
+    """dev, 2026-11-27 (Travel Concierge 2825005, 05/12, confirmed 27/11 14:05 with "50% by 14:05 on 29/11" and "the
+    remaining 50% by 28/11"): when the 48-hour deposit deadline `due` is not before the balance date (check-in − 7
+    days), the 50/50 split can't stand. The two payment lines become one: the full amount by `due`, or by 14:00 on
+    the check-in day when `due` is that day or later. A travel agency's or a guest's confirmation only.
+    Returns ([(old, new, kept)], [dropped lines]): `kept` as in pdf_terms_fix (bullet or label Outlook renders
+    apart). ([], []) when nothing to change; Refused when the split is there but can't be read on two lines."""
+    if row.get("channel_type") == "Tour operator" or is_ota_row(row):
+        return [], []
+    arrival = operators._date(row.get("arrival"))
+    if (not arrival or due.date() < arrival - timedelta(days=payments.BALANCE_DAYS)
+            or arrival <= (due - timedelta(hours=48)).date()):  # a guest in house or gone: not a booking's terms
+        return [], []
+    lines = body.splitlines()
+    dep = [ln for ln in lines if _SPLIT_DEPOSIT.search(ln) and not _SPLIT_BALANCE.search(ln)]
+    bal = [ln for ln in lines if _SPLIT_BALANCE.search(ln)]
+    if not dep or not bal:  # no 50/50 split written: nothing to make one line of
+        return [], []
+    amounts = [_AMOUNT.search(ln) for ln in dep + bal]
+    vi = "giờ Việt Nam" in body
+    if len(dep) != 1 or len(bal) != 1 or not all(amounts) or (not vi and re.search(r"[а-яё]", dep[0], re.I)):
+        raise Refused(f"the deposit deadline ({due:%H:%M %d/%m/%Y}) is not before the balance date "
+                      f"({arrival - timedelta(days=payments.BALANCE_DAYS):%d/%m/%Y}): the payment terms must be one "
+                      f"line, full payment by the deadline (skills/email-templates.md 1, Short notice), and the 50% "
+                      f"lines couldn't be rewritten by themselves. Nothing changed.")
+    sep = "." if "." in amounts[0].group(0) else ","
+    total = sum(int(re.sub(r"\D", "", m.group(0))) for m in amounts)
+    amount = f"{total:,}".replace(",", sep)
+    old = dep[0]
+    prefix = re.match(r"\s*(?:[-•*–]\s+)?", old).group(0)
+    label = re.match(r"([^:\d]{2,40}:)\s", old[len(prefix):])
+    kept = len(prefix) + (len(label.group(0)) if label else 0)
+    on_time = due.date() < arrival
+    if vi:
+        when = (f"trước {due:%H:%M} ngày {due:%d/%m/%Y} (giờ Việt Nam, UTC+7), 48 giờ kể từ khi nhận xác nhận này"
+                if on_time else f"trước 14:00 ngày {arrival:%d/%m/%Y} (giờ Việt Nam, UTC+7), trước khi nhận phòng")
+        line = f"Thanh toán 100% = {amount} VND {when}."
+    else:
+        when = (f"by {due:%H:%M} on {due:%d/%m/%Y}, Vietnam time (UTC+7), 48 hours after receiving this confirmation"
+                if on_time else f"by 14:00 on {arrival:%d/%m/%Y}, Vietnam time (UTC+7), before check-in")
+        line = f"Full payment (VND {amount}) {when}."
+    changes = [(old, old[:kept] + line, kept)]
+    for was, now_ in _RELEASE:
+        for ln in lines:
+            if was in ln:
+                changes.append((was, now_, 0))
+                break
+    b = bal[0]
+    b_kept = len(re.match(r"\s*(?:[-•*–]\s+)?", b).group(0))
+    return changes, [(b, b_kept)]
+
+
+def _apply_full_payment(text, fix):
+    changes, drops = fix
+    for old, new, _ in changes:
+        text = text.replace(old, new)
+    for line, _ in drops:
+        text = "\n".join(ln for ln in text.split("\n") if ln != line)
+    return text
+
+
 def _money_forms(value):
     """'3347324' → {'3,347,324', '3.347.324', '3347324'}: how an amount may be written in a draft."""
     s = str(value or "").strip()
@@ -3347,6 +3415,12 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         if fix:
             body = body.replace(fix[0], fix[1])
             out(f"cancellation terms written as the EZFOLIO PDF prints them: '{fix[0].strip()}' → '{fix[1].strip()}'")
+        due = (datetime.now(VN) + timedelta(hours=48)).replace(second=0, microsecond=0)
+        full = full_payment_fix(body, r, due)  # dev 27/11: deadline past the balance date → one line
+        if full[0]:
+            body = _apply_full_payment(body, full)
+            out(f"the deposit deadline {due:%H:%M %d/%m/%Y} is not before the balance date: payment terms written as "
+                f"one line, '{full[0][0][1].strip()}'; the 50% balance line taken out")
         files = [(name, data, "application/pdf")] + extra
     if subject:
         to, cc = new_recipients(args)
@@ -3537,7 +3611,9 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
         if mime != "application/pdf":
             raise Refused(f"pdf_link on row {row['_row']} is {mime}, not a PDF. Nothing changed.")
         fills = _fills(row, r["text"], now)
-        text = r["text"]
+        due = (now + timedelta(hours=48)).replace(second=0, microsecond=0)
+        full = full_payment_fix(r["text"], row, due)  # dev 27/11: deadline past the balance date → one line
+        text = _apply_full_payment(r["text"], full)
         for old, new in fills.items():
             text = text.replace(old, new)
         text = _strip_stop_line(text)
@@ -3552,13 +3628,22 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
         if no_invoice:
             text = f"{NO_INVOICE}\n\n{text}"
         files = [(name, data, "application/pdf")] + extra
+        if full[0]:
+            out(f"#{n}: the deposit deadline {due:%H:%M %d/%m/%Y} is not before the balance date: payment terms "
+                f"written as one line, '{full[0][0][1].strip()}'; the 50% balance line taken out")
         if review.in_outlook(r):
             need = [fix[0][fix[2]:]] if fix else []  # a person's edit of that line in Outlook: not overwritten blind
+            changes, drops = full
+            need += [old[kept:] for old, _, kept in changes] + [line[kept:] for line, kept in drops]
+            # the payment lines first: the deposit line still holds [DEPOSIT DEADLINE] in Outlook
+            outlook = {**{old[kept:]: new[kept:] for old, new, kept in changes}, **fills}
+            gone = [line[kept:] for line, kept in drops]
             try:
                 if no_invoice:  # the red line stays red, its words change
-                    mail.fill_draft(r["draft_id"], {**fills, DO_NOT_SEND: NO_INVOICE}, drop=None, require=need)
+                    mail.fill_draft(r["draft_id"], {**outlook, DO_NOT_SEND: NO_INVOICE}, drop=gone or None,
+                                    require=need)
                 else:
-                    mail.fill_draft(r["draft_id"], fills, require=need)
+                    mail.fill_draft(r["draft_id"], outlook, drop=[DO_NOT_SEND] + gone, require=need)
             except LookupError as e:
                 raise Refused(f"#{n}: {e}. Nothing changed.") from None
     except Refused as e:
