@@ -203,8 +203,13 @@ def inbox_new(mail, st, out=print, tg=None):
     for m in msgs:
         clip = " [attachments]" if m.get("hasAttachments") else ""
         late = "\n  MISSED EARLIER: received before the last scan, never done" if m in earlier else ""
+        # dev 27/11: the model is told up front, so it never answers a robot's notice with draft-reply
+        sender = _sender(m)
+        ota = ("\n  OTA NOTICE (robot): rows first, then ota-note <id> --ref <booking_ref>; no draft-reply"
+               if is_ota_sender(sender) and is_ota_robot_notice(sender, m.get("subject", ""),
+                                                                 message_headers(mail, m["id"])) else "")
         out(f"\n- id: {m['id']}\n  received: {vn(m['receivedDateTime'])}\n  from: {addr(m.get('from'))}"
-            f"\n  subject: {m.get('subject', '')}{clip}{late}")
+            f"\n  subject: {m.get('subject', '')}{clip}{late}{ota}")
     # dev 17/11: each email gets its line in the group's '📥 Email tới' tab; `done` writes the outcome on it
     inbox_notices.announce(tg, msgs, config.SIM_DIR or WORK_DIR, vn, missed_ids={m["id"] for m in earlier}, out=out)
     return msgs, started
@@ -344,31 +349,85 @@ _DAY_CHECK = r"^\s*(?:DAY CHECK:\s*)?"
 NO_REPLY_OK = re.compile(_DAY_CHECK + r"NO REPLY:\s*(?:spam|marketing|newsletter|quảng cáo|phishing|otp|passcode|mã otp|"
                          r"alert|cảnh báo|maintenance|bảo trì|system|hệ thống|internal|nội bộ|palma)\b", re.I)
 ANSWERED_BY_STAFF = re.compile(_DAY_CHECK + r"ANSWERED BY STAFF\b", re.I)
+# --- Which email is an OTA's booking notice (dev, 2026-11-27) ---
+# Trip.com 1359049748321348: "Trip.com - Thông báo đơn đặt mới: <no>" from auto_reservation@trip.com matched no subject
+# word (English only, plus "đặt phòng") and its sender wasn't named no-reply, so ota-note refused it, the model answered
+# with draft-reply --kind reply to the robot, and a reply kind is never auto-sent. The dev: "regex thế này dễ sót lắm".
+# Now the words are only one signal. An OTA robot (by name, or by the Auto-Submitted header the OTA robots set) mailing
+# a booking number in the subject is a notice in any language, unless the subject is money or a report. And whatever
+# the words, a reply to an OTA robot's notice is refused (reply_recipients), so a miss can't end in a stuck draft.
 OTA_NOTICE_DOMAINS = ("synxis.com", "agoda.com", "booking.com", "expedia.com", "expediapartnercentral.com", "trip.com",
                       "ctrip.com", "traveloka.com", "ohmyhotel.com", "mytour.vn", "vntrip.vn", "didatravel.com",
-                      "makemytrip.com", "hotelbeds.com", "webbeds.com", "dotw.com")
-OTA_NOTICE_SUBJECT = re.compile(r"\bRes(?:ervation)?\b.{0,25}\b(?:Confirm|Modif|Chang|Cancel)|\bbooking\b|"
-                                r"\breservation\b|đặt phòng", re.I)
+                      "makemytrip.com", "hotelbeds.com", "hbxgroup.com", "webbeds.com", "dotw.com", "mgbedbank.com",
+                      "mgholiday.com", "tiket.com")
+# Matched on the subject without accents (payments._plain), so "Thong bao don dat moi" counts as well.
+OTA_NOTICE_WORDS = re.compile(
+    # singular on purpose: "Reservations with today's or tomorrow's arrival date" is Booking.com's daily list
+    r"\bres(?:ervation)?\b.{0,25}\b(?:confirm|modif|chang|cancel)|\bbooking\b|\breservation\b|"
+    r"\bdat phong\b|\bdon dat\b|\bdat cho\b|\b(?:huy|thay doi|xac nhan|sua doi)\s+(?:don|dat|booking)\b|"
+    r"бронир|예약|预订|預訂|订单|訂單|予約|\bpemesanan\b|\bpesanan\b|การจอง", re.I)
+# A robot's mail with a booking number that is not a booking: money, reports, account mail. These keep their own path
+# (forward-slip for a payout, NO REPLY for a report).
+OTA_NOT_A_BOOKING = re.compile(
+    r"remittance|payout|pay-?out|payment|invoice|statement|settlement|reconcil|commission|newsletter|webinar|survey|"
+    r"\breview|rating|performance|\breport|password|verif|passcode|\botp\b|"
+    r"thanh toan|hoa don|doi soat|sao ke|chuyen khoan|hoa hong|bao cao|danh gia|mat khau|"
+    r"оплат|счет|счёт|отчет|отчёт", re.I)
+# A robot's own address not named no-reply: auto_reservation@trip.com, notifications@, system@, mailer@.
+OTA_ROBOT_LOCAL = re.compile(r"^(?:auto|notif|system|mailer|robot|alert)", re.I)
 NO_ROW = re.compile(r"\bno rows?\b|không ghi row|chưa ghi row|no row written", re.I)
 ROW_NAMED = re.compile(r"\brows?\s+\d+|\bduplicate\b|\btrùng\b", re.I)
 # dev, 2026-11-26: a partner's booking sold after our stop sale gets no row, only the decline (stop_sale_decline)
 STOP_SALE_LEAK = re.compile(_DAY_CHECK + r"STOP SALE LEAK\b", re.I)
 
 
-def is_ota_notice(sender, subject):
-    """An OTA's or the channel manager's own booking notice (not a guest writing through the OTA's relay)."""
+def is_ota_sender(sender):
+    """An OTA's, a B2B site's or SynXis's own address (a guest writing through the OTA's relay is not)."""
     domain = (sender or "").lower().rpartition("@")[2]
     if domain.startswith("guest.") or ".guest." in domain:
         return False
-    return (any(domain == d or domain.endswith("." + d) for d in OTA_NOTICE_DOMAINS)
-            and bool(OTA_NOTICE_SUBJECT.search(subject or "")))
+    return any(domain == d or domain.endswith("." + d) for d in OTA_NOTICE_DOMAINS)
 
 
-def is_ota_robot_notice(sender, subject):
-    """An OTA or SynXis booking notice sent by a robot: answered only by ota-note, to the robot itself (Karen, 14/11)."""
-    domain = (sender or "").lower().rpartition("@")[2]
-    return is_ota_notice(sender, subject) and (is_no_reply(sender) or domain == "synxis.com"
-                                               or domain.endswith(".synxis.com"))
+def auto_generated(headers):
+    """RFC 3834 Auto-Submitted: auto-generated (the OTA robots' header). An out-of-office (auto-replied) is not."""
+    value = ({k.lower(): v for k, v in (headers or {}).items()}.get("auto-submitted") or "").strip().lower()
+    return bool(value) and not value.startswith("no") and not value.startswith("auto-replied")
+
+
+def is_ota_robot(sender, headers=None):
+    """An OTA's robot rather than a person at the OTA (lodgingsupport@, khoi.duong@): SynXis, a no-reply name, a robot's
+    name (auto_reservation@), or the Auto-Submitted header when the caller has the headers."""
+    if not is_ota_sender(sender):
+        return False
+    local, _, domain = (sender or "").lower().rpartition("@")
+    return (domain == "synxis.com" or domain.endswith(".synxis.com") or is_no_reply(sender)
+            or bool(OTA_ROBOT_LOCAL.match(local)) or auto_generated(headers))
+
+
+def is_ota_notice(sender, subject, headers=None):
+    """An OTA's or the channel manager's own booking notice: booking words in the subject (any of HAYA's languages,
+    accents or not), or a robot's mail with a booking number in the subject that is not money or a report."""
+    if not is_ota_sender(sender):
+        return False
+    plain = payments._plain(subject or "")
+    if OTA_NOTICE_WORDS.search(plain):
+        return True
+    return (bool(booking_numbers(subject)) and not OTA_NOT_A_BOOKING.search(plain)
+            and is_ota_robot(sender, headers))
+
+
+def is_ota_robot_notice(sender, subject, headers=None):
+    """An OTA or SynXis booking notice sent by a robot: answered only by ota-note, to front office (Karen, 14–15/11)."""
+    return is_ota_notice(sender, subject, headers) and is_ota_robot(sender, headers)
+
+
+def message_headers(mail, message_id):
+    """The email's headers, or {} when the mailbox can't give them (the check then goes by name and subject)."""
+    try:
+        return getattr(mail, "message_headers", lambda _id: {})(message_id) or {}
+    except Exception:
+        return {}
 
 
 # --- OTA notices: the intake note (Karen, 2026-11-14) ---
@@ -463,7 +522,7 @@ def ota_note(mail, sheet, st, args, tg=None, out=print, live=None):
     msg = mail.get_message_text(args.message_id)
     sender = ((msg.get("from") or {}).get("emailAddress") or {}).get("address", "")
     subject = msg.get("subject", "")
-    if not is_ota_notice(sender, subject):
+    if not is_ota_notice(sender, subject, message_headers(mail, args.message_id)):
         raise Refused(f"{sender} '{subject}' is not an OTA or SynXis booking notice: answer it with draft-reply")
     sent = [n for n, r in st.data["reviews"].items() if r.get("source") == args.message_id
             and r.get("kind") == "ota_note" and r.get("status") == "sent"]
@@ -716,9 +775,10 @@ def ota_drafts(mail, sheet, st, tg=None, fix=False, out=print, live=None):
             out(line + f" → {done_word}; NO NOTE: {str(e)[:160]}")
 
 
-def check_email_answered(st, message_id, outcome, load_message, out=print):
+def check_email_answered(st, message_id, outcome, load_message, out=print, load_headers=None):
     """done's second check (dev, 2026-11-13): the email has its reply, or the outcome says why not.
-    load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP."""
+    load_message() gives the email (sender, subject); None or an error = not readable, said as a GAP.
+    load_headers() gives its headers (an OTA robot not named as one, dev 27/11); None or an error = by name only."""
     if NO_REPLY_OK.search(outcome) or ANSWERED_BY_STAFF.search(outcome):
         return
     try:
@@ -737,7 +797,13 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
                       "partner hears that we can't accept it (dev, 26/11): draft-reply <id> <body> --kind "
                       "stop_sale_decline --ref <ref> (email-templates.md 9c), then done <id> \"STOP SALE LEAK: "
                       "declined #n, no row\". Not marked.")
-    ota = is_ota_notice(sender, msg.get("subject", ""))
+    headers = {}
+    if load_headers is not None and is_ota_sender(sender):
+        try:
+            headers = load_headers() or {}
+        except Exception:
+            headers = {}
+    ota = is_ota_notice(sender, msg.get("subject", ""), headers)
     if ota and NO_ROW.search(outcome) and not ROW_NAMED.search(outcome):
         raise Refused("OTA BOOKING WITHOUT A ROW: an OTA or SynXis booking notice always gets its rows (OTA bookings "
                       "are always accepted, Karen 04/11) and is never held for a question to Karen. A missing field "
@@ -745,7 +811,7 @@ def check_email_answered(st, message_id, outcome, load_message, out=print):
                       "Write the rows, then ota-note <id> --ref <booking_ref>, then done with the row numbers. "
                       "Not marked.")
     reviews = st.data["reviews"]
-    if ota and is_ota_robot_notice(sender, msg.get("subject", "")):
+    if ota and is_ota_robot(sender, headers):
         notes = {n for n, r in reviews.items() if r.get("kind") == "ota_note" and r.get("status") != "denied"}
         if any(reviews[n].get("source") == message_id for n in notes) or set(re.findall(r"#(\d+)", outcome)) & notes:
             return
@@ -1930,6 +1996,16 @@ FORWARDED_IN = ("this email is from {sender}, our own staff, not the guest or ag
                 "reply goes to'). Only if you really are answering a colleague: --internal (--kind reply).")
 
 
+OTA_NOTICE_REFUSAL = (
+    "OTA NOTICE: an OTA's or SynXis's booking notice, sent by a robot, gets no confirmation and no reply of its own "
+    "(Karen, 14/11), whatever its language. Write its rows, then 'ota-note <message_id> --ref <booking_ref>': the note "
+    "goes to front office on this thread and is sent by the command. A robot's mail that is not a booking (a payout: "
+    "forward-slip; a report: done 'NO REPLY: alert') gets no draft-reply either. No draft made.")
+# The kinds that may answer an OTA robot's notice: the intake note itself, and the stop-sale decline (sent to the
+# partner's stop-sale desk, never to the robot).
+NOT_AN_OTA_NOTICE_REPLY = ("ota_note", "stop_sale_decline")
+
+
 def reply_recipients(mail, args, kind):
     """(to, cc) for a reply: the --to / --cc lists, or (None, None) to let the mailbox answer the sender.
     Refuses a reply that would land on our own staff: the bug of 2026-10-22, when replies to guests whose
@@ -1942,6 +2018,18 @@ def reply_recipients(mail, args, kind):
         raise Refused("--to sets the recipients itself: drop --all and list everyone in --to / --cc")
     if internal and kind in GUEST_KINDS:
         raise Refused(f"--internal is for a reply to a colleague; a {kind} draft goes to the guest or agency")
+    if kind not in NOT_AN_OTA_NOTICE_REPLY:
+        # dev, 2026-11-27 (Trip.com 1359049748321348): checked with --to too, so no address given by hand gets round it
+        try:
+            src = mail.get_message_text(args.message_id)
+        except Exception:
+            src = None
+        if src is not None:
+            src_sender = (src.get("from") or {}).get("emailAddress", {}).get("address", "")
+            if (not operators.robot_operator(src_sender)
+                    and is_ota_robot_notice(src_sender, src.get("subject", ""),
+                                            message_headers(mail, args.message_id))):
+                raise Refused(OTA_NOTICE_REFUSAL)
     if to:
         ours = [a for a in to if is_internal(a)]
         if ours and not internal:
@@ -1954,10 +2042,6 @@ def reply_recipients(mail, args, kind):
     if robot:
         # tour-operators.md: Anex mails from a no-reply robot; replies go to its reservations desk
         return list(operators.OPERATORS[robot]["reply_to"]), []
-    if is_ota_robot_notice(sender, msg.get("subject", "")):
-        raise Refused("OTA NOTICE: an OTA or SynXis booking notice gets no confirmation and no reply to the guest "
-                      "(Karen, 14/11). Write its rows, then 'ota-note <message_id> --ref <booking_ref>': a short "
-                      "note on this thread to the no-reply sender saying which intake rows hold it. No draft made.")
     if is_no_reply(sender):
         found = booking_email((msg.get("body") or {}).get("content", ""))
         if found:
@@ -5063,7 +5147,8 @@ def main(argv=None):
         elif c == "done":
             check_vouchers_handled(args.message_id, " ".join(args.outcome), _rows_for_done)
             check_email_answered(st, args.message_id, " ".join(args.outcome),
-                                 lambda: config.mail().get_message_text(args.message_id))
+                                 lambda: config.mail().get_message_text(args.message_id),
+                                 load_headers=lambda: config.mail().message_headers(args.message_id))
             st.mark_processed(args.message_id, " ".join(args.outcome))
             st.save()
             print("marked handled")
