@@ -3135,6 +3135,55 @@ def check_cancellation_days(body, pdf_text):
                       f"the PDF is wrong, it goes to Karen (ask-karen), no draft. No draft made.")
 
 
+# EZFOLIO's PDF (Travel Concierge 2825005 / We Go Asia, 27/11): "III. Cancellation Policy: 1. The cancellation is free
+# of charge 3 days prior to the date of arrival 2. Otherwise, 100% the total amount as cancellation fee will be applied."
+PDF_FREE_DAYS = re.compile(r"free\s+of\s+charge\s+(\d{1,3})\s*days?\s+prior", re.I)
+PDF_FEE = re.compile(r"otherwise,?\s*(\d{1,3})\s*%", re.I)
+
+
+def pdf_cancellation_terms(pdf_text):
+    """(free days, fee %) as the EZFOLIO PDF prints them, or None when it doesn't say it that way."""
+    free, fee = PDF_FREE_DAYS.search(pdf_text or ""), PDF_FEE.search(pdf_text or "")
+    if not free or not fee:
+        return None
+    return int(free.group(1)), int(fee.group(1))
+
+
+def _terms_line(label, days, fee, lang):
+    if lang == "vi":
+        return (f"{label or 'Chính sách hủy:'} hủy trước {days:02d} ngày so với ngày đến: miễn phí; sau thời hạn này: "
+                f"phí {fee}% tổng tiền booking.")
+    if lang == "ru":
+        return (f"{label or 'Условия отмены:'} бесплатно не позднее чем за {days} дн. до даты заезда; иначе "
+                f"{fee}% стоимости бронирования.")
+    return (f"{label or 'Cancellation:'} free of charge up to {days} days before the arrival date; otherwise {fee}% of "
+            f"the booking total.")
+
+
+def pdf_terms_fix(body, pdf_text):
+    """The email's cancellation line written again with the PDF's terms when the two differ (dev, 2026-11-27: the
+    TA template says 7 days, EZFOLIO's PDF 3 days, so every TA confirmation drafted before its PDF was refused at
+    confirmation-attach and sat with DO NOT SEND; the PMS is the truth). Returns (old line, new line, kept): `kept` is
+    how many leading characters (bullet, "Label: ") the two lines share, which Outlook's HTML renders apart (the label
+    in bold, the bullet as a list item), so a draft in Outlook is changed from there on. None when nothing differs. Refused, as before, when the PDF's terms can't be read or the email's can't be found on one line."""
+    said, built = _cancellation_days(body), _cancellation_days(pdf_text)
+    if not (said and built and not said <= built):
+        return None
+    terms = pdf_cancellation_terms(pdf_text)
+    lines = [ln for ln in body.splitlines() if _cancellation_days(ln)]
+    if terms is None or len(lines) != 1:
+        check_cancellation_days(body, pdf_text)  # raises with the usual words
+    old = lines[0]
+    prefix = re.match(r"\s*(?:[-•*–]\s+)?", old).group(0)  # indent and bullet stay as they were
+    label = re.match(r"([^:\d]{2,40}:)\s", old[len(prefix):])
+    lang = ("ru" if re.search(r"[а-яё]", old, re.I) else
+            "vi" if re.search(r"hủy|huỷ|ngày|đến", old, re.I) else "en")
+    new = prefix + _terms_line(label.group(1).strip() if label else "", terms[0], terms[1], lang)
+    check_cancellation_days(body.replace(old, new), pdf_text)
+    kept = len(prefix) + (len(label.group(0)) if label else 0)
+    return old, new, kept
+
+
 def _money_forms(value):
     """'3347324' → {'3,347,324', '3.347.324', '3347324'}: how an amount may be written in a draft."""
     s = str(value or "").strip()
@@ -3294,7 +3343,10 @@ def draft_confirmation(mail, sheet, st, args, tg=None, out=print):
         if mime != "application/pdf":
             raise Refused(f"pdf_link on row {args.row} is {mime}, not a PDF: the confirmation must be the PDF "
                           f"exported from EZFOLIO. No draft made.")
-        check_cancellation_days(body, attachments.extract_text(path, data))
+        fix = pdf_terms_fix(body, attachments.extract_text(path, data))
+        if fix:
+            body = body.replace(fix[0], fix[1])
+            out(f"cancellation terms written as the EZFOLIO PDF prints them: '{fix[0].strip()}' → '{fix[1].strip()}'")
         files = [(name, data, "application/pdf")] + extra
     if subject:
         to, cc = new_recipients(args)
@@ -3381,6 +3433,42 @@ def _booking_row(sheet, r):
     return moved[-1]
 
 
+def _rebuilt_row(sheet, r, row):
+    """Pegas 11162942 (26–27/11): the confirmation was drafted before the PDF on a row of the booking as it was first
+    entered; Emi then declined it (CANCEL 2758), Karen took it back and it was booked again (NEW 2766, "Rebooked after
+    cancellation row 2758"). The draft's own row is never built, so confirmation-attach said "isn't built yet" for
+    ever. The rebuilt booking's built NEW row, when the draft's row is from before the rebook; else None."""
+    mine = _parts(r.get("ref"))
+    hits = [x for x in sheet.rows() if mine and _parts(x.get("booking_ref")) & mine]
+    after = payments.since_rebook(hits)
+    if not after or after[0]["_row"] <= row["_row"]:
+        return None
+    return next((x for x in after if x.get("action") == "NEW" and _built(x)), None)
+
+
+def hold_refused_attach(st, tg, n, r, row, why, out=print):
+    """dev 27/11: confirmation-attach refused on a built booking (Travel Concierge 2825005, We Go Asia): the draft sat
+    with DO NOT SEND, the same ATTACH line woke job 2 only every 4 hours, and no hold put it in front of anyone. Now
+    the booking is held at once (report_holds lists it every run and job 2 is woken until Karen is asked) and the
+    reason goes to the ❓ tab once."""
+    ref = r.get("ref", "")
+    reason = f"confirmation-attach #{n} refused: {why}"[:500]
+    holds = st.data["confirmation_holds"]
+    old = holds.get(ref) or {}
+    if old.get("reason") == reason and old.get("pdf_link") == row.get("pdf_link", ""):
+        return
+    holds[ref] = {"pdf_link": row.get("pdf_link", ""), "reason": reason, "processed": row.get("ez_processed_at", "")}
+    out(f"HELD {ref}: {reason}. Off confirmations-due until a new PDF lands or confirmation-hold {ref} 0 --clear")
+    if tg is None:
+        return
+    try:
+        tg.send(f"⚠️ <b>#{n} {telegram.esc(ref)}</b>: the EZFOLIO PDF could not be put on the confirmation drafted "
+                f"before it. {telegram.esc(why)}\nThe draft keeps its DO NOT SEND line; the booking is held until "
+                f"this is settled.", topic="question")
+    except Exception as e:
+        out(f"GAP: Telegram notice for the hold not sent ({str(e).splitlines()[0][:120]})")
+
+
 def _fills(row, text, now):
     """The placeholders of a before-PDF draft, from the built row."""
     fills = {}
@@ -3429,9 +3517,15 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
         return _attach_invoice(mail, st, n, r, attach, tg=tg, out=out)
     row = _booking_row(sheet, r)
     if not _built(row):
-        raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
-                      f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
-                      f"#{n} keeps its DO NOT SEND line")
+        rebuilt = _rebuilt_row(sheet, r, row)
+        if rebuilt is None:
+            raise Refused(f"{r.get('ref')} row {row['_row']} isn't built yet (ez_status "
+                          f"{row.get('ez_status') or 'blank'}, pdf_link {'set' if row.get('pdf_link') else 'blank'}): "
+                          f"#{n} keeps its DO NOT SEND line")
+        st.move_confirmation(r.get("ref", ""), int(r.get("row") or 0), rebuilt["_row"])
+        out(f"#{n} was written on row {row['_row']}, before the booking was cancelled and booked again: the rebuilt "
+            f"booking's row {rebuilt['_row']} (group #{rebuilt.get('ezfolio_group_code', '')}) is the one confirmed")
+        r["row"], row = rebuilt["_row"], rebuilt
     if operators.operator_name(row.get("company")) == "Odeon" and not attach:
         made = _auto_invoice(sheet, r.get("ref", ""), out=out)  # dev, 2026-11-09: Emi makes the proforma itself
         attach = [made] if made else []
@@ -3439,23 +3533,38 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
     no_invoice = operators.operator_name(row.get("company")) == "Odeon" and not attach
     extra = read_pdfs(attach)
     path, name, mime, data = pdf_fetch(sheet, row["_row"], out=out)
-    if mime != "application/pdf":
-        raise Refused(f"pdf_link on row {row['_row']} is {mime}, not a PDF. Nothing changed.")
-    fills = _fills(row, r["text"], now)
-    text = r["text"]
-    for old, new in fills.items():
-        text = text.replace(old, new)
-    text = _strip_stop_line(text)
-    confirmation_check(row)(text)
-    check_cancellation_days(text, attachments.extract_text(path, data))
-    if no_invoice:
-        text = f"{NO_INVOICE}\n\n{text}"
-    files = [(name, data, "application/pdf")] + extra
+    try:
+        if mime != "application/pdf":
+            raise Refused(f"pdf_link on row {row['_row']} is {mime}, not a PDF. Nothing changed.")
+        fills = _fills(row, r["text"], now)
+        text = r["text"]
+        for old, new in fills.items():
+            text = text.replace(old, new)
+        text = _strip_stop_line(text)
+        confirmation_check(row)(text)
+        fix = pdf_terms_fix(text, attachments.extract_text(path, data))
+        if fix:  # dev 27/11: the PDF's terms go in, not a hold (the PMS is the truth)
+            old_line, new_line, kept = fix
+            text = text.replace(old_line, new_line)
+            fills[old_line[kept:]] = new_line[kept:]
+            out(f"#{n}: cancellation terms written as the EZFOLIO PDF prints them: '{fix[0].strip()}' → "
+                f"'{fix[1].strip()}'")
+        if no_invoice:
+            text = f"{NO_INVOICE}\n\n{text}"
+        files = [(name, data, "application/pdf")] + extra
+        if review.in_outlook(r):
+            need = [fix[0][fix[2]:]] if fix else []  # a person's edit of that line in Outlook: not overwritten blind
+            try:
+                if no_invoice:  # the red line stays red, its words change
+                    mail.fill_draft(r["draft_id"], {**fills, DO_NOT_SEND: NO_INVOICE}, drop=None, require=need)
+                else:
+                    mail.fill_draft(r["draft_id"], fills, require=need)
+            except LookupError as e:
+                raise Refused(f"#{n}: {e}. Nothing changed.") from None
+    except Refused as e:
+        hold_refused_attach(st, tg, n, r, row, str(e), out=out)
+        raise
     if review.in_outlook(r):
-        if no_invoice:  # the red line stays red, its words change
-            mail.fill_draft(r["draft_id"], {**fills, DO_NOT_SEND: NO_INVOICE}, drop=None)
-        else:
-            mail.fill_draft(r["draft_id"], fills)
         for fname, fdata, ctype in files:
             mail.add_attachment(r["draft_id"], fname, fdata, content_type=ctype)
     for fname, fdata, ctype in files:
@@ -3473,7 +3582,8 @@ def confirmation_attach(mail, sheet, st, args, tg=None, out=print, now=None):
             f"above). Once that is fixed: confirmation-attach {n} (it runs invoice-make), or --attach {invoice} made "
             f"by a person. Report: chờ invoice {r.get('ref')}")
         return
-    review.notify(tg, n, r, note="đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND", in_place=True)
+    terms = "; điều khoản hủy viết lại theo PDF" if fix else ""
+    review.notify(tg, n, r, note=f"đã đính kèm PDF xác nhận và bỏ dòng DO NOT SEND{terms}", in_place=True)
     out(f"#{n}: {len(files)} PDF(s) attached ({name}), {filled}, DO NOT SEND line removed. Ready for review.")
 
 

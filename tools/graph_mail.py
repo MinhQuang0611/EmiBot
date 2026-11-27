@@ -813,15 +813,21 @@ class GraphMail:
             raise PermissionError(f"{draft_id} is not an unsent Emi draft; leaving it alone")
         return self._call("PATCH", f"/messages/{draft_id}", body=fields)
 
-    def fill_draft(self, draft_id, replacements, drop=DO_NOT_SEND):
+    def fill_draft(self, draft_id, replacements, drop=DO_NOT_SEND, require=()):
         """An Emi draft written before its PDF (confirmation-attach): each placeholder replaced in the body as it
-        is in Outlook now, so a person's own edits stay, and the red `drop` line taken out. Returns the new HTML."""
+        is in Outlook now, so a person's own edits stay, and the red `drop` line taken out. Returns the new HTML.
+        `require`: text that must still be in the draft as Emi wrote it (the cancellation line rewritten from the
+        PDF, dev 27/11); LookupError, nothing changed, when a person has edited it."""
         draft = self.get_draft(draft_id)
         if draft is None:
             raise PermissionError(f"{draft_id} is no longer in Drafts: a person sent or deleted it")
         if EMI_CATEGORY not in draft.get("categories", []):
             raise PermissionError(f"{draft_id} is not an Emi draft; leaving it alone")
         content = self._call("GET", f"/messages/{draft_id}?$select=body").get("body", {}).get("content", "")
+        gone = [t for t in require if html.escape(t.strip()) not in content and t.strip() not in content]
+        if gone:
+            raise LookupError(f"the draft in Outlook no longer has the line '{gone[0].strip()}' (edited by a person?): "
+                              f"its cancellation terms must be made the PDF's by hand")
         for old, new in replacements.items():  # DO_NOT_SEND -> NO_INVOICE keeps the line's bold red markup
             content = content.replace(html.escape(old), html.escape(new)).replace(old, html.escape(new))
         if drop:

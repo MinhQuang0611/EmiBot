@@ -223,6 +223,17 @@ class State:
     def pdf_attached(self, booking_ref, row):
         self.data["confirmations"][f"{booking_ref}|{row}"].pop("awaiting_pdf", None)
 
+    def move_confirmation(self, booking_ref, old_row, new_row):
+        """A confirmation drafted before the PDF on a row of a booking that was cancelled and booked again (Pegas
+        11162942, 26/11): it belongs to the rebuilt booking's row now."""
+        entry = self.data["confirmations"].pop(f"{booking_ref}|{old_row}", None)
+        if entry is None:
+            return
+        self.data["confirmations"][f"{booking_ref}|{new_row}"] = entry
+        draft = self.data["drafts"].get(entry.get("draft_id"))
+        if draft:
+            draft["row"] = new_row
+
     def drop_awaiting(self, booking_ref, row):
         """The early draft was denied, or left Drafts without its PDF: job 2 drafts the confirmation the usual way."""
         entry = self.data["confirmations"].get(f"{booking_ref}|{row}")
