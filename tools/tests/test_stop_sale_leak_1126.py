@@ -75,7 +75,8 @@ class ChartTest(unittest.TestCase):
         self.assertEqual(ss.partner("CÔNG TY TNHH OHMYHOTEL&CO VN"), "OhMyHotel")
         self.assertEqual(ss.partner("WebBeds FZ LLC"), "WebBeds")
         self.assertEqual(ss.partner("Agoda"), "")  # not on the stop-sale list: SynXis sells its rooms
-        self.assertEqual(len(ss.RECIPIENTS), 16)
+        self.assertEqual(len(ss.RECIPIENTS), 17)
+        self.assertIn("mai.do@tiket.com", ss.RECIPIENTS)  # dev, 27/11
 
     def test_sent_chart_read_with_its_room_codes(self):
         for as_dates in (False, True):

@@ -31,12 +31,13 @@ SUBJECT = "Stop Sale / Sold Out Room Type Chart"
 MAX_LISTED = 40  # changed lines written out in the email; the chart has them all
 # Bcc: the partners compete, and HAYA's own list went out with an empty To (10/09).
 # Dev, 2026-11-13: WebBeds' second and third, Traveloka's last five and Trip.com's khoi.duong added; HotelBeds dropped.
+# Dev, 2026-11-27: Tiket's mai.do added.
 # name: (the stop-sale addresses, the words of the company on an intake row). The addresses are also where a booking
 # sold after the stop sale is declined (dev, 2026-11-26).
 PARTNERS = {
     "WebBeds": (("suppliers@webbeds.com", "Stopsales.APAC@webbeds.com", "tuankhang.truong@webbeds.com"),
                 ("webbeds", "dotw")),
-    "Tiket": (("info.partner@tiket.com",), ("tiket", "tiketcom", "tiket com")),
+    "Tiket": (("info.partner@tiket.com", "mai.do@tiket.com"), ("tiket", "tiketcom", "tiket com")),
     "Trip.com": (("hotelsupport@trip.com", "khoi.duong@trip.com"), ("trip com", "tripcom", "ctrip")),
     "MG": (("roomupdate@mgholiday.com",), ("mg", "mgholiday", "mg holiday", "mgbedbank", "mg bedbank")),
     "Traveloka": (("phuong.truong@traveloka.com", "hotel@traveloka.com", "loi.le@traveloka.com",
