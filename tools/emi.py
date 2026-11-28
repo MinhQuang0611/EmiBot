@@ -14,7 +14,7 @@ to write its own Python to reach the mailbox or the sheet (schedule.md says whic
     python -m tools.emi sheet-access                      # the sheet Emi writes to, and whether it has edit access
     python -m tools.emi sheet-template <NEW|CHANGE|CANCEL> <file.json>  # empty booking JSON to fill
     python -m tools.emi sheet-check <booking.json>        # check a filled booking without writing
-    python -m tools.emi sheet-find <text>                 # rows by ref, guest name, confirmation no., or arrival DD/MM/YYYY
+    python -m tools.emi sheet-find <text>                 # rows by ref, guest name, confirmation no., group code, or arrival DD/MM/YYYY
                                                           #   (Emi's sheet + the live sheet, read only)
     python -m tools.emi zalo-notes --agency <name> [--guest <name>] [--arrival DD/MM/YYYY --departure DD/MM/YYYY]
                                                           # what Sunny told them on Zalo (sold out, quote); --text <words>
@@ -1088,12 +1088,17 @@ def sheet_find(sheet, text, out=print, live=None):
     writing with the OTA's own number and a Cyrillic name is found by the arrival date (dev 30/10, Booking.com
     5486733008, on the sheet only as SynXis 92777EF003114 'Anna Ivanova').
     Accents and word order don't count (dev 10/11: 'Edita Šarenac' writing with Booking.com 5859857089 was live
-    row 1792 'EDITA SARENAC', SynXis 92777EF003335 (Booking.com), and the draft said 'not found on the sheet')."""
+    row 1792 'EDITA SARENAC', SynXis 92777EF003335 (Booking.com), and the draft said 'not found on the sheet').
+    The EZFOLIO group code too, whole, with or without '#' (dev 28/11: front office asked about 'mã đoàn 31280';
+    Emi answered 'not on the intake sheet' though it was live row 2356, Mytour H7232588)."""
     t = text.strip()
     words = payments._plain(t).split()
+    code = t.lstrip("#").strip()
     match = lambda r: (any(words and all(w in payments._plain(r.get(c, "")) for w in words)
                            for c in ("booking_ref", "guest_names", "confirmation_no"))
-                       or t == r.get("arrival", "").strip())
+                       or t == r.get("arrival", "").strip()
+                       or (code and code in {str(r.get(c) or "").strip().lstrip("#")
+                                             for c in ("ezfolio_group_code", "Group code")}))
     hits = [r for r in sheet.rows() if match(r)]
     found_live = [r for r in live_rows(live, out) if match(r)]
     out(f"rows found: {len(hits)}" + (f" on Emi's sheet, {len(found_live)} on the live sheet (read only; "

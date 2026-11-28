@@ -51,6 +51,14 @@ class LiveLookupTest(unittest.TestCase):
         self.assertEqual(hits[0]["ezfolio_group_code"], "30455")  # the bot's Group code column
         self.assertIn("0 on Emi's sheet, 1 on the live sheet", self.lines[0])
 
+    def test_found_by_group_code(self):
+        # dev 28/11: 'mã đoàn 31280' was live row 2356 (Mytour H7232588); sheet-find answered 'not on the sheet'
+        sh, _ = real_sheet()
+        live, _ = live_sheet([TIQI])
+        for text in ("30455", "#30455", " 30455 "):
+            self.assertEqual(len(emi.sheet_find(sh, text, out=self.lines.append, live=live)), 1, text)
+        self.assertEqual(emi.sheet_find(sh, "3045", out=self.lines.append, live=live), [])  # whole code only
+
     def test_unreadable_live_sheet_is_a_gap_not_a_stop(self):
         sh, _ = real_sheet()
         live, _ = live_sheet(broken=True)
