@@ -1,5 +1,12 @@
 # Dựng Emi lên host OpenClaw (Hostinger)
 
+> **Deploy hằng ngày trên hotpink-bee (2026-11-28):** một lệnh trong hPanel Terminal —
+> `bash /data/emi/deploy/deploy.sh` (thêm `--tests` khi commit đổi code Python). Script kiểm checkout sạch, `git pull
+> --ff-only`, chép vào `/data/.openclaw/workspace-emi` những file Emi đọc mà khác (SOUL / IDENTITY / USER / AGENTS /
+> schedule.md, `skills/`, `docs/rate-knowledge/`; bản cũ cất `/data/emi-ws-backup-<giờ>/`; MEMORY.md và `memory/` không
+> bao giờ ghi đè), ghi `DEPLOYED_VERSION`, chạy `send-blocked` (và bộ test với `--tests`). Terminal không chạy được
+> Python thì báo SKIPPED — chạy hai bước đó qua chat của Emi. Phần dưới là cách dựng lần đầu trên VPS (cũ).
+
 Dành cho dev dựng Emi. Quyết định 2026-10-09: Emi là **agent thứ hai** trên OpenClaw đang chạy ở VPS Hostinger `srv2000138` (201.18.208.83). Phần n8n/FastAPI trong `emi/` và `Dockerfile` không dùng cho cách này.
 
 ## Host thực tế (kiểm tra 2026-10-09, chỉ đọc)
